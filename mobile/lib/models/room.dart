@@ -3,16 +3,19 @@ import 'dart:collection';
 import 'package:mobile/models/track.dart';
 
 class Room {
+  int id;
   String owner;
   Track? currentTrack;
   final Queue<Track> queue;
   int status; // 0 = waiting, 1 = playing
   final List<String> listeners;
+  bool isPublic;
 
   Duration positionAtLastSync;
   DateTime updatedAt;
 
   Room({
+    required this.id,
     required this.owner,
     this.currentTrack,
     Queue<Track>? queue,
@@ -20,6 +23,7 @@ class Room {
     List<String>? listeners,
     Duration? positionAtLastSync,
     DateTime? updatedAt,
+    this.isPublic = true,
   }) : queue = queue ?? Queue(),
        listeners = listeners ?? [],
        positionAtLastSync = positionAtLastSync ?? Duration.zero,

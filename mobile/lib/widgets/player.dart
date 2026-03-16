@@ -71,7 +71,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             borderRadius: BorderRadius.circular(12),
             child: track?.imageUrl != null
                 ? Image.network(
-                    track!.imageUrl,
+                    track!.imageUrl!,
                     width: 260,
                     height: 260,
                     fit: BoxFit.cover,

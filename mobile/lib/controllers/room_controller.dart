@@ -10,8 +10,10 @@ class RoomController extends ChangeNotifier {
 
   final List<Room> _availableRooms = [
     Room(
+      id: 1,
       owner: 'Alice',
       currentTrack: Track(
+        id: 1,
         title: 'Song A',
         artist: 'Artist X',
         imageUrl: 'https://picsum.photos/400',
@@ -21,8 +23,10 @@ class RoomController extends ChangeNotifier {
       listeners: ['Alice', 'Anna', 'Armand'],
     ),
     Room(
+      id: 2,
       owner: 'Bob',
       currentTrack: Track(
+        id: 2,
         title: 'Song B',
         artist: 'Artist Y',
         imageUrl: 'https://picsum.photos/400',
@@ -32,8 +36,10 @@ class RoomController extends ChangeNotifier {
       listeners: ['Bob', 'Bella'],
     ),
     Room(
+      id: 3,
       owner: 'Charlie',
       currentTrack: Track(
+        id: 3,
         title: 'Song C',
         artist: 'Artist Z',
         imageUrl: 'https://picsum.photos/400',
@@ -42,12 +48,14 @@ class RoomController extends ChangeNotifier {
       status: 0,
       queue: Queue.of([
         Track(
+          id: 4,
           title: 'Song D',
           artist: 'Artist W',
           imageUrl: 'https://picsum.photos/400',
           duration: const Duration(minutes: 3, seconds: 30),
         ),
         Track(
+          id: 5,
           title: 'Song E',
           artist: 'Artist V',
           imageUrl: 'https://picsum.photos/400',
@@ -83,6 +91,9 @@ class RoomController extends ChangeNotifier {
   // Queue management
   void addTrack(Room room, Track track) {
     room.queue.add(track);
+    if (room.currentTrack == null) {
+      skipNext();
+    }
     notifyListeners();
   }
 
@@ -116,6 +127,11 @@ class RoomController extends ChangeNotifier {
   }
 
   // Listener management
+  void togglePrivacy(Room room) {
+    room.isPublic = !room.isPublic;
+    notifyListeners();
+  }
+
   void kickListener(Room room, String listener) {
     if (room.listeners.contains(listener) && listener != room.owner) {
       room.listeners.remove(listener);

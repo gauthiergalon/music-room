@@ -15,6 +15,7 @@ void showQueueBottomSheet(BuildContext context) {
           final currentRoom = controller.currentRoom;
           if (currentRoom == null) return const SizedBox.shrink();
           final queue = currentRoom.queue.toList();
+          final theme = Theme.of(ctx);
 
           return SizedBox(
             height: MediaQuery.of(ctx).size.height * 0.6,
@@ -44,12 +45,24 @@ void showQueueBottomSheet(BuildContext context) {
                           key: ValueKey(queue[i].title),
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(6),
-                            child: Image.network(
-                              queue[i].imageUrl,
-                              width: 56,
-                              height: 56,
-                              fit: BoxFit.cover,
-                            ),
+                            child: queue[i].imageUrl != null
+                                ? Image.network(
+                                    queue[i].imageUrl!,
+                                    width: 56,
+                                    height: 56,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(
+                                    width: 56,
+                                    height: 56,
+                                    color: theme
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                                    child: Icon(
+                                      Icons.music_note,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
                           ),
                           title: Text(queue[i].title),
                           subtitle: Text(queue[i].artist),

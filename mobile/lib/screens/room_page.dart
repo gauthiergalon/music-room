@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
@@ -17,6 +19,7 @@ class _RoomPageState extends State<RoomPage> {
 
   void _createRoom() {
     final newRoom = Room(
+      id: Random().nextInt(1000000),
       owner: 'You',
       currentTrack: null,
       status: 0,
@@ -63,7 +66,9 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   Widget _buildRoomList(RoomController controller) {
-    final rooms = controller.availableRooms;
+    final rooms = controller.availableRooms
+        .where((r) => r.isPublic || r.listeners.contains(currentUser))
+        .toList();
     return RefreshIndicator(
       onRefresh: controller.refreshRooms,
       child: ListView.builder(

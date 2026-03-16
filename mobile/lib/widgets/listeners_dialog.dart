@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
 
@@ -72,6 +73,54 @@ void showListenersDialog(BuildContext context, String currentUser) {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      if (currentUser == currentRoom.owner) ...[
+                        const Divider(),
+                        SwitchListTile(
+                          title: const Text('Room Publique'),
+                          subtitle: Text(
+                            currentRoom.isPublic
+                                ? 'Visible par tous'
+                                : 'Cachée (invitation uniquement)',
+                          ),
+                          value: currentRoom.isPublic,
+                          onChanged: (val) {
+                            controller.togglePrivacy(currentRoom);
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.link),
+                          title: const Text('Copier le lien d\'invitation'),
+                          onTap: () {
+                            Clipboard.setData(
+                              ClipboardData(
+                                text:
+                                    'musicroom://join/${currentRoom.id.toString()}',
+                              ),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Lien copié dans le presse-papier !',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(),
+                      ],
+                      const Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Autres auditeurs',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
                         ),
                       ),
                       Expanded(
