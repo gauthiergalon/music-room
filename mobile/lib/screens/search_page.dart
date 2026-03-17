@@ -42,7 +42,7 @@ class _SearchPageState extends State<SearchPage> {
         Track(
           id: 1,
           title: '$query (Radio Edit)',
-          artist: 'Artiste Inconnu',
+          artist: 'Unknown Artist',
           duration: const Duration(minutes: 3, seconds: 12),
           imageUrl: 'https://picsum.photos/seed/1/200',
         ),
@@ -55,7 +55,7 @@ class _SearchPageState extends State<SearchPage> {
         Track(
           id: 3,
           title: '$query (Acoustic)',
-          artist: 'Artiste Inconnu',
+          artist: 'Unknown Artist',
           duration: const Duration(minutes: 2, seconds: 45),
           imageUrl: 'https://picsum.photos/seed/3/200',
         ),
@@ -82,7 +82,7 @@ class _SearchPageState extends State<SearchPage> {
               ),
               child: SearchBar(
                 controller: _searchController,
-                hintText: 'Rechercher un titre, artiste...',
+                hintText: 'Find a song...',
                 leading: const Padding(
                   padding: EdgeInsets.only(left: 8.0),
                   child: Icon(Icons.search),
@@ -118,11 +118,11 @@ class _SearchPageState extends State<SearchPage> {
     }
 
     if (!_hasSearched) {
-      return const Center(child: Text('Trouvez vos musiques préférées'));
+      return const Center(child: Text('Find your favorite songs'));
     }
 
     if (_results.isEmpty) {
-      return const Center(child: Text('Aucun résultat trouvé.'));
+      return const Center(child: Text('No results found.'));
     }
 
     return ListView.builder(
@@ -175,16 +175,14 @@ class _SearchPageState extends State<SearchPage> {
                 controller.addTrack(currentRoom, track);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('${track.title} ajouté à la file d\'attente'),
+                    content: Text('${track.title} added to the queue'),
                     duration: const Duration(seconds: 3),
                   ),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Rejoignez une room pour ajouter une musique.',
-                    ),
+                    content: Text('Join a room to add a song.'),
                     duration: Duration(seconds: 3),
                   ),
                 );
