@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/models/track.dart';
 import 'package:mobile/controllers/room_controller.dart';
+import '../core/theme.dart';
 
 class PlayerWidget extends StatefulWidget {
   final Track? track;
@@ -62,7 +63,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     final duration = track?.duration ?? Duration.zero;
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: AppTheme.paddingLg,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

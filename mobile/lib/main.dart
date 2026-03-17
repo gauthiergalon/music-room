@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'controllers/room_controller.dart';
 import 'screens/main_screen.dart';
+import 'core/theme.dart';
 
 void main() {
   runApp(
@@ -20,13 +21,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Music Room',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.dark,
-        ),
-      ),
+      theme: AppTheme.darkTheme,
       home: const MainScreen(),
     );
   }

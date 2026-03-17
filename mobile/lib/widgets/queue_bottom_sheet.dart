@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
+import '../core/theme.dart';
+import 'track_list_tile.dart';
 
 void showQueueBottomSheet(BuildContext context) {
   final room = context.read<RoomController>().currentRoom;
@@ -15,14 +17,15 @@ void showQueueBottomSheet(BuildContext context) {
           final currentRoom = controller.currentRoom;
           if (currentRoom == null) return const SizedBox.shrink();
           final queue = currentRoom.queue.toList();
-          final theme = Theme.of(ctx);
 
           return SizedBox(
             height: MediaQuery.of(ctx).size.height * 0.6,
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppTheme.spacingMd,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -41,34 +44,12 @@ void showQueueBottomSheet(BuildContext context) {
                     },
                     children: [
                       for (var i = 0; i < queue.length; i++)
-                        ListTile(
+                        Container(
                           key: ValueKey(queue[i].title),
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: queue[i].imageUrl != null
-                                ? Image.network(
-                                    queue[i].imageUrl!,
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    width: 56,
-                                    height: 56,
-                                    color: theme
-                                        .colorScheme
-                                        .surfaceContainerHighest,
-                                    child: Icon(
-                                      Icons.music_note,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                          ),
-                          title: Text(queue[i].title),
-                          subtitle: Text(queue[i].artist),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () =>
+                          child: TrackListTile(
+                            track: queue[i],
+                            trailingIcon: Icons.delete_outline,
+                            onTapTrailing: () =>
                                 controller.removeTrack(currentRoom, i),
                           ),
                         ),

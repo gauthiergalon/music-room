@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
 import '../models/room.dart';
 import '../widgets/room_list_item.dart';
+import '../core/theme.dart';
 import 'room_overlay.dart';
 
 class RoomPage extends StatefulWidget {
@@ -47,20 +48,22 @@ class _RoomPageState extends State<RoomPage> {
           controller.leaveRoom();
         }
       },
-      child: Stack(
-        children: [
-          _buildRoomList(controller),
-          if (current != null) const Positioned.fill(child: RoomOverlay()),
-          if (current == null)
-            Positioned(
-              right: 16,
-              bottom: 16,
-              child: FloatingActionButton(
+      child: Scaffold(
+        floatingActionButton: current == null
+            ? FloatingActionButton(
                 onPressed: _createRoom,
                 child: const Icon(Icons.add),
-              ),
-            ),
-        ],
+              )
+            : null,
+        body: SafeArea(
+          bottom: false,
+          child: Stack(
+            children: [
+              _buildRoomList(controller),
+              if (current != null) const Positioned.fill(child: RoomOverlay()),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -72,6 +75,7 @@ class _RoomPageState extends State<RoomPage> {
     return RefreshIndicator(
       onRefresh: controller.refreshRooms,
       child: ListView.builder(
+        padding: const EdgeInsets.only(top: 10.0, bottom: AppTheme.spacingMd),
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: rooms.length,
         itemBuilder: (context, index) => RoomListItem(

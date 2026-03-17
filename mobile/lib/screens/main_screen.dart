@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'room_page.dart';
 import 'search_page.dart';
 import 'profile_page.dart';
+import '../widgets/app_navbar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -23,28 +24,9 @@ class _MainScreenState extends State<MainScreen> {
 
     return Scaffold(
       body: pages[_selectedIndex],
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: AppNavBar(
         selectedIndex: _selectedIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: const <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(Icons.group_outlined),
-            label: 'Room',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.search_outlined),
-            label: 'Search',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-        ],
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        onIndexSelected: (int index) => setState(() => _selectedIndex = index),
       ),
     );
   }

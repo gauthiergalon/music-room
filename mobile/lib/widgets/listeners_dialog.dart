@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
+import '../core/theme.dart';
 
 void showListenersDialog(BuildContext context, String currentUser) {
   showGeneralDialog(
@@ -41,7 +42,7 @@ void showListenersDialog(BuildContext context, String currentUser) {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
+                          horizontal: AppTheme.spacingMd,
                           vertical: 12,
                         ),
                         child: Row(

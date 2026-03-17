@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/room.dart';
+import '../core/theme.dart';
 
 class RoomListItem extends StatelessWidget {
   final Room room;
@@ -10,13 +11,19 @@ class RoomListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: FilledButton.tonal(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spacingMd,
+        vertical: 6.0,
+      ),
+      child: FilledButton(
         onPressed: onTap,
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 72),
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppTheme.spacingMd,
+            vertical: 12.0,
+          ),
         ),
         child: Row(
           children: [
