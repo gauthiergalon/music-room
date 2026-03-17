@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:18
+    env_file: .env
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+  redis:
+    image: redis:8
+    ports:
+      - "6379:6379"
+
+  backend:
+    image: rust:latest
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: cargo run
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  postgres_data:
