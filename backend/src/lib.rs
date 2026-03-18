@@ -7,8 +7,11 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 mod db;
+pub mod dtos;
 pub mod errors;
+pub mod handlers;
 mod middleware;
+pub mod repositories;
 pub mod routes;
 pub mod services;
 

@@ -14,6 +14,7 @@ struct TestAuthResponse {
 #[derive(Deserialize, Debug)]
 struct ErrorResponse {
 	error: String,
+	details: Option<Vec<String>>,
 }
 
 #[sqlx::test]
@@ -62,7 +63,8 @@ async fn test_register_duplicate_email(pool: PgPool) {
 
 	res.assert_status(StatusCode::CONFLICT);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Email already in use");
+	assert_eq!(error_res.error, "Conflict");
+	assert_eq!(error_res.details.unwrap()[0], "Email already in use");
 }
 
 #[sqlx::test]
@@ -90,7 +92,8 @@ async fn test_register_duplicate_username(pool: PgPool) {
 
 	res.assert_status(StatusCode::CONFLICT);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Username already taken");
+	assert_eq!(error_res.error, "Conflict");
+	assert_eq!(error_res.details.unwrap()[0], "Username already taken");
 }
 
 #[sqlx::test]
@@ -145,7 +148,8 @@ async fn test_login_invalid_password(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid email or password");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid email or password");
 }
 
 #[sqlx::test]
@@ -163,7 +167,8 @@ async fn test_login_nonexistent_user(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid email or password");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid email or password");
 }
 
 #[sqlx::test]
@@ -182,12 +187,8 @@ async fn test_validation_errors(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 	let error_res = res.json::<ErrorResponse>();
-	// Validation failed check removed
-
-	// details removed
-	assert_eq!(error_res.error, "Username has invalid length (must be between 3 and 32 characters)");
-	// assert_eq!(error_res.error, "Invalid email address");
-	// assert_eq!(error_res.error, "Password does not meet the required policy (must be at least 8 characters)");
+	assert_eq!(error_res.error, "Validation Error");
+	assert_eq!(error_res.details.unwrap()[0], "Username has invalid length (must be between 3 and 32 characters)".to_string());
 }
 
 #[sqlx::test]
@@ -206,8 +207,8 @@ async fn test_username_too_long(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Username has invalid length (must be between 3 and 32 characters)");
-	assert_eq!(error_res.error, "Username has invalid length (must be between 3 and 32 characters)");
+	assert_eq!(error_res.error, "Validation Error");
+	assert_eq!(error_res.details.unwrap()[0], "Username has invalid length (must be between 3 and 32 characters)");
 }
 
 #[sqlx::test]
@@ -255,7 +256,8 @@ async fn test_refresh_token_invalid(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid token");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }
 
 #[sqlx::test]
@@ -298,7 +300,8 @@ async fn test_logout_no_auth_token(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid token");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }
 
 #[sqlx::test]
@@ -329,6 +332,9 @@ async fn test_forgot_password_invalid_email(pool: PgPool) {
 		.await;
 
 	res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+	let error_res = res.json::<ErrorResponse>();
+	assert_eq!(error_res.error, "Validation Error");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid email address");
 }
 
 #[sqlx::test]
@@ -346,7 +352,8 @@ async fn test_reset_password_invalid_token(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid token");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }
 
 #[sqlx::test]
@@ -363,6 +370,9 @@ async fn test_reset_password_weak_password(pool: PgPool) {
 		.await;
 
 	res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+	let error_res = res.json::<ErrorResponse>();
+	assert_eq!(error_res.error, "Validation Error");
+	assert_eq!(error_res.details.unwrap()[0], "Password does not meet the required policy (must be at least 8 characters)");
 }
 
 #[sqlx::test]
@@ -377,7 +387,7 @@ async fn test_login_missing_fields(pool: PgPool) {
 		}))
 		.await;
 
-	assert!(res.status_code() == StatusCode::BAD_REQUEST || res.status_code() == StatusCode::UNPROCESSABLE_ENTITY);
+	res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[sqlx::test]
@@ -395,5 +405,6 @@ async fn test_logout_invalid_auth_token(pool: PgPool) {
 
 	res.assert_status(StatusCode::UNAUTHORIZED);
 	let error_res = res.json::<ErrorResponse>();
-	assert_eq!(error_res.error, "Invalid token");
+	assert_eq!(error_res.error, "Unauthorized");
+	assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }

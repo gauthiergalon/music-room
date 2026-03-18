@@ -8,44 +8,47 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-	#[error("{0}")]
+	#[error("Not Found")]
 	NotFound(ErrorMessage),
 
-	#[error("{0}")]
+	#[error("Unauthorized")]
 	Unauthorized(ErrorMessage),
 
-	#[error("{0}")]
+	#[error("Forbidden")]
 	Forbidden(ErrorMessage),
 
-	#[error("{0}")]
+	#[error("Conflict")]
 	Conflict(ErrorMessage),
 
-	#[error("{0}")]
-	Validation(ErrorMessage),
+	#[error("Validation Error")]
+	Validation(Vec<ErrorMessage>),
 
-	#[error("Internal server error")]
-	Internal,
-
-	#[error("Database error")]
+	#[error("Database Error")]
 	Database(#[from] sqlx::Error),
+
+	#[error("Internal Server Error")]
+	Internal,
 }
 
 impl IntoResponse for AppError {
 	fn into_response(self) -> Response {
-		let (status, message, details): (StatusCode, String, Option<serde_json::Value>) = match &self {
-			AppError::NotFound(_) => (StatusCode::NOT_FOUND, self.to_string(), None),
-			AppError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, self.to_string(), None),
-			AppError::Forbidden(_) => (StatusCode::FORBIDDEN, self.to_string(), None),
-			AppError::Conflict(_) => (StatusCode::CONFLICT, self.to_string(), None),
-			AppError::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, self.to_string(), None),
-			AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string(), None),
+		let (status, details): (StatusCode, Option<serde_json::Value>) = match &self {
+			AppError::NotFound(msg) => (StatusCode::NOT_FOUND, Some(json!([msg.to_string()]))),
+			AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, Some(json!([msg.to_string()]))),
+			AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, Some(json!([msg.to_string()]))),
+			AppError::Conflict(msg) => (StatusCode::CONFLICT, Some(json!([msg.to_string()]))),
+			AppError::Validation(msgs) => {
+				let string_msgs: Vec<String> = msgs.iter().map(|m| m.to_string()).collect();
+				(StatusCode::UNPROCESSABLE_ENTITY, Some(json!(string_msgs)))
+			}
 			AppError::Database(e) => {
 				tracing::error!("DB error: {e}");
-				(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".into(), None)
+				(StatusCode::INTERNAL_SERVER_ERROR, None)
 			}
+			AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, None),
 		};
 
-		(status, Json(json!({ "error": message, "details": details }))).into_response()
+		(status, Json(json!({ "error": self.to_string(), "details": details }))).into_response()
 	}
 }
 
