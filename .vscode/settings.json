@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.cargo.extraEnv": {
+        "DATABASE_URL": "postgres://musicroom:secret@localhost:5432/musicroom",
+        "SQLX_OFFLINE": "false"
+    }
+}
