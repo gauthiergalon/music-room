@@ -1,13 +1,19 @@
 use crate::errors::{AppError, ErrorMessage};
-use crate::repositories::auth as auth_repo;
+use crate::middleware::auth::Claims;
+use crate::models::refresh_token::NewRefreshToken;
+use crate::models::reset_token::NewResetToken;
+use crate::models::user::NewUser;
+use crate::repositories::{refresh_tokens, reset_tokens, users};
 use argon2::{
 	Argon2,
 	password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use chrono::{TimeDelta, Utc};
 use hex;
+use jsonwebtoken::{EncodingKey, Header, encode};
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
+
 use uuid::Uuid;
 
 pub fn hash_token(token: &str) -> String {
@@ -31,20 +37,20 @@ pub async fn store_refresh_token(pool: &PgPool, user_id: Uuid) -> Result<String,
 	let token_hash = hash_token(&token);
 	let expires_at = Utc::now() + TimeDelta::days(7);
 
-	auth_repo::store_refresh_token(pool, token_hash, user_id, expires_at).await?;
+	refresh_tokens::insert(pool, NewRefreshToken { token_hash, user_id, expires_at }).await?;
 
 	Ok(token)
 }
 
 pub async fn delete_refresh_token(pool: &PgPool, token: &str, user_id: &Uuid) -> Result<(), AppError> {
 	let token_hash = hash_token(token);
-	auth_repo::delete_refresh_token(pool, token_hash, user_id).await?;
+	refresh_tokens::delete(pool, token_hash, user_id).await?;
 	Ok(())
 }
 
 pub async fn rotate_refresh_token(pool: &PgPool, token: &str) -> Result<Uuid, AppError> {
 	let token_hash = hash_token(token);
-	let stored = auth_repo::delete_and_return_refresh_token(pool, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
+	let stored = refresh_tokens::delete_and_return(pool, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 
 	if stored.expires_at < Utc::now() {
 		return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
@@ -55,14 +61,14 @@ pub async fn rotate_refresh_token(pool: &PgPool, token: &str) -> Result<Uuid, Ap
 
 pub async fn create_reset_token(pool: &PgPool, email: &str) -> Result<(), AppError> {
 	let email = email.trim().to_lowercase();
-	let user = auth_repo::find_user_id_by_email(pool, &email).await?;
+	let user = users::find_by_email(pool, &email).await?;
 
-	if let Some(user_id) = user {
+	if let Some(user_model) = user {
 		let token = Uuid::new_v4().to_string();
 		let token_hash = hash_token(&token);
 		let expires_at = Utc::now() + TimeDelta::minutes(15);
 
-		auth_repo::insert_reset_token(pool, token_hash, user_id, expires_at).await?;
+		reset_tokens::insert(pool, NewResetToken { token_hash, user_id: user_model.id, expires_at }).await?;
 
 		todo!("Send email with reset link containing the token: {}", token);
 	}
@@ -76,13 +82,13 @@ pub async fn update_password_with_token(pool: &PgPool, token: &str, new_password
 
 	let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
-	let stored = auth_repo::delete_and_return_reset_token(&mut tx, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
+	let stored = reset_tokens::delete_and_return(&mut tx, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 
 	if stored.expires_at < Utc::now() {
 		return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
 	}
 
-	auth_repo::update_user_password(&mut tx, stored.user_id, password_hash).await?;
+	users::update_password(&mut tx, stored.user_id, password_hash).await?;
 
 	tx.commit().await.map_err(AppError::Database)?;
 
@@ -94,15 +100,22 @@ pub async fn create_user(pool: &PgPool, username: &str, email: &str, password: &
 	let email = email.trim().to_lowercase();
 	let password_hash = hash_password(password)?;
 
-	auth_repo::insert_user(pool, username, &email, password_hash).await
+	users::insert(pool, NewUser { username, email: &email, password_hash: Some(password_hash), google_id: None }).await
 }
 
 pub async fn authenticate_user(pool: &PgPool, email: &str, password: &str) -> Result<Uuid, AppError> {
 	let email = email.trim().to_lowercase();
-	let user = auth_repo::find_user_credentials_by_email(pool, &email).await?.ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+	let user = users::find_by_email(pool, &email).await?.ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 
 	let password_hash = user.password_hash.ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 	verify_password(password, &password_hash)?;
 
 	Ok(user.id)
+}
+
+pub fn generate_access_token(user_id: Uuid, secret: &str) -> Result<String, AppError> {
+	let exp = (Utc::now() + TimeDelta::minutes(15)).timestamp() as usize;
+	let claims = Claims { user_id, exp };
+
+	encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())).map_err(|_| AppError::Internal)
 }
