@@ -316,7 +316,7 @@ async fn test_forgot_password_success(pool: PgPool) {
 		}))
 		.await;
 
-	res.assert_status(StatusCode::OK);
+	res.assert_status(StatusCode::NO_CONTENT);
 }
 
 #[sqlx::test]

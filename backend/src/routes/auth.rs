@@ -1,11 +1,12 @@
 use crate::{
 	handlers::auth::{forgot_password, login, logout, refresh, register, reset_password},
 	middleware::auth::auth_middleware,
+	state::AppState,
 };
 use axum::{Router, middleware, routing::post};
 use sqlx::PgPool;
 
-pub fn router(state: crate::state::AppState) -> Router<crate::state::AppState> {
+pub fn router(state: AppState) -> Router<AppState> {
 	let public = Router::new().route("/register", post(register)).route("/login", post(login)).route("/refresh", post(refresh)).route("/forgot-password", post(forgot_password)).route("/reset-password", post(reset_password));
 
 	let protected = Router::new().route("/logout", post(logout)).layer(middleware::from_fn_with_state(state.clone(), auth_middleware));

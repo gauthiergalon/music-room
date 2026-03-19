@@ -6,7 +6,6 @@ pub struct UserResponse {
 	pub id: Uuid,
 	pub username: String,
 	pub email: String,
-	pub created_at: String,
 }
 
 #[derive(Serialize)]

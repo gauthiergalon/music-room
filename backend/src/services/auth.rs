@@ -1,9 +1,11 @@
-use crate::errors::{AppError, ErrorMessage};
-use crate::middleware::auth::Claims;
-use crate::models::refresh_token::NewRefreshToken;
-use crate::models::reset_token::NewResetToken;
-use crate::models::user::NewUser;
-use crate::repositories::{refresh_tokens, reset_tokens, users};
+use crate::{
+	errors::{AppError, ErrorMessage},
+	middleware::auth::Claims,
+	models::refresh_token::NewRefreshToken,
+	models::reset_token::NewResetToken,
+	models::user::NewUser,
+	repositories::{refresh_tokens, reset_tokens, users},
+};
 use argon2::{
 	Argon2,
 	password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
@@ -82,13 +84,13 @@ pub async fn update_password_with_token(pool: &PgPool, token: &str, new_password
 
 	let mut tx = pool.begin().await.map_err(AppError::Database)?;
 
-	let stored = reset_tokens::delete_and_return(&mut tx, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
+	let stored = reset_tokens::delete_and_return(&mut *tx, token_hash).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 
 	if stored.expires_at < Utc::now() {
 		return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
 	}
 
-	users::update_password(&mut tx, stored.user_id, password_hash).await?;
+	users::update_password(&mut *tx, stored.user_id, password_hash).await?;
 
 	tx.commit().await.map_err(AppError::Database)?;
 
