@@ -5,6 +5,19 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
+
+fn create_app(pool: PgPool) -> axum::Router {
+    let state = backend::state::AppState {
+        pool: pool.clone(),
+        jwt_secret: "test_secret".to_string(),
+        room_channels: Arc::new(RwLock::new(HashMap::new())),
+    };
+    app_router(state.clone()).with_state(state)
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 struct TestAuthResponse {
 	access_token: String,
@@ -19,7 +32,7 @@ struct ErrorResponse {
 
 #[sqlx::test]
 async fn test_register_success(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -40,7 +53,7 @@ async fn test_register_success(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_register_duplicate_email(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	server
@@ -69,7 +82,7 @@ async fn test_register_duplicate_email(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_register_duplicate_username(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	server
@@ -98,7 +111,7 @@ async fn test_register_duplicate_username(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_login_success(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	server
@@ -126,7 +139,7 @@ async fn test_login_success(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_login_invalid_password(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	server
@@ -154,7 +167,7 @@ async fn test_login_invalid_password(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_login_nonexistent_user(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -173,7 +186,7 @@ async fn test_login_nonexistent_user(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_validation_errors(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -193,7 +206,7 @@ async fn test_validation_errors(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_username_too_long(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -213,7 +226,7 @@ async fn test_username_too_long(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_refresh_token_success(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let login_res = server
@@ -244,7 +257,7 @@ async fn test_refresh_token_success(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_refresh_token_invalid(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -262,7 +275,7 @@ async fn test_refresh_token_invalid(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_logout_success(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let login_res = server
@@ -288,7 +301,7 @@ async fn test_logout_success(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_logout_no_auth_token(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -306,7 +319,7 @@ async fn test_logout_no_auth_token(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_forgot_password_success(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -321,7 +334,7 @@ async fn test_forgot_password_success(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_forgot_password_invalid_email(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -339,7 +352,7 @@ async fn test_forgot_password_invalid_email(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_reset_password_invalid_token(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -358,7 +371,7 @@ async fn test_reset_password_invalid_token(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_reset_password_weak_password(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -377,7 +390,7 @@ async fn test_reset_password_weak_password(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_login_missing_fields(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server
@@ -392,7 +405,7 @@ async fn test_login_missing_fields(pool: PgPool) {
 
 #[sqlx::test]
 async fn test_logout_invalid_auth_token(pool: PgPool) {
-	let app = app_router(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() }).with_state(backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string() });
+	let app = create_app(pool.clone());
 	let server = TestServer::new(app);
 
 	let res = server

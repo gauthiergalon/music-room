@@ -3,7 +3,10 @@
 use crate::state::AppState;
 use axum::http::Method;
 use dotenv::dotenv;
+use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -27,9 +30,8 @@ pub async fn run() {
 
 	let pool = db::create_pool(&database_url).await;
 	let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-	let state = AppState { pool: pool.clone(), jwt_secret };
-	let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-	let state = AppState { pool: pool.clone(), jwt_secret };
+
+	let state = AppState { pool: pool.clone(), jwt_secret, room_channels: Arc::new(RwLock::new(HashMap::new())) };
 	tracing::info!("Connected to PostgreSQL");
 
 	let cors = CorsLayer::new().allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]).allow_headers(Any).allow_origin(Any);

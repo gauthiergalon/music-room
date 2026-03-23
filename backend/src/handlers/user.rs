@@ -1,28 +1,26 @@
 use axum::{
 	Extension, Json,
-	extract::{Path, State},
+	extract::{Path, Query, State},
 	http::StatusCode,
 };
-use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-	dtos::user::{PublicUserResponse, UpdateEmailRequest, UpdatePasswordRequest, UpdateUsernameRequest, UserResponse},
+	dtos::user::{ConfirmEmailQuery, PublicUserResponse, UpdateEmailRequest, UpdatePasswordRequest, UpdateUsernameRequest, UserResponse},
 	errors::{AppError, ErrorMessage},
 	middleware::auth::Claims,
-	repositories::users,
-	services::auth::{hash_password, verify_password},
+	services::user as user_service,
 	state::AppState,
 };
 
 pub async fn get_me(State(state): State<AppState>, Extension(claims): Extension<Claims>) -> Result<Json<UserResponse>, AppError> {
-	let user = users::find_by_id(&state.pool, claims.user_id).await?.ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
+	let user = user_service::get_me(&state.pool, claims.user_id).await?;
 
 	Ok(Json(UserResponse { id: user.id, username: user.username, email: user.email }))
 }
 
 pub async fn get_user(State(state): State<AppState>, Path(user_id): Path<Uuid>) -> Result<Json<PublicUserResponse>, AppError> {
-	let user = users::find_by_id(&state.pool, user_id).await?.ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
+	let user = user_service::get_user(&state.pool, user_id).await?;
 
 	Ok(Json(PublicUserResponse { id: user.id, username: user.username }))
 }
@@ -32,7 +30,7 @@ pub async fn update_username(State(state): State<AppState>, Extension(claims): E
 		return Err(AppError::Validation(vec![ErrorMessage::UsernameInvalidLength]));
 	}
 
-	let user = users::update_username(&state.pool, claims.user_id, &payload.username).await?;
+	let user = user_service::update_username(&state.pool, claims.user_id, &payload.username).await?;
 
 	Ok(Json(UserResponse { id: user.id, username: user.username, email: user.email }))
 }
@@ -42,9 +40,7 @@ pub async fn update_email(Extension(claims): Extension<Claims>, State(state): St
 		return Err(AppError::Validation(vec![ErrorMessage::EmailInvalidFormat]));
 	}
 
-	// todo!("Send confirmation email to new address");
-
-	let user = users::update_email(&state.pool, claims.user_id, &payload.new_email).await?;
+	let user = user_service::update_email(&state.pool, claims.user_id, &payload.new_email).await?;
 
 	Ok(Json(UserResponse { id: user.id, username: user.username, email: user.email }))
 }
@@ -54,13 +50,19 @@ pub async fn update_password(State(state): State<AppState>, Extension(claims): E
 		return Err(AppError::Validation(vec![ErrorMessage::PasswordInvalidPolicy]));
 	}
 
-	let user = users::find_by_id(&state.pool, claims.user_id).await?.ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
-	let current_hash: String = user.password_hash.ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+	user_service::update_password(&state.pool, claims.user_id, &payload.current_password, &payload.new_password).await?;
 
-	verify_password(&payload.current_password, &current_hash)?;
-	let new_password_hash = hash_password(&payload.new_password)?;
+	Ok(StatusCode::NO_CONTENT)
+}
 
-	users::update_password(&state.pool, claims.user_id, new_password_hash).await?;
+pub async fn confirm_email(State(state): State<AppState>, Query(query): Query<ConfirmEmailQuery>) -> Result<StatusCode, AppError> {
+	user_service::confirm_email(&state.pool, &query.token).await?;
+
+	Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn send_email_confirmation_email(State(state): State<AppState>, Extension(claims): Extension<Claims>) -> Result<StatusCode, AppError> {
+	user_service::send_email_confirmation_email(&state.pool, claims.user_id).await?;
 
 	Ok(StatusCode::NO_CONTENT)
 }

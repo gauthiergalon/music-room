@@ -2,7 +2,7 @@ use crate::errors::AppError;
 use crate::models::reset_token::{NewResetToken, ResetToken};
 use sqlx::{Executor, Postgres};
 
-pub async fn insert<'c, E>(executor: E, token: NewResetToken) -> Result<(), AppError>
+pub async fn create<'c, E>(executor: E, token: NewResetToken) -> Result<(), AppError>
 where
 	E: Executor<'c, Database = Postgres>,
 {

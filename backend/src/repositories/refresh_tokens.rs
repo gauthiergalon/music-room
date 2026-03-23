@@ -3,7 +3,7 @@ use crate::models::refresh_token::{NewRefreshToken, RefreshToken};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
-pub async fn insert<'c, E>(executor: E, token: NewRefreshToken) -> Result<(), AppError>
+pub async fn create<'c, E>(executor: E, token: NewRefreshToken) -> Result<(), AppError>
 where
 	E: Executor<'c, Database = Postgres>,
 {

@@ -3,11 +3,11 @@ use crate::models::user::{NewUser, User};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
 
-pub async fn insert<'c, E>(executor: E, new_user: NewUser<'_>) -> Result<Uuid, AppError>
+pub async fn create<'c, E>(executor: E, new_user: NewUser<'_>) -> Result<Uuid, AppError>
 where
 	E: Executor<'c, Database = Postgres>,
 {
-	let id = sqlx::query_scalar!("INSERT INTO users (username, email, password_hash, google_id) VALUES ($1, $2, $3, $4) RETURNING id", new_user.username, new_user.email, new_user.password_hash, new_user.google_id).fetch_one(executor).await.map_err(|e| {
+	let user = sqlx::query_scalar!("INSERT INTO users (username, email, password_hash, google_id) VALUES ($1, $2, $3, $4) RETURNING id", new_user.username, new_user.email, new_user.password_hash, new_user.google_id).fetch_one(executor).await.map_err(|e| {
 		if let sqlx::Error::Database(ref db_err) = e {
 			if db_err.code().as_deref() == Some("23505") {
 				let error_msg = db_err.message();
@@ -20,7 +20,7 @@ where
 		}
 		AppError::Database(e)
 	})?;
-	Ok(id)
+	Ok(user)
 }
 
 pub async fn find_by_id<'c, E>(executor: E, user_id: Uuid) -> Result<Option<User>, AppError>
@@ -60,5 +60,13 @@ where
 	E: Executor<'c, Database = Postgres>,
 {
 	sqlx::query!("UPDATE users SET password_hash = $1 WHERE id = $2", password_hash, user_id).execute(executor).await.map_err(AppError::Database)?;
+	Ok(())
+}
+
+pub async fn confirm_email<'c, E>(executor: E, user_id: Uuid) -> Result<(), AppError>
+where
+	E: Executor<'c, Database = Postgres>,
+{
+	sqlx::query!("UPDATE users SET email_confirmed = TRUE WHERE id = $1", user_id).execute(executor).await.map_err(AppError::Database)?;
 	Ok(())
 }
