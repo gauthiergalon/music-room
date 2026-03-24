@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../widgets/edit_dialog.dart';
 import '../widgets/profile_info_tile.dart';
+import '../controllers/auth_controller.dart';
+import '../core/utils/ui_utils.dart';
+import '../core/exceptions/api_exception.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -11,12 +15,10 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Variables d'état pour stocker les informations affichées
-  String _username = 'User';
-  String _email = 'user@example.com';
-
   @override
   Widget build(BuildContext context) {
+    final authController = context.watch<AuthController>();
+
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -24,61 +26,184 @@ class _ProfilePageState extends State<ProfilePage> {
           padding: const EdgeInsets.all(AppTheme.spacingMd),
           children: [
             Card(
-                child: Column(
-                  children: [
-                    ProfileInfoTile(
-                      icon: Icons.person_outline,
-                      title: 'Username',
-                      subtitle: _username,
-                      onTap: () {
-                        showEditDialog(
-                          context,
-                          title: 'Username',
-                          currentValue: _username,
-                          onSave: (newValue) =>
-                              setState(() => _username = newValue),
-                        );
-                      },
-                    ),
-                    const Divider(),
-                    ProfileInfoTile(
-                      icon: Icons.email_outlined,
-                      title: 'Email Address',
-                      subtitle: _email,
-                      onTap: () {
-                        showEditDialog(
-                          context,
-                          title: 'Email Address',
-                          currentValue: _email,
-                          isEmail: true,
-                          onSave: (newValue) =>
-                              setState(() => _email = newValue),
-                        );
-                      },
-                    ),
-                    const Divider(),
-                    ProfileInfoTile(
-                      icon: Icons.lock_outline,
-                      title: 'Password',
-                      subtitle: '********',
-                      onTap: () {
-                        showEditDialog(
-                          context,
-                          title: 'Password',
-                          currentValue: '',
-                          isPassword: true,
-                          onSave: (newValue) {
-                            // TODO: Implémenter la logique de mise à jour du mot de passe avec le backend
-                          },
-                        );
-                      },
-                    ),
-                  ],
+              child: Column(
+                children: [
+                  ProfileInfoTile(
+                    icon: Icons.person_outline,
+                    title: 'Username',
+                    subtitle: authController.username,
+                    onTap: () {
+                      showEditDialog(
+                        context,
+                        title: 'Username',
+                        currentValue: authController.username,
+                        onSave: (newValue) async {
+                          final currentContext = context;
+                          try {
+                            await context.read<AuthController>().updateUsername(newValue);
+                            if (currentContext.mounted) {
+                              UiUtils.showSuccess(currentContext, 'Username updated successfully');
+                            }
+                          } on ApiException catch (e) {
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.message);
+                            }
+                          } catch (e) {
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.toString());
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  ProfileInfoTile(
+                    icon: Icons.email_outlined,
+                    title: 'Email Address',
+                    subtitle: authController.email,
+                    onTap: () {
+                      showEditDialog(
+                        context,
+                        title: 'Email Address',
+                        currentValue: authController.email,
+                        isEmail: true,
+                        onSave: (newValue) async {
+                          final currentContext = context;
+                          try {
+                            await context.read<AuthController>().updateEmail(newValue);
+                            if (currentContext.mounted) {
+                              UiUtils.showSuccess(currentContext, 'Email updated successfully');
+                            }
+                          } on ApiException catch (e) {
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.message);
+                            }
+                          } catch (e) {
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.toString());
+                            }
+                          }
+                        },
+                      );
+                    },
+                  ),
+                  ProfileInfoTile(
+                    icon: Icons.lock_outline,
+                    title: 'Password',
+                    subtitle: '********',
+                    onTap: () {
+                      _showPasswordDialog(context);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () {
+                context.read<AuthController>().logout();
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Log out', style: TextStyle(fontSize: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                foregroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Future<void> _showPasswordDialog(BuildContext context) async {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final currentContext = context;
+
+    return showDialog(
+      context: currentContext,
+      builder: (dialogContext) {
+        bool isSaving = false;
+
+        return StatefulBuilder(
+          builder: (builderContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Update Password'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: currentPasswordController,
+                    obscureText: true,
+                    enabled: !isSaving,
+                    decoration: const InputDecoration(labelText: 'Current Password'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: newPasswordController,
+                    obscureText: true,
+                    enabled: !isSaving,
+                    decoration: const InputDecoration(labelText: 'New Password'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final currentPwd = currentPasswordController.text;
+                          final newPwd = newPasswordController.text;
+                          if (currentPwd.isEmpty || newPwd.isEmpty) return;
+
+                          setDialogState(() => isSaving = true);
+
+                          try {
+                            await currentContext.read<AuthController>().updatePassword(currentPwd, newPwd);
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext); // Close dialog
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showSuccess(currentContext, 'Password updated successfully');
+                            }
+                          } on ApiException catch (e) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isSaving = false);
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.message);
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isSaving = false);
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.toString());
+                            }
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
