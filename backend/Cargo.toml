@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 argon2 = "0.5.3"
 axum = { version = "0.8.8", features = ["ws"] }
-chrono = "0.4.44"
+chrono = { version = "0.4.44", features = ["serde"] }
 dotenv = "0.15.0"
 futures-util = { version = "0.3.32", features = ["sink"] }
 hex = "0.4.3"

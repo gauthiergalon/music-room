@@ -4,5 +4,6 @@ CREATE TABLE rooms (
     is_public           BOOLEAN NOT NULL DEFAULT true,
     current_track       BIGINT,
     current_position    INT NOT NULL DEFAULT 0,
+    played_at           TIMESTAMPTZ,
     is_playing          BOOLEAN NOT NULL DEFAULT false
 );
