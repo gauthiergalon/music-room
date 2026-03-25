@@ -43,7 +43,18 @@ class ApiClient {
         }
       }
     }
-    return 'Unknown error (${e.response?.statusCode})';
+
+    if (e.type == DioExceptionType.connectionError ||
+        e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'Could not connect to the server, try again later';
+    }
+
+    if (e.response?.statusCode != null) {
+      return 'Unknown error (${e.response!.statusCode})';
+    }
+
+    return e.message ?? 'Network error occurred';
   }
 
   static Future<dynamic> get(String endpoint) async {

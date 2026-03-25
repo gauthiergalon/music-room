@@ -18,3 +18,12 @@ where
 
 	Ok(stored.map(|s| ResetToken { token_hash: s.token_hash, user_id: s.user_id, created_at: s.created_at, expires_at: s.expires_at }))
 }
+
+pub async fn find_valid_by_user_id<'c, E>(executor: E, user_id: uuid::Uuid) -> Result<Option<ResetToken>, AppError>
+where
+	E: Executor<'c, Database = Postgres>,
+{
+	let token = sqlx::query!("SELECT token_hash, user_id, created_at, expires_at FROM reset_tokens WHERE user_id = $1 AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1", user_id).fetch_optional(executor).await.map_err(AppError::Database)?;
+
+	Ok(token.map(|s| ResetToken { token_hash: s.token_hash, user_id: s.user_id, created_at: s.created_at, expires_at: s.expires_at }))
+}

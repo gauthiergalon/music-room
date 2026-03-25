@@ -60,6 +60,10 @@ pub async fn confirm_email(pool: &PgPool, token: &str) -> Result<(), AppError> {
 pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Result<(), AppError> {
 	let user = users::find_by_id(pool, user_id).await?.ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
 
+	if email_tokens::find_valid_by_user_id(pool, user_id).await?.is_some() {
+		return Err(AppError::TooManyRequests(ErrorMessage::TooManyEmails));
+	}
+
 	let token_pair = TokenPair::generate();
 	let email = Email::for_email_confirmation(&token_pair.plain);
 	let email_token = NewEmailToken { token_hash: token_pair.hash, user_id: user.id, new_email: user.email.clone(), expires_at: Utc::now() + Duration::hours(24) };

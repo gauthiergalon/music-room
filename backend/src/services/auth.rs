@@ -48,7 +48,7 @@ pub async fn register(pool: &PgPool, jwt_secret: &str, username: &str, email: &s
 	let email = email.trim().to_lowercase();
 	let password_hash = hash_password(password)?;
 
-	let user_id = users::create(pool, NewUser { username, email: &email, password_hash: Some(password_hash), google_id: None }).await?;
+	let user_id = users::create(pool, NewUser { username, email: &email, password_hash: Some(password_hash), email_confirmed: Some(false), google_id: None }).await?;
 
 	let access_token = generate_access_token(user_id, jwt_secret)?;
 	let refresh_token = store_refresh_token(pool, user_id).await?;
@@ -91,17 +91,20 @@ pub async fn refresh(pool: &PgPool, jwt_secret: &str, token: &str) -> Result<(St
 
 pub async fn forgot_password(pool: &PgPool, email: &str) -> Result<(), AppError> {
 	let email_address = email.trim().to_lowercase();
-	let user = users::find_by_email(pool, &email_address).await?;
 
-	if let Some(user_model) = user {
-		let token_pair = crate::services::tokens::TokenPair::generate();
-		let expires_at = Utc::now() + TimeDelta::minutes(15);
+	let user_model = users::find_by_email(pool, &email_address).await?.ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
 
-		reset_tokens::create(pool, NewResetToken { token_hash: token_pair.hash, user_id: user_model.id, expires_at }).await?;
-
-		let email_to_send = crate::services::email::Email::for_password_reset(&token_pair.plain);
-		email_to_send.send(&email_address)?;
+	if reset_tokens::find_valid_by_user_id(pool, user_model.id).await?.is_some() {
+		return Err(AppError::TooManyRequests(ErrorMessage::TooManyEmails));
 	}
+
+	let token_pair = TokenPair::generate();
+	let expires_at = Utc::now() + TimeDelta::minutes(15);
+
+	reset_tokens::create(pool, NewResetToken { token_hash: token_pair.hash, user_id: user_model.id, expires_at }).await?;
+
+	let email_to_send = crate::services::email::Email::for_password_reset(&token_pair.plain);
+	email_to_send.send(&email_address)?;
 
 	Ok(())
 }

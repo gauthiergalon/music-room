@@ -18,3 +18,12 @@ where
 
 	Ok(token)
 }
+
+pub async fn find_valid_by_user_id<'c, E>(executor: E, user_id: Uuid) -> Result<Option<EmailToken>, AppError>
+where
+	E: Executor<'c, Database = Postgres>,
+{
+	let token = sqlx::query_as!(EmailToken, "SELECT * FROM email_tokens WHERE user_id = $1 AND expires_at > NOW() ORDER BY expires_at DESC LIMIT 1", user_id).fetch_optional(executor).await.map_err(AppError::Database)?;
+
+	Ok(token)
+}

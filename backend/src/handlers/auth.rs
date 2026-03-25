@@ -56,7 +56,7 @@ pub async fn forgot_password(State(state): State<AppState>, Json(payload): Json<
 		return Err(AppError::Validation(vec![ErrorMessage::EmailInvalidFormat]));
 	}
 
-	auth_service::forgot_password(&state.pool, &payload.email).await?;
+	let _ = auth_service::forgot_password(&state.pool, &payload.email).await;
 
 	Ok(StatusCode::NO_CONTENT)
 }

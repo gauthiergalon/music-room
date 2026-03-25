@@ -2,17 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/api_client.dart';
 import '../core/exceptions/api_exception.dart';
+import '../models/user.dart';
 
 class AuthController extends ChangeNotifier {
   bool _isAuthenticated = false;
   String? _token;
-  String? _username;
-  String? _email;
+  User? _user;
 
   bool get isAuthenticated => _isAuthenticated;
   String? get token => _token;
-  String get username => _username ?? 'User';
-  String get email => _email ?? 'user@example.com';
+  User? get user => _user;
 
   AuthController() {
     ApiClient.onUnauthorized = () => logout();
@@ -35,8 +34,13 @@ class AuthController extends ChangeNotifier {
     try {
       final data = await ApiClient.get('/users/me');
       if (data != null) {
-        _username = data['username'];
-        _email = data['email'];
+        _user = User(
+          id: data['id'],
+          username: data['username'],
+          email: data['email'],
+          emailConfirmed: data['email_confirmed'],
+          googleId: data['google_id'],
+        );
         notifyListeners();
       }
     } on ApiException catch (e) {
@@ -55,7 +59,7 @@ class AuthController extends ChangeNotifier {
       body: {'username': newUsername},
     );
     if (data != null) {
-      _username = data['username'];
+      _user = _user!.copyWith(username: data['username']);
       notifyListeners();
     }
   }
@@ -66,7 +70,7 @@ class AuthController extends ChangeNotifier {
       body: {'new_email': newEmail},
     );
     if (data != null) {
-      _email = data['email'];
+      _user = _user!.copyWith(email: data['email'], emailConfirmed: false);
       notifyListeners();
     }
   }
@@ -79,6 +83,10 @@ class AuthController extends ChangeNotifier {
       '/users/me/password',
       body: {'current_password': currentPassword, 'new_password': newPassword},
     );
+  }
+
+  Future<void> sendEmailConfirmation() async {
+    await ApiClient.post('/users/me/send-confirmation-email');
   }
 
   Future<void> register(String username, String email, String password) async {
@@ -123,6 +131,17 @@ class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<void> forgotPassword(String email) async {
+    await ApiClient.post('/auth/forgot-password', body: {'email': email});
+  }
+
+  Future<void> resetPassword(String token, String newPassword) async {
+    await ApiClient.post(
+      '/auth/reset-password',
+      body: {'token': token, 'new_password': newPassword},
+    );
+  }
+
   Future<void> loginWithGoogle() async {
     throw ApiException('Google login is not implemented yet');
   }
@@ -144,12 +163,22 @@ class AuthController extends ChangeNotifier {
 
     _isAuthenticated = false;
     _token = null;
-    _username = null;
-    _email = null;
+    _user = null;
 
     await prefs.remove('jwt_token');
     await prefs.remove('refresh_token');
 
     notifyListeners();
+  }
+
+  Future<void> confirmEmail(String token) async {
+    try {
+      await ApiClient.patch('/users/me/confirm-email?token=$token');
+
+      _user = _user?.copyWith(emailConfirmed: true);
+      notifyListeners();
+    } catch (e) {
+      throw Exception('Failed to verify email: $e');
+    }
   }
 }

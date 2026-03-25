@@ -85,38 +85,38 @@ class _SearchPageState extends State<SearchPage> {
                 right: AppTheme.spacingMd,
               ),
               child: Material(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                    child: SearchBar(
-                      controller: _searchController,
-                      hintText: 'Find a song...',
-                      leading: const Padding(
-                        padding: EdgeInsets.only(left: 8.0),
-                        child: Icon(Icons.search),
-                      ),
-                      trailing: [
-                        if (_searchController.text.isNotEmpty)
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              _searchController.clear();
-                              _performSearch('');
-                            },
-                          ),
-                      ],
-                      onSubmitted: _performSearch,
-                      onChanged: (value) {
-                        setState(() {});
-                      },
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: SearchBar(
+                    controller: _searchController,
+                    hintText: 'Find a song...',
+                    leading: const Padding(
+                      padding: EdgeInsets.only(left: 8.0),
+                      child: Icon(Icons.search),
                     ),
+                    trailing: [
+                      if (_searchController.text.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            _performSearch('');
+                          },
+                        ),
+                    ],
+                    onSubmitted: _performSearch,
+                    onChanged: (value) {
+                      setState(() {});
+                    },
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Expanded(child: _buildBody()),
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
     );
   }

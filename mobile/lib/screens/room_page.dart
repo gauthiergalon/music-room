@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../controllers/auth_controller.dart';
 import '../controllers/room_controller.dart';
 import '../models/room.dart';
 import '../widgets/room_list_item.dart';
@@ -16,15 +17,13 @@ class RoomPage extends StatefulWidget {
 }
 
 class _RoomPageState extends State<RoomPage> {
-  final String currentUser = 'You';
-
-  void _createRoom() {
+  void _createRoom(String username) {
     final newRoom = Room(
       id: Random().nextInt(1000000),
-      owner: 'You',
+      owner: username,
       currentTrack: null,
       status: 0,
-      listeners: ['You'],
+      listeners: [username],
     );
     final controller = context.read<RoomController>();
     controller.createRoom(newRoom);
@@ -37,6 +36,13 @@ class _RoomPageState extends State<RoomPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authController = context.watch<AuthController>();
+    final user = authController.user;
+
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     final controller = context.watch<RoomController>();
     final current = controller.currentRoom;
 
@@ -51,7 +57,7 @@ class _RoomPageState extends State<RoomPage> {
       child: Scaffold(
         floatingActionButton: current == null
             ? FloatingActionButton(
-                onPressed: _createRoom,
+                onPressed: () => _createRoom(user.username),
                 child: const Icon(Icons.add),
               )
             : null,
@@ -59,7 +65,7 @@ class _RoomPageState extends State<RoomPage> {
           bottom: false,
           child: Stack(
             children: [
-              _buildRoomList(controller),
+              _buildRoomList(controller, user.username),
               if (current != null) const Positioned.fill(child: RoomOverlay()),
             ],
           ),
@@ -68,10 +74,8 @@ class _RoomPageState extends State<RoomPage> {
     );
   }
 
-  Widget _buildRoomList(RoomController controller) {
-    final rooms = controller.availableRooms
-        .where((r) => r.isPublic || r.listeners.contains(currentUser))
-        .toList();
+  Widget _buildRoomList(RoomController controller, String username) {
+    final rooms = controller.availableRooms.where((r) => r.isPublic).toList();
     return RefreshIndicator(
       onRefresh: controller.refreshRooms,
       child: ListView.builder(

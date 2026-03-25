@@ -20,6 +20,9 @@ pub enum AppError {
 	#[error("Conflict")]
 	Conflict(ErrorMessage),
 
+	#[error("Too Many Requests")]
+	TooManyRequests(ErrorMessage),
+
 	#[error("Validation Error")]
 	Validation(Vec<ErrorMessage>),
 
@@ -37,6 +40,7 @@ impl IntoResponse for AppError {
 			AppError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, Some(json!([msg.to_string()]))),
 			AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, Some(json!([msg.to_string()]))),
 			AppError::Conflict(msg) => (StatusCode::CONFLICT, Some(json!([msg.to_string()]))),
+			AppError::TooManyRequests(msg) => (StatusCode::TOO_MANY_REQUESTS, Some(json!([msg.to_string()]))),
 			AppError::Validation(msgs) => {
 				let string_msgs: Vec<String> = msgs.iter().map(|m| m.to_string()).collect();
 				(StatusCode::UNPROCESSABLE_ENTITY, Some(json!(string_msgs)))
@@ -60,6 +64,7 @@ pub enum ErrorMessage {
 	UsernameTaken,
 	TokenExpired,
 	TokenInvalid,
+	TooManyEmails,
 
 	// Validation
 	UsernameInvalidLength,
@@ -87,6 +92,7 @@ impl ErrorMessage {
 			Self::UsernameTaken => "Username already taken",
 			Self::TokenExpired => "Token expired",
 			Self::TokenInvalid => "Invalid token",
+			Self::TooManyEmails => "An email was already sent recently, please check your inbox or try again later",
 
 			// Validation
 			Self::UsernameInvalidLength => "Username has invalid length (must be between 3 and 32 characters)",

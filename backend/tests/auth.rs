@@ -5,17 +5,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 fn create_app(pool: PgPool) -> axum::Router {
-    let state = backend::state::AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        room_channels: Arc::new(RwLock::new(HashMap::new())),
-    };
-    app_router(state.clone()).with_state(state)
+	let state = backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), room_channels: Arc::new(RwLock::new(HashMap::new())) };
+	app_router(state.clone()).with_state(state)
 }
 
 #[derive(Serialize, Deserialize, Debug)]

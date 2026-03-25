@@ -18,6 +18,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final authController = context.watch<AuthController>();
+    final user = authController.user;
+
+    if (user == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       body: SafeArea(
@@ -31,18 +36,23 @@ class _ProfilePageState extends State<ProfilePage> {
                   ProfileInfoTile(
                     icon: Icons.person_outline,
                     title: 'Username',
-                    subtitle: authController.username,
+                    subtitle: user.username,
                     onTap: () {
                       showEditDialog(
                         context,
                         title: 'Username',
-                        currentValue: authController.username,
+                        currentValue: user.username,
                         onSave: (newValue) async {
                           final currentContext = context;
                           try {
-                            await context.read<AuthController>().updateUsername(newValue);
+                            await context.read<AuthController>().updateUsername(
+                              newValue,
+                            );
                             if (currentContext.mounted) {
-                              UiUtils.showSuccess(currentContext, 'Username updated successfully');
+                              UiUtils.showSuccess(
+                                currentContext,
+                                'Username updated successfully',
+                              );
                             }
                           } on ApiException catch (e) {
                             if (currentContext.mounted) {
@@ -60,19 +70,24 @@ class _ProfilePageState extends State<ProfilePage> {
                   ProfileInfoTile(
                     icon: Icons.email_outlined,
                     title: 'Email Address',
-                    subtitle: authController.email,
+                    subtitle: user.email ?? 'No email linked',
                     onTap: () {
                       showEditDialog(
                         context,
                         title: 'Email Address',
-                        currentValue: authController.email,
+                        currentValue: user.email ?? '',
                         isEmail: true,
                         onSave: (newValue) async {
                           final currentContext = context;
                           try {
-                            await context.read<AuthController>().updateEmail(newValue);
+                            await context.read<AuthController>().updateEmail(
+                              newValue,
+                            );
                             if (currentContext.mounted) {
-                              UiUtils.showSuccess(currentContext, 'Email updated successfully');
+                              UiUtils.showSuccess(
+                                currentContext,
+                                'Email updated successfully',
+                              );
                             }
                           } on ApiException catch (e) {
                             if (currentContext.mounted) {
@@ -94,6 +109,69 @@ class _ProfilePageState extends State<ProfilePage> {
                     onTap: () {
                       _showPasswordDialog(context);
                     },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(Icons.mark_email_read_outlined),
+                    title: const Text('Email Verification'),
+                    subtitle: Text(
+                      user.emailConfirmed == true
+                          ? 'Your email is verified'
+                          : 'Tap to send a verification email',
+                    ),
+                    trailing: user.emailConfirmed == true
+                        ? const Icon(Icons.check_circle, color: Colors.green)
+                        : const Icon(Icons.chevron_right),
+                    onTap: user.emailConfirmed == true
+                        ? null
+                        : () async {
+                            final currentContext = context;
+                            try {
+                              await context
+                                  .read<AuthController>()
+                                  .sendEmailConfirmation();
+                              if (currentContext.mounted) {
+                                UiUtils.showSuccess(
+                                  currentContext,
+                                  'Verification email sent! Check your inbox.',
+                                );
+                              }
+                            } on ApiException catch (e) {
+                              if (currentContext.mounted) {
+                                UiUtils.showError(currentContext, e.message);
+                              }
+                            } catch (e) {
+                              if (currentContext.mounted) {
+                                UiUtils.showError(currentContext, e.toString());
+                              }
+                            }
+                          },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.account_circle_outlined),
+                    title: const Text('Google Account'),
+                    subtitle: Text(
+                      user.googleId != null
+                          ? 'Linked to Google'
+                          : 'Tap to link your Google account',
+                    ),
+                    trailing: user.googleId != null
+                        ? const Icon(Icons.check_circle)
+                        : const Icon(Icons.link),
+                    onTap: user.googleId != null
+                        ? null
+                        : () {
+                            UiUtils.showError(
+                              context,
+                              'Google linking is not implemented yet',
+                            );
+                          },
                   ),
                 ],
               ),
@@ -141,20 +219,26 @@ class _ProfilePageState extends State<ProfilePage> {
                     controller: currentPasswordController,
                     obscureText: true,
                     enabled: !isSaving,
-                    decoration: const InputDecoration(labelText: 'Current Password'),
+                    decoration: const InputDecoration(
+                      labelText: 'Current Password',
+                    ),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: newPasswordController,
                     obscureText: true,
                     enabled: !isSaving,
-                    decoration: const InputDecoration(labelText: 'New Password'),
+                    decoration: const InputDecoration(
+                      labelText: 'New Password',
+                    ),
                   ),
                 ],
               ),
               actions: [
                 TextButton(
-                  onPressed: isSaving ? null : () => Navigator.pop(dialogContext),
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -168,12 +252,17 @@ class _ProfilePageState extends State<ProfilePage> {
                           setDialogState(() => isSaving = true);
 
                           try {
-                            await currentContext.read<AuthController>().updatePassword(currentPwd, newPwd);
+                            await currentContext
+                                .read<AuthController>()
+                                .updatePassword(currentPwd, newPwd);
                             if (dialogContext.mounted) {
                               Navigator.pop(dialogContext); // Close dialog
                             }
                             if (currentContext.mounted) {
-                              UiUtils.showSuccess(currentContext, 'Password updated successfully');
+                              UiUtils.showSuccess(
+                                currentContext,
+                                'Password updated successfully',
+                              );
                             }
                           } on ApiException catch (e) {
                             if (dialogContext.mounted) {

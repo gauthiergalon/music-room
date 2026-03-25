@@ -121,10 +121,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, room_id: Uuid, is_own
 
 	let mut send_task = tokio::spawn(async move {
 		while let Ok(msg) = rx.recv().await {
-			if let Ok(text) = serde_json::to_string(&msg) {
-				if sender.send(Message::Text(text.into())).await.is_err() {
-					break;
-				}
+			if let Ok(text) = serde_json::to_string(&msg)
+				&& sender.send(Message::Text(text.into())).await.is_err()
+			{
+				break;
 			}
 		}
 	});

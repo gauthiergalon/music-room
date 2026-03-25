@@ -41,7 +41,6 @@ async fn register_and_login(server: &TestServer, username: &str, email: &str) ->
 	json.access_token
 }
 
-
 #[sqlx::test]
 async fn test_get_me(pool: PgPool) {
 	let app = create_app(pool);
@@ -55,7 +54,6 @@ async fn test_get_me(pool: PgPool) {
 	assert_eq!(user.username, "test_get_me");
 	assert_eq!(user.email, "getme@example.com");
 }
-
 
 #[sqlx::test]
 async fn test_update_username(pool: PgPool) {
@@ -79,7 +77,6 @@ async fn test_update_username(pool: PgPool) {
 	assert_eq!(user.username, "new_username");
 }
 
-
 #[sqlx::test]
 async fn test_update_email(pool: PgPool) {
 	let app = create_app(pool);
@@ -101,7 +98,6 @@ async fn test_update_email(pool: PgPool) {
 	let user = res.json::<TestUserResponse>();
 	assert_eq!(user.email, "newemail@example.com");
 }
-
 
 #[sqlx::test]
 async fn test_update_password(pool: PgPool) {
@@ -132,7 +128,6 @@ async fn test_update_password(pool: PgPool) {
 	res.assert_status(StatusCode::OK);
 }
 
-
 #[sqlx::test]
 async fn test_get_user_by_id(pool: PgPool) {
 	let app = create_app(pool);
@@ -156,71 +151,38 @@ async fn test_get_user_by_id(pool: PgPool) {
 	assert_eq!(user.username, "test_get_u");
 }
 
-
-
-
 #[sqlx::test]
 async fn test_confirm_email_invalid_token(pool: PgPool) {
-    let app = create_app(pool);
-    let server = TestServer::new(app);
-    let token = register_and_login(&server, "test_conf_invalid", "conf_invalid@example.com").await;
+	let app = create_app(pool);
+	let server = TestServer::new(app);
+	let token = register_and_login(&server, "test_conf_invalid", "conf_invalid@example.com").await;
 
-    let res = server
-        .patch("/users/me/confirm-email?token=invalid_token123")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
+	let res = server.patch("/users/me/confirm-email?token=invalid_token123").add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token)).await;
 
-    res.assert_status(StatusCode::UNAUTHORIZED);
+	res.assert_status(StatusCode::UNAUTHORIZED);
 }
-
 
 #[sqlx::test]
 async fn test_confirm_email_success(pool: PgPool) {
-    let app = create_app(pool.clone());
-    let server = TestServer::new(app);
-    let token = register_and_login(&server, "test_conf_success", "conf_success@example.com").await;
+	let app = create_app(pool.clone());
+	let server = TestServer::new(app);
+	let token = register_and_login(&server, "test_conf_success", "conf_success@example.com").await;
 
-    let me_res = server
-        .get("/users/me")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
-    let me = me_res.json::<TestUserResponse>();
-    let user_id = uuid::Uuid::parse_str(&me.id).unwrap();
+	let me_res = server.get("/users/me").add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token)).await;
+	let me = me_res.json::<TestUserResponse>();
+	let user_id = uuid::Uuid::parse_str(&me.id).unwrap();
 
-    let token_pair = backend::services::tokens::TokenPair::generate();
-    
-    let new_token = backend::models::email_token::NewEmailToken {
-        token_hash: token_pair.hash.clone(),
-        user_id,
-        new_email: "new_confirmed@example.com".to_string(),
-        expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
-    };
-    
-    backend::repositories::email_tokens::create(&pool, new_token).await.unwrap();
+	let token_pair = backend::services::tokens::TokenPair::generate();
 
-    let res = server
-        .patch(&format!("/users/me/confirm-email?token={}", token_pair.plain))
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
+	let new_token = backend::models::email_token::NewEmailToken { token_hash: token_pair.hash.clone(), user_id, new_email: "new_confirmed@example.com".to_string(), expires_at: chrono::Utc::now() + chrono::Duration::hours(24) };
 
-    res.assert_status(StatusCode::NO_CONTENT);
+	backend::repositories::email_tokens::create(&pool, new_token).await.unwrap();
 
-    let me_res2 = server
-        .get("/users/me")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
-    let me2 = me_res2.json::<TestUserResponse>();
-    assert_eq!(me2.email, "new_confirmed@example.com");
+	let res = server.patch(&format!("/users/me/confirm-email?token={}", token_pair.plain)).add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token)).await;
+
+	res.assert_status(StatusCode::NO_CONTENT);
+
+	let me_res2 = server.get("/users/me").add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token)).await;
+	let me2 = me_res2.json::<TestUserResponse>();
+	assert_eq!(me2.email, "new_confirmed@example.com");
 }

@@ -40,7 +40,12 @@ class _LoginPageState extends State<LoginPage> {
     } on ApiException catch (e) {
       if (mounted) UiUtils.showError(context, e.message);
     } catch (e) {
-      if (mounted) UiUtils.showError(context, 'An unexpected error occurred. Please try again.');
+      if (mounted) {
+        UiUtils.showError(
+          context,
+          'An unexpected error occurred. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -53,7 +58,46 @@ class _LoginPageState extends State<LoginPage> {
     } on ApiException catch (e) {
       if (mounted) UiUtils.showError(context, e.message);
     } catch (e) {
-      if (mounted) UiUtils.showError(context, 'An unexpected error occurred. Please try again.');
+      if (mounted) {
+        UiUtils.showError(
+          context,
+          'An unexpected error occurred. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      UiUtils.showError(
+        context,
+        'Please enter your email first to reset your password',
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await context.read<AuthController>().forgotPassword(email);
+      if (mounted) {
+        UiUtils.showSuccess(
+          context,
+          'Password reset link sent to your email (if it exists).',
+        );
+      }
+    } on ApiException catch (e) {
+      if (mounted) UiUtils.showError(context, e.message);
+    } catch (e) {
+      if (mounted) {
+        UiUtils.showError(
+          context,
+          'An unexpected error occurred. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -87,7 +131,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _isLogin ? 'Log in to join your friends' : 'Create an account to join',
+                  _isLogin
+                      ? 'Log in to join your friends'
+                      : 'Create an account to join',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16),
                 ),
@@ -95,6 +141,7 @@ class _LoginPageState extends State<LoginPage> {
                 if (!_isLogin) ...[
                   TextField(
                     controller: _usernameController,
+                    textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
                       labelText: 'Username',
                       prefixIcon: const Icon(Icons.person),
@@ -108,6 +155,7 @@ class _LoginPageState extends State<LoginPage> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: 'Email',
                     prefixIcon: const Icon(Icons.email),
@@ -120,6 +168,8 @@ class _LoginPageState extends State<LoginPage> {
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _handleSubmit(),
                   decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock),
@@ -128,7 +178,16 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                if (_isLogin)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _handleForgotPassword,
+                      child: const Text('Forgot your password?'),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 32),
                 SizedBox(
                   height: 50,
                   child: ElevatedButton(
@@ -152,9 +211,13 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _isLoading ? null : () => setState(() => _isLogin = !_isLogin),
+                  onPressed: _isLoading
+                      ? null
+                      : () => setState(() => _isLogin = !_isLogin),
                   child: Text(
-                    _isLogin ? "Don't have an account? Sign up" : "Already have an account? Log in",
+                    _isLogin
+                        ? "Don't have an account? Sign up"
+                        : "Already have an account? Log in",
                   ),
                 ),
                 const SizedBox(height: 16),
