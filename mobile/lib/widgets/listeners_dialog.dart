@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
+import '../controllers/auth_controller.dart';
 import '../core/theme.dart';
 
-void showListenersDialog(BuildContext context, String currentUser) {
+void showListenersDialog(BuildContext context) {
   showGeneralDialog(
     context: context,
     barrierLabel: 'Listeners',
@@ -28,14 +29,15 @@ void showListenersDialog(BuildContext context, String currentUser) {
             width: size.width * 0.78,
             height: size.height,
             child: SafeArea(
-              child: Consumer<RoomController>(
-                builder: (ctx2, controller, _) {
+              child: Consumer2<RoomController, AuthController>(
+                builder: (ctx2, controller, authController, _) {
                   final currentRoom = controller.currentRoom;
-                  if (currentRoom == null) return const SizedBox.shrink();
+                  final currentUser = authController.user;
+                  if (currentRoom == null || currentUser == null) {
+                    return const SizedBox.shrink();
+                  }
 
-                  final otherListeners = currentRoom.listeners
-                      .where((l) => l != currentRoom.owner)
-                      .toList();
+                  final otherListeners = currentRoom.listeners.toList();
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -62,37 +64,36 @@ void showListenersDialog(BuildContext context, String currentUser) {
                           ],
                         ),
                       ),
-                      ListTile(
-                        title: Row(
-                          children: [
-                            const Icon(Icons.emoji_events, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              currentRoom.owner,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (currentUser == currentRoom.owner) ...[
+                      if (currentUser.id == currentRoom.owner) ...[
                         const Divider(),
                         SwitchListTile(
-                          title: const Text('Room Publique'),
+                          title: const Text('Room Privacy'),
                           subtitle: Text(
                             currentRoom.isPublic
-                                ? 'Visible par tous'
-                                : 'Cachée (invitation uniquement)',
+                                ? 'Public'
+                                : 'Private (invitation link only)',
                           ),
                           value: currentRoom.isPublic,
-                          onChanged: (val) {
-                            controller.togglePrivacy(currentRoom);
+                          onChanged: (val) async {
+                            try {
+                              await controller.togglePrivacy(currentRoom);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Failed to update room privacy',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
                           },
                         ),
                         ListTile(
                           leading: const Icon(Icons.link),
-                          title: const Text('Copier le lien d\'invitation'),
+                          title: const Text('Copy Invitation Link'),
                           onTap: () {
                             Clipboard.setData(
                               ClipboardData(
@@ -102,9 +103,7 @@ void showListenersDialog(BuildContext context, String currentUser) {
                             );
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text(
-                                  'Lien copié dans le presse-papier !',
-                                ),
+                                content: Text('Link copied to clipboard!'),
                               ),
                             );
                           },
@@ -117,7 +116,7 @@ void showListenersDialog(BuildContext context, String currentUser) {
                           vertical: 8,
                         ),
                         child: Text(
-                          'Autres auditeurs',
+                          'Members of the room',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: Colors.grey,
@@ -128,11 +127,34 @@ void showListenersDialog(BuildContext context, String currentUser) {
                         child: ListView.builder(
                           itemCount: otherListeners.length,
                           itemBuilder: (c, idx) {
-                            final name = otherListeners[idx];
-                            final amOwner = currentUser == currentRoom.owner;
+                            final roomUser = otherListeners[idx];
+                            final amOwner = currentUser.id == currentRoom.owner;
+                            final isMe = roomUser.id == currentUser.id;
+                            final isOwnerUser =
+                                roomUser.id == currentRoom.owner;
+
+                            Widget? leadingIcon;
+                            if (isOwnerUser) {
+                              leadingIcon = const Icon(
+                                Icons.emoji_events,
+                                size: 18,
+                                color: Colors.amber,
+                              );
+                            } else {
+                              leadingIcon = const SizedBox(width: 18);
+                            }
+
                             return ListTile(
-                              title: Text(name),
-                              trailing: amOwner
+                              leading: leadingIcon,
+                              title: Text(
+                                roomUser.username,
+                                style: TextStyle(
+                                  fontWeight: isMe
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              trailing: (amOwner && !isMe)
                                   ? Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -144,15 +166,19 @@ void showListenersDialog(BuildContext context, String currentUser) {
                                           onPressed: () =>
                                               controller.promoteToOwner(
                                                 currentRoom,
-                                                name,
+                                                roomUser,
                                               ),
                                         ),
                                         IconButton(
                                           icon: const Icon(
                                             Icons.remove_circle_outline,
+                                            size: 20,
                                           ),
-                                          onPressed: () => controller
-                                              .kickListener(currentRoom, name),
+                                          onPressed: () =>
+                                              controller.kickListener(
+                                                currentRoom,
+                                                roomUser,
+                                              ),
                                         ),
                                       ],
                                     )

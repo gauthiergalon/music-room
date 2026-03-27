@@ -51,7 +51,7 @@ class RoomOverlay extends StatelessWidget {
                     flex: 2,
                     child: Center(
                       child: Text(
-                        "${room.owner}'s Room",
+                        room.name,
                         style: Theme.of(context).textTheme.titleMedium,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -63,7 +63,7 @@ class RoomOverlay extends StatelessWidget {
                     child: IconButton(
                       tooltip: 'Listeners',
                       icon: const Icon(Icons.people),
-                      onPressed: () => showListenersDialog(context, 'You'),
+                      onPressed: () => showListenersDialog(context),
                     ),
                   ),
                 ],

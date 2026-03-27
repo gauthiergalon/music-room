@@ -1,6 +1,7 @@
 CREATE TABLE rooms (
     id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     owner_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name                VARCHAR(255) NOT NULL,
     is_public           BOOLEAN NOT NULL DEFAULT true,
     current_track       BIGINT,
     current_position    INT NOT NULL DEFAULT 0,

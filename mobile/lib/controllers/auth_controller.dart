@@ -6,10 +6,12 @@ import '../models/user.dart';
 
 class AuthController extends ChangeNotifier {
   bool _isAuthenticated = false;
+  bool _isLoadingUser = false;
   String? _token;
   User? _user;
 
   bool get isAuthenticated => _isAuthenticated;
+  bool get isLoadingUser => _isLoadingUser;
   String? get token => _token;
   User? get user => _user;
 
@@ -32,6 +34,9 @@ class AuthController extends ChangeNotifier {
   Future<void> fetchUserInfo() async {
     if (_token == null) return;
     try {
+      _isLoadingUser = true;
+      notifyListeners();
+
       final data = await ApiClient.get('/users/me');
       if (data != null) {
         _user = User(
@@ -41,7 +46,6 @@ class AuthController extends ChangeNotifier {
           emailConfirmed: data['email_confirmed'],
           googleId: data['google_id'],
         );
-        notifyListeners();
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
@@ -50,6 +54,9 @@ class AuthController extends ChangeNotifier {
       debugPrint('Failed to fetch user info: $e');
     } catch (e) {
       debugPrint('Unexpected error fetching user info: $e');
+    } finally {
+      _isLoadingUser = false;
+      notifyListeners();
     }
   }
 

@@ -27,9 +27,9 @@ pub fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
 	Argon2::default().verify_password(password.as_bytes(), &parsed).map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))
 }
 
-fn generate_access_token(user_id: Uuid, secret: &str) -> Result<String, AppError> {
+fn generate_access_token(user_id: Uuid, username: String, secret: &str) -> Result<String, AppError> {
 	let exp = (Utc::now() + TimeDelta::minutes(15)).timestamp() as usize;
-	let claims = Claims { user_id, exp };
+	let claims = Claims { user_id, username, exp };
 
 	encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())).map_err(|_| AppError::Internal)
 }
@@ -50,7 +50,7 @@ pub async fn register(pool: &PgPool, jwt_secret: &str, username: &str, email: &s
 
 	let user_id = users_repo::create(pool, NewUser { username, email: &email, password_hash: Some(password_hash), email_confirmed: Some(false), google_id: None }).await?;
 
-	let access_token = generate_access_token(user_id, jwt_secret)?;
+	let access_token = generate_access_token(user_id, username.to_string(), jwt_secret)?;
 	let refresh_token = store_refresh_token(pool, user_id).await?;
 
 	Ok((access_token, refresh_token))
@@ -63,7 +63,7 @@ pub async fn login(pool: &PgPool, jwt_secret: &str, email: &str, password: &str)
 	let password_hash = user.password_hash.ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 	verify_password(password, &password_hash)?;
 
-	let access_token = generate_access_token(user.id, jwt_secret)?;
+	let access_token = generate_access_token(user.id, user.username.clone(), jwt_secret)?;
 	let refresh_token = store_refresh_token(pool, user.id).await?;
 
 	Ok((access_token, refresh_token))
@@ -83,7 +83,8 @@ pub async fn refresh(pool: &PgPool, jwt_secret: &str, token: &str) -> Result<(St
 		return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
 	}
 
-	let access_token = generate_access_token(stored.user_id, jwt_secret)?;
+    let user = users_repo::find_by_id(pool, stored.user_id).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
+    let access_token = generate_access_token(stored.user_id, user.username, jwt_secret)?;
 	let refresh_token = store_refresh_token(pool, stored.user_id).await?;
 
 	Ok((access_token, refresh_token))

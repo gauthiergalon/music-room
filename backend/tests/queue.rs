@@ -26,12 +26,11 @@ struct TestQueueResponse {
 	id: String,
 	room_id: String,
 	track_id: i64,
-	added_by: String,
 	position: f64,
 }
 
 fn create_app(pool: PgPool) -> axum::Router {
-	let state = AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), room_channels: Arc::new(RwLock::new(HashMap::new())) };
+	let state = AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), active_rooms: Arc::new(RwLock::new(HashMap::new())) };
 	app_router(state.clone()).with_state(state)
 }
 

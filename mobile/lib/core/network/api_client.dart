@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../exceptions/api_exception.dart';
@@ -10,8 +11,8 @@ class ApiClient {
   static final Dio _dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 3),
+      receiveTimeout: const Duration(seconds: 3),
       contentType: Headers.jsonContentType,
     ),
   )..interceptors.add(_AuthInterceptor());
@@ -59,8 +60,10 @@ class ApiClient {
 
   static Future<dynamic> get(String endpoint) async {
     try {
-      final response = await _dio.get(endpoint);
+      final response = await _dio.get(endpoint).timeout(const Duration(seconds: 3));
       return response.data;
+    } on TimeoutException {
+      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -73,8 +76,10 @@ class ApiClient {
     Map<String, dynamic>? body,
   }) async {
     try {
-      final response = await _dio.post(endpoint, data: body);
+      final response = await _dio.post(endpoint, data: body).timeout(const Duration(seconds: 3));
       return response.data;
+    } on TimeoutException {
+      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -82,13 +87,32 @@ class ApiClient {
     }
   }
 
+  static Future<dynamic> delete(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
+    try {
+      final response = await _dio.delete(endpoint, data: body).timeout(const Duration(seconds: 3));
+      return response.data;
+    } on TimeoutException {
+      throw ApiException('Could not connect to the server, try again later');
+    } on DioException catch (e) {
+      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
+    } catch (e) {
+      throw ApiException('An unexpected error occurred');
+    }
+  }
+
+
   static Future<dynamic> patch(
     String endpoint, {
     Map<String, dynamic>? body,
   }) async {
     try {
-      final response = await _dio.patch(endpoint, data: body);
+      final response = await _dio.patch(endpoint, data: body).timeout(const Duration(seconds: 3));
       return response.data;
+    } on TimeoutException {
+      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {

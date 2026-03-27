@@ -21,7 +21,31 @@ class _ProfilePageState extends State<ProfilePage> {
     final user = authController.user;
 
     if (user == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      if (authController.isLoadingUser) {
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Colors.redAccent,
+              ),
+              const SizedBox(height: 16),
+              const Text('An error occurred while loading data.'),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+                onPressed: () => authController.fetchUserInfo(),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(

@@ -31,7 +31,7 @@ pub async fn run() {
 	let pool = db::create_pool(&database_url).await;
 	let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
 
-	let state = AppState { pool: pool.clone(), jwt_secret, room_channels: Arc::new(RwLock::new(HashMap::new())) };
+	let state = AppState { pool: pool.clone(), jwt_secret, active_rooms: Arc::new(RwLock::new(HashMap::new())) };
 	tracing::info!("Connected to PostgreSQL");
 
 	let cors = CorsLayer::new().allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE]).allow_headers(Any).allow_origin(Any);

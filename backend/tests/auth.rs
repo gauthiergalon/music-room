@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 fn create_app(pool: PgPool) -> axum::Router {
-	let state = backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), room_channels: Arc::new(RwLock::new(HashMap::new())) };
+	let state = backend::state::AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), active_rooms: Arc::new(RwLock::new(HashMap::new())) };
 	app_router(state.clone()).with_state(state)
 }
 

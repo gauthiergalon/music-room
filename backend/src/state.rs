@@ -5,9 +5,14 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
+pub struct ActiveRoom {
+    pub tx: broadcast::Sender<WsEvent>,
+    pub users: HashMap<Uuid, String>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
-	pub pool: PgPool,
-	pub jwt_secret: String,
-	pub room_channels: Arc<RwLock<HashMap<Uuid, broadcast::Sender<WsEvent>>>>,
+    pub pool: PgPool,
+    pub jwt_secret: String,
+    pub active_rooms: Arc<RwLock<HashMap<Uuid, ActiveRoom>>>,
 }

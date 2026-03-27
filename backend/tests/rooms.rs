@@ -29,7 +29,7 @@ struct TestUserResponse {
 }
 
 fn create_app(pool: PgPool) -> axum::Router {
-	let state = AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), room_channels: Arc::new(RwLock::new(HashMap::new())) };
+	let state = AppState { pool: pool.clone(), jwt_secret: "test_secret".to_string(), active_rooms: Arc::new(RwLock::new(HashMap::new())) };
 	app_router(state.clone()).with_state(state)
 }
 
@@ -53,7 +53,7 @@ async fn get_me(server: &TestServer, token: &str) -> TestUserResponse {
 }
 
 #[sqlx::test]
-async fn test_create_room(pool: PgPool) {
+async fn test_create(pool: PgPool) {
 	let app = create_app(pool);
 	let server = TestServer::new(app);
 	let token = register_and_login(&server, "test_create", "create@example.com").await;
@@ -84,7 +84,7 @@ async fn test_get_room(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_delete_room(pool: PgPool) {
+async fn test_delete(pool: PgPool) {
 	let app = create_app(pool);
 	let server = TestServer::new(app);
 	let token = register_and_login(&server, "test_del", "del@example.com").await;

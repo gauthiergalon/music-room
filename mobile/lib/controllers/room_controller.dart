@@ -1,208 +1,230 @@
-import 'dart:collection';
-
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/models/track.dart';
+import 'package:mobile/models/queue_item.dart';
 import '../models/room.dart';
+import '../core/network/api_client.dart';
+import '../core/network/ws_factory.dart';
+import '../models/room_user.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 class RoomController extends ChangeNotifier {
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
 
-  final List<Room> _availableRooms = [
-    Room(
-      id: 1,
-      owner: 'Alice',
-      currentTrack: Track(
-        id: 1,
-        title: 'Song A',
-        artist: 'Artist X',
-        imageUrl: 'https://picsum.photos/400',
-        duration: const Duration(minutes: 3, seconds: 30),
-      ),
-      status: 0,
-      listeners: ['Alice', 'Anna', 'Armand'],
-    ),
-    Room(
-      id: 2,
-      owner: 'Bob',
-      currentTrack: Track(
-        id: 2,
-        title: 'Song B',
-        artist: 'Artist Y',
-        imageUrl: 'https://picsum.photos/400',
-        duration: const Duration(minutes: 3, seconds: 30),
-      ),
-      status: 0,
-      listeners: ['Bob', 'Bella'],
-    ),
-    Room(
-      id: 3,
-      owner: 'Charlie',
-      currentTrack: Track(
-        id: 3,
-        title: 'Song C',
-        artist: 'Artist Z',
-        imageUrl: 'https://picsum.photos/400',
-        duration: const Duration(minutes: 3, seconds: 30),
-      ),
-      status: 0,
-      queue: Queue.of([
-        Track(
-          id: 4,
-          title: 'Song D',
-          artist: 'Artist W',
-          imageUrl: 'https://picsum.photos/400',
-          duration: const Duration(minutes: 3, seconds: 30),
-        ),
-        Track(
-          id: 5,
-          title: 'Song E',
-          artist: 'Artist V',
-          imageUrl: 'https://picsum.photos/400',
-          duration: const Duration(minutes: 3, seconds: 30),
-        ),
-      ]),
-      listeners: ['Charlie'],
-    ),
-  ];
+  List<Room> _availableRooms = [];
   List<Room> get availableRooms => _availableRooms;
 
-  void createRoom(Room room) {
-    _availableRooms.add(room);
-    notifyListeners();
+  WebSocketChannel? _wsChannel;
+
+  Future<void> refreshRooms() async {
+    try {
+      final response = await ApiClient.get('/rooms');
+      if (response is List) {
+        _availableRooms = response.map((data) => Room.fromJson(data)).toList();
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Failed to refresh rooms: $e');
+      rethrow;
+    }
   }
 
-  void openRoom(Room room) {
+  Future<Room> createRoom() async {
+    try {
+      final response = await ApiClient.post('/rooms');
+      final newRoom = Room.fromJson(response);
+      _availableRooms.add(newRoom);
+      notifyListeners();
+      await openRoom(newRoom);
+      return newRoom;
+    } catch (e) {
+      debugPrint('Failed to create room: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> openRoom(Room room) async {
     _currentRoom = room;
+    await refreshQueue(room.id);
+    _connectWebSocket(room.id);
     notifyListeners();
   }
 
   void leaveRoom() {
     _currentRoom = null;
+    _wsChannel?.sink.close();
+    _wsChannel = null;
+    notifyListeners();
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      refreshRooms();
+    });
+  }
+
+  void _connectWebSocket(String roomId) async {
+    final token = await ApiClient.getToken();
+    if (token == null) return;
+
+    final baseUrl =
+        '${ApiClient.baseUrl.replaceFirst('http', 'ws')}/rooms/$roomId/ws';
+    _wsChannel = createWsChannel(baseUrl, token);
+
+    try {
+      _wsChannel!.stream.listen(
+        (message) {
+          debugPrint('WS Message: $message');
+          final data = jsonDecode(message);
+          _handleWsEvent(data);
+        },
+        onError: (err) => debugPrint('WS Error: $err'),
+        onDone: () => debugPrint('WS Closed'),
+      );
+    } catch (e) {
+      debugPrint('Error listening to WS: $e');
+    }
+  }
+
+  void _handleWsEvent(Map<String, dynamic> data) {
+    if (_currentRoom == null) return;
+    final type = data['type'];
+    final payload = data['payload'] ?? {};
+    if (type == 'SyncUsers') {
+      final users = payload['users'] as List?;
+      if (users != null) {
+        _currentRoom!.listeners.clear();
+        for (var u in users) {
+          final id = u['user_id'] as String?;
+          final name = u['username'] as String?;
+          if (id != null && name != null) {
+            _currentRoom!.listeners.add(RoomUser(id: id, username: name));
+          }
+        }
+      }
+    } else if (type == 'UserJoin') {
+      final id = payload['user_id'] as String?;
+      final name = payload['username'] as String?;
+      if (id != null && name != null) {
+        final existing = _currentRoom!.listeners.indexWhere((u) => u.id == id);
+        if (existing == -1) {
+          _currentRoom!.listeners.add(RoomUser(id: id, username: name));
+        }
+      }
+    } else if (type == 'UserLeave') {
+      final id = payload['user_id'] as String?;
+      if (id != null) {
+        _currentRoom!.listeners.removeWhere((u) => u.id == id);
+      }
+    } else if (type == 'RoomClosed') {
+      leaveRoom();
+      return;
+    }
+
+    // React to events (add simple logs or state updates)
+    if (type == 'QueueAdd' || type == 'QueueRemove' || type == 'QueueReorder') {
+      refreshQueue(_currentRoom!.id);
+    }
     notifyListeners();
   }
 
-  Future<void> refreshRooms() async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    _availableRooms.shuffle();
-    notifyListeners();
+  Future<void> refreshQueue(String roomId) async {
+    try {
+      final response = await ApiClient.get('/rooms/$roomId/queue');
+      if (response is List) {
+        if (_currentRoom != null && _currentRoom!.id == roomId) {
+          _currentRoom!.queue = response
+              .map((data) => QueueItem.fromJson(data))
+              .toList();
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to refresh queue: $e');
+    }
   }
 
   // Queue management
-  void addTrack(Room room, Track track) {
-    room.queue.add(track);
-    if (room.currentTrack == null) {
-      skipNext();
-    }
-    notifyListeners();
-  }
-
-  void removeTrack(Room room, int index) {
-    final list = room.queue.toList();
-    if (index < 0 || index >= list.length) return;
-    list.removeAt(index);
-    room.queue.clear();
-    room.queue.addAll(list);
-    notifyListeners();
-  }
-
-  void playTrack(Room room, int index) {
-    final list = room.queue.toList();
-    if (index < 0 || index >= list.length) return;
-    room.currentTrack = list[index];
-    room.status = 1;
-    room.positionAtLastSync = Duration.zero;
-    room.updatedAt = DateTime.now();
-    notifyListeners();
-  }
-
-  void moveTrack(Room room, int from, int to) {
-    final list = room.queue.toList();
-    if (from < 0 || from >= list.length || to < 0 || to >= list.length) return;
-    final item = list.removeAt(from);
-    list.insert(to, item);
-    room.queue.clear();
-    room.queue.addAll(list);
-    notifyListeners();
-  }
-
-  // Listener management
-  void togglePrivacy(Room room) {
-    room.isPublic = !room.isPublic;
-    notifyListeners();
-  }
-
-  void kickListener(Room room, String listener) {
-    if (room.listeners.contains(listener) && listener != room.owner) {
-      room.listeners.remove(listener);
-      notifyListeners();
+  Future<void> addTrack(Room room, Track track) async {
+    try {
+      await ApiClient.post(
+        '/rooms/${room.id}/queue',
+        body: {'track_id': track.id},
+      );
+      await refreshQueue(room.id);
+    } catch (e) {
+      debugPrint('Failed to add track: $e');
     }
   }
 
-  void promoteToOwner(Room room, String listener) {
-    if (room.listeners.contains(listener)) {
-      final previous = room.owner;
-      room.owner = listener;
-      if (!room.listeners.contains(previous)) {
-        room.listeners.insert(0, previous);
-      }
-      notifyListeners();
+  Future<void> removeQueueItem(Room room, QueueItem item) async {
+    try {
+      await ApiClient.delete('/rooms/${room.id}/queue', body: {'id': item.id});
+      await refreshQueue(room.id);
+    } catch (e) {
+      debugPrint('Failed to remove track: $e');
+    }
+  }
+
+  Future<void> moveQueueItem(
+    Room room,
+    QueueItem item,
+    double newPosition,
+  ) async {
+    try {
+      await ApiClient.patch(
+        '/rooms/${room.id}/queue',
+        body: {'id': item.id, 'new_position': newPosition},
+      );
+      await refreshQueue(room.id);
+    } catch (e) {
+      debugPrint('Failed to reorder track: $e');
     }
   }
 
   // Music control
   void togglePlay(Room room) {
-    final now = DateTime.now();
-    if (room.status == 1) {
-      // Pause
-      room.positionAtLastSync = room.currentPosition;
-      room.status = 0;
-    } else {
-      // Play
-      if (room.currentPosition >=
-          (room.currentTrack?.duration ?? Duration.zero)) {
-        room.positionAtLastSync = Duration.zero;
-      } else {
-        room.positionAtLastSync = room.currentPosition;
-      }
-      room.status = 1;
-      room.updatedAt = now;
-    }
-    notifyListeners();
+    // Should call WS event or endpoint
   }
 
   void seekTo(Room room, Duration position) {
-    room.positionAtLastSync = position;
-    room.updatedAt = DateTime.now();
-    notifyListeners();
+    // Should call WS event or endpoint
   }
 
   void skipNext() {
-    final room = _currentRoom;
-    if (room == null) return;
-    if (room.queue.isNotEmpty) {
-      final next = room.queue.removeFirst();
-      room.currentTrack = next;
-      room.status = 1;
-      room.positionAtLastSync = Duration.zero;
-      room.updatedAt = DateTime.now();
-    } else {
-      room.currentTrack = null;
-      room.status = 0;
-      room.positionAtLastSync = Duration.zero;
-      room.updatedAt = DateTime.now();
-    }
-    notifyListeners();
+    // Should call WS event or endpoint
   }
 
   void skipPrev() {
-    final room = _currentRoom;
-    if (room == null) return;
-    if (room.currentTrack != null) {
-      room.status = 1;
-      room.positionAtLastSync = Duration.zero;
-      room.updatedAt = DateTime.now();
+    // Should call WS event or endpoint
+  }
+
+  Future<void> togglePrivacy(Room room) async {
+    try {
+      if (!room.isPublic) {
+        await ApiClient.post('/rooms/${room.id}/publish');
+      } else {
+        await ApiClient.post('/rooms/${room.id}/privatize');
+      }
+      room.isPublic = !room.isPublic;
       notifyListeners();
+
+      refreshRooms(); // Update available list
+    } catch (e) {
+      debugPrint('Failed to toggle privacy: $e');
+      notifyListeners(); // Keep UI in sync if the switch failed
+      rethrow;
+    }
+  }
+
+  void kickListener(Room room, RoomUser listener) {}
+  Future<void> promoteToOwner(Room room, RoomUser listener) async {
+    try {
+      await ApiClient.post(
+        '/rooms/${room.id}/transfer-ownership',
+        body: {'new_owner_id': listener.id},
+      );
+    } catch (e) {
+      debugPrint('Failed to transfer ownership: $e');
     }
   }
 }

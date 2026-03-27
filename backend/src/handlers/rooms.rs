@@ -20,26 +20,45 @@ use crate::{
 	state::AppState,
 };
 
-pub async fn create_room(State(state): State<AppState>, Extension(claims): Extension<Claims>) -> Result<(StatusCode, Json<RoomResponse>), AppError> {
-	let room = room_service::create_room(&state.pool, claims.user_id).await?;
-	Ok((StatusCode::CREATED, Json(RoomResponse { id: room.id, owner_id: room.owner_id })))
+pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<RoomResponse>>, AppError> {
+    let rooms = room_service::list(&state.pool).await?;
+    let responses = rooms.into_iter().map(|room| RoomResponse {
+        id: room.id, owner_id: room.owner_id, name: room.name,
+        is_public: room.is_public, current_track: room.current_track,
+        current_position: room.current_position, is_playing: room.is_playing
+    }).collect();
+    Ok(Json(responses))
 }
 
-pub async fn delete_room(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>) -> Result<StatusCode, AppError> {
-	room_service::delete_room(&state.pool, room_id, claims.user_id).await?;
+pub async fn create(State(state): State<AppState>, Extension(claims): Extension<Claims>) -> Result<(StatusCode, Json<RoomResponse>), AppError> {
+        let name = format!("{}'s room", claims.username);
+        let room = room_service::create(&state.pool, claims.user_id, &name).await?;
+        Ok((StatusCode::CREATED, Json(RoomResponse { 
+            id: room.id, owner_id: room.owner_id, name: room.name, 
+            is_public: room.is_public, current_track: room.current_track,
+            current_position: room.current_position, is_playing: room.is_playing
+        })))
+}
+
+pub async fn delete(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>) -> Result<StatusCode, AppError> {
+	room_service::delete(&state.pool, room_id, claims.user_id).await?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn get_room(State(state): State<AppState>, Path(room_id): Path<Uuid>) -> Result<Json<RoomResponse>, AppError> {
-	let room = room_service::get_room(&state.pool, room_id).await?;
-	Ok(Json(RoomResponse { id: room.id, owner_id: room.owner_id }))
+pub async fn get(State(state): State<AppState>, Path(room_id): Path<Uuid>) -> Result<Json<RoomResponse>, AppError> {
+        let room = room_service::get(&state.pool, room_id).await?;
+        Ok(Json(RoomResponse { 
+            id: room.id, owner_id: room.owner_id, name: room.name, 
+            is_public: room.is_public, current_track: room.current_track,
+            current_position: room.current_position, is_playing: room.is_playing
+        }))
 }
 
 pub async fn transfer_ownership(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<TransferOwnershipRequest>) -> Result<StatusCode, AppError> {
 	room_service::transfer_ownership(&state.pool, room_id, claims.user_id, payload.new_owner_id).await?;
 
-	if let Some(tx) = state.room_channels.read().await.get(&room_id) {
-		let _ = tx.send(WsEvent::UserOwnershipTransferred { new_owner_id: payload.new_owner_id });
+	if let Some(tx) = state.active_rooms.read().await.get(&room_id) {
+		let _ = tx.tx.send(WsEvent::UserOwnershipTransferred { new_owner_id: payload.new_owner_id });
 	}
 
 	Ok(StatusCode::NO_CONTENT)
@@ -55,22 +74,31 @@ pub async fn privatize(State(state): State<AppState>, Path(room_id): Path<Uuid>,
 	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>) -> Result<axum::response::Response, AppError> {
-	let room = room_service::get_room(&state.pool, room_id).await?;
+pub async fn ws(ws: WebSocketUpgrade, State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>) -> Result<axum::response::Response, AppError> {
+	let room = room_service::get(&state.pool, room_id).await?;
 	let is_owner = room.owner_id == claims.user_id;
 
-	Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, room_id, is_owner, claims.user_id)))
+	Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, room_id, is_owner, claims.user_id, claims.username)))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, room_id: Uuid, is_owner: bool, user_id: Uuid) {
+async fn handle_socket(socket: WebSocket, state: AppState, room_id: Uuid, is_owner: bool, user_id: Uuid, username: String) {
 	let (mut sender, mut receiver) = socket.split();
 
-	let tx = {
-		let mut channels = state.room_channels.write().await;
-		channels.entry(room_id).or_insert_with(|| tokio::sync::broadcast::channel(100).0).clone()
-	};
+	let (tx, users_list) = {
+                let mut channels = state.active_rooms.write().await;
+                let room = channels.entry(room_id).or_insert_with(|| crate::state::ActiveRoom {
+                        tx: tokio::sync::broadcast::channel(100).0,
+                        users: std::collections::HashMap::new(),
+                });
+                room.users.insert(user_id, username.clone());
+                let list: Vec<crate::dtos::ws::UserInfo> = room.users.iter().map(|(id, name)| crate::dtos::ws::UserInfo { user_id: *id, username: name.clone() }).collect();
+                (room.tx.clone(), list)
+        };
+        if let Ok(sync_msg) = serde_json::to_string(&WsEvent::SyncUsers { users: users_list }) {
+                let _ = sender.send(Message::Text(sync_msg.into())).await;
+        }
 
-	let _ = tx.send(WsEvent::UserJoin { user_id });
+	let _ = tx.send(WsEvent::UserJoin { user_id, username: username.clone() });
 
 	let tx_clone = tx.clone();
 	let mut rx = tx.subscribe();
@@ -134,13 +162,22 @@ async fn handle_socket(socket: WebSocket, state: AppState, room_id: Uuid, is_own
 	_ = (&mut send_task) => recv_task.abort(),
 	};
 
-	let _ = tx.send(WsEvent::UserLeave { user_id });
 
-	if is_owner {
-		let _ = tx.send(WsEvent::RoomClosed);
-		tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        let mut is_empty = false;
+        {
+                let mut channels = state.active_rooms.write().await;
+                if let std::collections::hash_map::Entry::Occupied(mut entry) = channels.entry(room_id) {
+                        entry.get_mut().users.remove(&user_id);
+                        if entry.get().users.is_empty() {
+                                is_empty = true;
+                                entry.remove();
+                        }
+                }
+        }
+        let _ = tx.send(WsEvent::UserLeave { user_id, username });
 
-		let mut channels = state.room_channels.write().await;
-		channels.remove(&room_id);
-	}
+        if is_empty {
+                let _ = sqlx::query!("DELETE FROM rooms WHERE id = $1", room_id).execute(&state.pool).await;
+                let _ = tx.send(WsEvent::RoomClosed);
+        }
 }

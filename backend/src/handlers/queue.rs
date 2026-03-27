@@ -14,26 +14,26 @@ use crate::{
 	state::AppState,
 };
 
-pub async fn get_queue(State(state): State<AppState>, Path(room_id): Path<Uuid>) -> Result<Json<Vec<Queue>>, AppError> {
-	let queues = queue_service::get_queue(&state.pool, room_id).await?;
+pub async fn list(State(state): State<AppState>, Path(room_id): Path<Uuid>) -> Result<Json<Vec<Queue>>, AppError> {
+	let queues = queue_service::find_all_by_room_id(&state.pool, room_id).await?;
 	Ok(Json(queues))
 }
 
-pub async fn add_to_queue(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<AddToQueueRequest>) -> Result<StatusCode, AppError> {
+pub async fn add(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<AddToQueueRequest>) -> Result<StatusCode, AppError> {
 	if payload.track_id <= 0 {
 		return Err(AppError::Validation(vec![ErrorMessage::TrackIdInvalid]));
 	}
 
-	queue_service::add_to_queue(&state.pool, room_id, claims.user_id, payload.track_id).await?;
+	queue_service::create(&state.pool, room_id, claims.user_id, payload.track_id).await?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn remove_from_queue(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<RemoveFromQueueRequest>) -> Result<StatusCode, AppError> {
-	queue_service::remove_from_queue(&state.pool, room_id, claims.user_id, payload.id).await?;
+pub async fn delete(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<RemoveFromQueueRequest>) -> Result<StatusCode, AppError> {
+	queue_service::remove(&state.pool, room_id, claims.user_id, payload.id).await?;
 	Ok(StatusCode::NO_CONTENT)
 }
 
-pub async fn reorder_queue(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<ReorderQueueRequest>) -> Result<StatusCode, AppError> {
-	queue_service::reorder_queue(&state.pool, room_id, claims.user_id, payload.id, payload.new_position).await?;
+pub async fn reorder(State(state): State<AppState>, Path(room_id): Path<Uuid>, Extension(claims): Extension<Claims>, Json(payload): Json<ReorderQueueRequest>) -> Result<StatusCode, AppError> {
+	queue_service::reorder(&state.pool, room_id, claims.user_id, payload.id, payload.new_position).await?;
 	Ok(StatusCode::NO_CONTENT)
 }

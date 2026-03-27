@@ -4,16 +4,13 @@ use axum::{
 };
 
 use crate::{
-	handlers::{
-		queue::{add_to_queue, get_queue, remove_from_queue, reorder_queue},
-		rooms::{create_room, delete_room, get_room, privatize, publish, transfer_ownership, ws_handler},
-	},
+	handlers::{queue, rooms},
 	middleware::auth::auth_middleware,
 	state::AppState,
 };
 
 pub fn router(state: AppState) -> Router<AppState> {
-	let protected = Router::new().route("/", post(create_room)).route("/{id}", get(get_room).delete(delete_room)).route("/{id}/ws", get(ws_handler)).route("/{id}/transfer-ownership", post(transfer_ownership)).route("/{id}/publish", post(publish)).route("/{id}/privatize", post(privatize)).route("/{id}/queue", get(get_queue).post(add_to_queue).delete(remove_from_queue).patch(reorder_queue)).layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
+	let protected = Router::new().route("/", get(rooms::list).post(rooms::create)).route("/{id}", get(rooms::get).delete(rooms::delete)).route("/{id}/ws", get(rooms::ws)).route("/{id}/transfer-ownership", post(rooms::transfer_ownership)).route("/{id}/publish", post(rooms::publish)).route("/{id}/privatize", post(rooms::privatize)).route("/{id}/queue", get(queue::list).post(queue::add).delete(queue::delete).patch(queue::reorder)).layer(middleware::from_fn_with_state(state.clone(), auth_middleware));
 
 	protected
 }
