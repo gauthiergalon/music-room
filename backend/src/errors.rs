@@ -71,6 +71,7 @@ pub enum ErrorMessage {
 	EmailInvalidFormat,
 	PasswordInvalidPolicy,
 	PasswordSameAsCurrent,
+	TrackIdInvalid,
 
 	// Ressources
 	UserNotFound,
@@ -99,6 +100,7 @@ impl ErrorMessage {
 			Self::EmailInvalidFormat => "Invalid email address",
 			Self::PasswordInvalidPolicy => "Password does not meet the required policy (must be at least 8 characters)",
 			Self::PasswordSameAsCurrent => "New password must be different from current password",
+			Self::TrackIdInvalid => "Track ID must be a positive integer",
 
 			// Resources
 			Self::UserNotFound => "User not found",
