@@ -1,0 +1,10 @@
+Add Google Auth (Mobile Side)
+Add Confidentiality settings
+Add Profile Music Preference
+Add Friends functionality
+Add Invitation for Friends and Store Invited Users for others functionalities (Playlist Editor and Room Access) (Use URL Invitation with Room ID, and store User ID to check permision)
+Test API Bruteforce
+Implement Music Api (squid.wtf)
+Add API documentation (doctring => swagger)
+Add env variables for mobile app (Backend URL)
+Generate logs for any Actions on the FrontEnd to the BackEnd
