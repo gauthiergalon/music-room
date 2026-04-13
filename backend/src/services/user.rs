@@ -68,8 +68,8 @@ pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Resu
 	let email = Email::for_email_confirmation(&token_pair.plain);
 	let email_token = NewEmailToken { token_hash: token_pair.hash, user_id: user.id, new_email: user.email.clone(), expires_at: Utc::now() + Duration::hours(24) };
 
-	email_tokens_repo::create(pool, email_token).await?;
 	email.send(&user.email)?;
+	email_tokens_repo::create(pool, email_token).await?;
 
 	Ok(())
 }

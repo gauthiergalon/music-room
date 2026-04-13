@@ -83,8 +83,8 @@ pub async fn refresh(pool: &PgPool, jwt_secret: &str, token: &str) -> Result<(St
 		return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
 	}
 
-    let user = users_repo::find_by_id(pool, stored.user_id).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
-    let access_token = generate_access_token(stored.user_id, user.username, jwt_secret)?;
+	let user = users_repo::find_by_id(pool, stored.user_id).await?.ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
+	let access_token = generate_access_token(stored.user_id, user.username, jwt_secret)?;
 	let refresh_token = store_refresh_token(pool, stored.user_id).await?;
 
 	Ok((access_token, refresh_token))
@@ -101,11 +101,10 @@ pub async fn forgot_password(pool: &PgPool, email: &str) -> Result<(), AppError>
 
 	let token_pair = TokenPair::generate();
 	let expires_at = Utc::now() + TimeDelta::minutes(15);
+	let email = crate::services::email::Email::for_password_reset(&token_pair.plain);
 
+	email.send(&email_address)?;
 	reset_tokens_repo::create(pool, NewResetToken { token_hash: token_pair.hash, user_id: user_model.id, expires_at }).await?;
-
-	let email_to_send = crate::services::email::Email::for_password_reset(&token_pair.plain);
-	email_to_send.send(&email_address)?;
 
 	Ok(())
 }
