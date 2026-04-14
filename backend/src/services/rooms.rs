@@ -12,7 +12,9 @@ pub async fn list(pool: &PgPool) -> Result<Vec<Room>, AppError> {
 }
 
 pub async fn get(pool: &PgPool, room_id: Uuid) -> Result<Room, AppError> {
-    rooms_repo::find_by_id(pool, room_id).await?.ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))
+    rooms_repo::find_by_id(pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))
 }
 
 pub async fn create(pool: &PgPool, owner_id: Uuid, name: &str) -> Result<Room, AppError> {
@@ -20,7 +22,9 @@ pub async fn create(pool: &PgPool, owner_id: Uuid, name: &str) -> Result<Room, A
 }
 
 pub async fn delete(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
-    let room = rooms_repo::find_by_id(pool, room_id).await?.ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
+    let room = rooms_repo::find_by_id(pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
 
     if room.owner_id != user_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));
@@ -29,8 +33,15 @@ pub async fn delete(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), A
     rooms_repo::delete(pool, room_id).await
 }
 
-pub async fn transfer_ownership(pool: &PgPool, room_id: Uuid, current_owner_id: Uuid, new_owner_id: Uuid) -> Result<(), AppError> {
-    let room = rooms_repo::find_by_id(pool, room_id).await?.ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
+pub async fn transfer_ownership(
+    pool: &PgPool,
+    room_id: Uuid,
+    current_owner_id: Uuid,
+    new_owner_id: Uuid,
+) -> Result<(), AppError> {
+    let room = rooms_repo::find_by_id(pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
 
     if room.owner_id != current_owner_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));
@@ -40,7 +51,9 @@ pub async fn transfer_ownership(pool: &PgPool, room_id: Uuid, current_owner_id: 
 }
 
 pub async fn publish(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
-    let room = rooms_repo::find_by_id(pool, room_id).await?.ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
+    let room = rooms_repo::find_by_id(pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
 
     if room.owner_id != user_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));
@@ -50,7 +63,9 @@ pub async fn publish(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), 
 }
 
 pub async fn privatize(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
-    let room = rooms_repo::find_by_id(pool, room_id).await?.ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
+    let room = rooms_repo::find_by_id(pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
 
     if room.owner_id != user_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));

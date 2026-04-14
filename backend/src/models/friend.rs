@@ -1,5 +1,5 @@
-use uuid::Uuid;
 use sqlx::FromRow;
+use uuid::Uuid;
 
 #[derive(Debug, FromRow)]
 pub struct Friend {

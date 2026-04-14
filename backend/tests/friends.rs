@@ -64,12 +64,16 @@ async fn test_send_friend_request(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
 
-    let (token_a, id_a) = register_login_and_get_user(&server, "alice_s", "alice_s@example.com").await;
+    let (token_a, id_a) =
+        register_login_and_get_user(&server, "alice_s", "alice_s@example.com").await;
     let (_token_b, id_b) = register_login_and_get_user(&server, "bob_s", "bob_s@example.com").await;
 
     let res = server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await;
 
@@ -84,19 +88,26 @@ async fn test_list_friend_requests(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
 
-    let (token_a, id_a) = register_login_and_get_user(&server, "alice_l", "alice_l@example.com").await;
+    let (token_a, id_a) =
+        register_login_and_get_user(&server, "alice_l", "alice_l@example.com").await;
     let (token_b, id_b) = register_login_and_get_user(&server, "bob_l", "bob_l@example.com").await;
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     let res_b = server
         .get("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_b))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_b),
+        )
         .await;
 
     res_b.assert_status(StatusCode::OK);
@@ -117,14 +128,20 @@ async fn test_accept_friend_request_success(pool: PgPool) {
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     let res = server
         .put(&format!("/friends/{id_a}/accept"))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_b))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_b),
+        )
         .await;
     res.assert_status(StatusCode::OK);
 
@@ -139,18 +156,25 @@ async fn test_cannot_accept_own_friend_request(pool: PgPool) {
 
     let (token_a, _id_a) =
         register_login_and_get_user(&server, "alice_acc2", "alice_acc2@test.com").await;
-    let (_token_b, id_b) = register_login_and_get_user(&server, "bob_acc2", "bob_acc2@test.com").await;
+    let (_token_b, id_b) =
+        register_login_and_get_user(&server, "bob_acc2", "bob_acc2@test.com").await;
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
         .put(&format!("/friends/{id_b}/accept"))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .await
         .assert_status(StatusCode::CONFLICT);
 }
@@ -166,20 +190,29 @@ async fn test_reject_friend_request(pool: PgPool) {
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
         .delete(&format!("/friends/{id_a}/reject"))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_b))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_b),
+        )
         .await
         .assert_status(StatusCode::NO_CONTENT);
 
     let list_res = server
         .get("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .await;
     let friends: Vec<FriendResponseDto> = list_res.json();
     assert_eq!(friends.len(), 0);
@@ -196,20 +229,29 @@ async fn test_remove_friend(pool: PgPool) {
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
         .put(&format!("/friends/{id_a}/accept"))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_b))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_b),
+        )
         .await
         .assert_status(StatusCode::OK);
 
     server
         .delete(&format!("/friends/{id_b}"))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .await
         .assert_status(StatusCode::NO_CONTENT);
 }
@@ -224,7 +266,10 @@ async fn test_cannot_send_request_to_self(pool: PgPool) {
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_a }))
         .await
         .assert_status(StatusCode::CONFLICT);
@@ -237,18 +282,25 @@ async fn test_cannot_send_duplicate_request(pool: PgPool) {
 
     let (token_a, _id_a) =
         register_login_and_get_user(&server, "alice_e2", "alice_edge2@test.com").await;
-    let (_token_b, id_b) = register_login_and_get_user(&server, "bob_e2", "bob_edge2@test.com").await;
+    let (_token_b, id_b) =
+        register_login_and_get_user(&server, "bob_e2", "bob_edge2@test.com").await;
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CONFLICT);
@@ -261,21 +313,28 @@ async fn test_mutual_request_auto_accepts(pool: PgPool) {
 
     let (token_a, id_a) =
         register_login_and_get_user(&server, "alice_e3", "alice_edge3@test.com").await;
-    let (token_b, id_b) = register_login_and_get_user(&server, "bob_e3", "bob_edge3@test.com").await;
+    let (token_b, id_b) =
+        register_login_and_get_user(&server, "bob_e3", "bob_edge3@test.com").await;
 
     server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_a))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_a),
+        )
         .json(&json!({ "friend_id": id_b }))
         .await
         .assert_status(StatusCode::CREATED);
 
     let auto_accept_res = server
         .post("/friends")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_b))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_b),
+        )
         .json(&json!({ "friend_id": id_a }))
         .await;
-    
+
     auto_accept_res.assert_status(StatusCode::CREATED);
     let friend: FriendResponseDto = auto_accept_res.json();
     assert!(!friend.is_pending);
