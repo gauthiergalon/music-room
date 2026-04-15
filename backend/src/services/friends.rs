@@ -73,3 +73,12 @@ pub async fn list_friends(
     let dtos = friends.into_iter().map(Into::into).collect();
     Ok(dtos)
 }
+
+pub async fn are_friends(pool: &PgPool, id1: Uuid, id2: Uuid) -> Result<bool, AppError> {
+    let (user_id_1, user_id_2) = order_ids(id1, id2);
+    let friend = friends_repo::find_by_users(pool, user_id_1, user_id_2).await?;
+    match friend {
+        Some(f) => Ok(!f.is_pending),
+        None => Ok(false),
+    }
+}

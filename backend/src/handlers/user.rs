@@ -12,6 +12,8 @@ use crate::{
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
+    models::user::PrivacyLevel,
+    services::friends as friends_service,
     services::user as user_service,
     state::AppState,
 };
@@ -26,18 +28,32 @@ pub async fn get_me(
         id: user.id,
         username: user.username,
         email: user.email,
+        favorite_genres: user.favorite_genres,
+        privacy_level: user.privacy_level,
     }))
 }
 
 pub async fn get_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<Json<PublicUserResponse>, AppError> {
     let user = user_service::get_user(&state.pool, user_id).await?;
+
+    let show_genres = user_id == claims.user_id
+        || match user.privacy_level {
+            PrivacyLevel::Public => true,
+            PrivacyLevel::Friends => {
+                friends_service::are_friends(&state.pool, claims.user_id, user_id).await?
+            }
+            PrivacyLevel::Private => false,
+        };
 
     Ok(Json(PublicUserResponse {
         id: user.id,
         username: user.username,
+        favorite_genres: user.favorite_genres.filter(|_| show_genres),
+        privacy_level: user.privacy_level,
     }))
 }
 
@@ -59,6 +75,8 @@ pub async fn update_username(
         id: user.id,
         username: user.username,
         email: user.email,
+        favorite_genres: user.favorite_genres,
+        privacy_level: user.privacy_level,
     }))
 }
 
@@ -77,6 +95,8 @@ pub async fn update_email(
         id: user.id,
         username: user.username,
         email: user.email,
+        favorite_genres: user.favorite_genres,
+        privacy_level: user.privacy_level,
     }))
 }
 
@@ -118,4 +138,40 @@ pub async fn send_email_confirmation_email(
     user_service::send_email_confirmation_email(&state.pool, claims.user_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn update_favorite_genres(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<crate::dtos::user::UpdateFavoriteGenresRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    let user =
+        user_service::update_favorite_genres(&state.pool, claims.user_id, payload.favorite_genres)
+            .await?;
+
+    Ok(Json(UserResponse {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        favorite_genres: user.favorite_genres.clone(),
+        privacy_level: user.privacy_level.clone(),
+    }))
+}
+
+pub async fn update_privacy_level(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<crate::dtos::user::UpdatePrivacyLevelRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    let user =
+        user_service::update_privacy_level(&state.pool, claims.user_id, payload.privacy_level)
+            .await?;
+
+    Ok(Json(UserResponse {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        favorite_genres: user.favorite_genres.clone(),
+        privacy_level: user.privacy_level.clone(),
+    }))
 }

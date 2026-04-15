@@ -263,3 +263,127 @@ async fn test_confirm_email_success(pool: PgPool) {
     let me2 = me_res2.json::<TestUserResponse>();
     assert_eq!(me2.email, "new_confirmed@example.com");
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+struct PrivacyTestUserResponse {
+    id: String,
+    username: String,
+    favorite_genres: Option<Vec<String>>,
+    privacy_level: backend::models::user::PrivacyLevel,
+}
+
+#[sqlx::test]
+async fn test_update_favorite_genres(pool: PgPool) {
+    let app = create_app(pool);
+    let server = TestServer::new(app);
+    let token = register_and_login(&server, "test_upd_genres", "up_ge@test.com").await;
+
+    let res = server
+        .patch("/users/me/favorite-genres")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .json(&json!({
+            "favorite_genres": ["Rock", "Electro"]
+        }))
+        .await;
+
+    res.assert_status(StatusCode::OK);
+
+    let res = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+
+    let user = res.json::<PrivacyTestUserResponse>();
+    assert_eq!(user.favorite_genres, Some(vec!["Rock".to_string(), "Electro".to_string()]));
+}
+
+#[sqlx::test]
+async fn test_update_privacy_level(pool: PgPool) {
+    let app = create_app(pool);
+    let server = TestServer::new(app);
+    let token = register_and_login(&server, "test_up_priv", "up_priv@test.com").await;
+
+    let res = server
+        .patch("/users/me/privacy")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .json(&json!({
+            "privacy_level": "Private"
+        }))
+        .await;
+
+    res.assert_status(StatusCode::OK);
+
+    let res = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+
+    let user = res.json::<PrivacyTestUserResponse>();
+    assert_eq!(user.privacy_level, backend::models::user::PrivacyLevel::Private);
+}
+
+#[sqlx::test]
+async fn test_get_user_privacy_control(pool: PgPool) {
+    let app = create_app(pool);
+    let server = TestServer::new(app);
+    
+    // Alice
+    let token_alice = register_and_login(&server, "alice_priv", "alice_p@test.com").await;
+    let me_res_alice = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_alice),
+        )
+        .await;
+    let alice = me_res_alice.json::<PrivacyTestUserResponse>();
+    
+    // Bob
+    let token_bob = register_and_login(&server, "bob_priv", "bob_p@test.com").await;
+
+    // Alice sets genres and privacy level to Private
+    server.patch("/users/me/favorite-genres")
+        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+        .json(&json!({ "favorite_genres": ["Jazz"] }))
+        .await;
+    
+    let res = server.patch("/users/me/privacy")
+        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+        .json(&json!({ "privacy_level": "Private" }))
+        .await;
+    res.assert_status(StatusCode::OK);
+
+    // Bob tries to get Alice's profile -> should be None
+    let res = server.get(&format!("/users/{}", alice.id))
+        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_bob))
+        .await;
+    res.assert_status(StatusCode::OK);
+    let public_alice_priv = res.json::<PrivacyTestUserResponse>();
+    assert_eq!(public_alice_priv.favorite_genres, None, "Bob should not see Alice's genres");
+
+    // Alice sets to Public
+    let res = server.patch("/users/me/privacy")
+        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+        .json(&json!({ "privacy_level": "Public" }))
+        .await;
+    res.assert_status(StatusCode::OK);
+
+    // Bob tries to get Alice's profile -> should see Some(["Jazz"])
+    let res = server.get(&format!("/users/{}", alice.id))
+        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_bob))
+        .await;
+    let public_alice_pub = res.json::<PrivacyTestUserResponse>();
+    assert_eq!(public_alice_pub.favorite_genres, Some(vec!["Jazz".to_string()]), "Bob should see Alice's genres now");
+}

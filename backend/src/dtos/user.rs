@@ -1,3 +1,4 @@
+use crate::models::user::PrivacyLevel;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -6,12 +7,26 @@ pub struct UserResponse {
     pub id: Uuid,
     pub username: String,
     pub email: String,
+    pub favorite_genres: Option<Vec<String>>,
+    pub privacy_level: PrivacyLevel,
 }
 
 #[derive(Debug, Serialize)]
 pub struct PublicUserResponse {
     pub id: Uuid,
     pub username: String,
+    pub favorite_genres: Option<Vec<String>>,
+    pub privacy_level: PrivacyLevel,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateFavoriteGenresRequest {
+    pub favorite_genres: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdatePrivacyLevelRequest {
+    pub privacy_level: PrivacyLevel,
 }
 
 #[derive(Debug, Deserialize)]

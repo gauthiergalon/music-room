@@ -91,6 +91,8 @@ pub async fn register(
             password_hash: Some(password_hash),
             email_confirmed: Some(false),
             google_id: None,
+            favorite_genres: None,
+            privacy_level: crate::models::user::PrivacyLevel::Friends,
         },
     )
     .await?;

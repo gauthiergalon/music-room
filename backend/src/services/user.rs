@@ -4,7 +4,10 @@ use uuid::Uuid;
 
 use crate::{
     errors::{AppError, ErrorMessage},
-    models::{email_token::NewEmailToken, user::User},
+    models::{
+        email_token::NewEmailToken,
+        user::{PrivacyLevel, User},
+    },
     repositories::{email_tokens as email_tokens_repo, users as users_repo},
     services::{
         auth::{hash_password, verify_password},
@@ -101,4 +104,20 @@ pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Resu
     email_tokens_repo::create(pool, email_token).await?;
 
     Ok(())
+}
+
+pub async fn update_favorite_genres(
+    pool: &PgPool,
+    user_id: Uuid,
+    favorite_genres: Option<Vec<String>>,
+) -> Result<User, AppError> {
+    users_repo::update_favorite_genres(pool, user_id, favorite_genres).await
+}
+
+pub async fn update_privacy_level(
+    pool: &PgPool,
+    user_id: Uuid,
+    privacy_level: PrivacyLevel,
+) -> Result<User, AppError> {
+    users_repo::update_privacy_level(pool, user_id, privacy_level).await
 }

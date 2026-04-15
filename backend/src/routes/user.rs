@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use crate::{
     handlers::user::{
         confirm_email, get_me, get_user, send_email_confirmation_email, update_email,
-        update_password, update_username,
+        update_favorite_genres, update_password, update_privacy_level, update_username,
     },
     middleware::auth::auth_middleware,
     state::AppState,
@@ -17,6 +17,8 @@ pub fn router(state: AppState) -> Router<AppState> {
     let protected = Router::new()
         .route("/{id}", get(get_user))
         .route("/me", get(get_me))
+        .route("/me/favorite-genres", patch(update_favorite_genres))
+        .route("/me/privacy", patch(update_privacy_level))
         .route("/me/username", patch(update_username))
         .route("/me/email", patch(update_email))
         .route("/me/password", patch(update_password))
