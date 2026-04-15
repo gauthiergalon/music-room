@@ -39,3 +39,8 @@ pub struct ResetPasswordRequest {
     pub token: String,
     pub new_password: String,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct GoogleLoginRequest {
+    pub id_token: String,
+}

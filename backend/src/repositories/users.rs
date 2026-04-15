@@ -201,3 +201,22 @@ where
         privacy_level: user.privacy_level,
     })
 }
+
+pub async fn link_google_id<'c, E>(
+    executor: E,
+    user_id: Uuid,
+    google_id: &str,
+) -> Result<(), AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!(
+        "UPDATE users SET google_id = $1 WHERE id = $2",
+        google_id,
+        user_id
+    )
+    .execute(executor)
+    .await
+    .map_err(AppError::Database)?;
+    Ok(())
+}

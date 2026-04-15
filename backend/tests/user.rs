@@ -26,6 +26,9 @@ fn create_app(pool: PgPool) -> axum::Router {
     let state = AppState {
         pool: pool.clone(),
         jwt_secret: "test_secret".to_string(),
+        google_client_id: "test_client_id".to_string(),
+        google_client_secret: "test_client_secret".to_string(),
+        google_auth_url: "http://localhost:8080".to_string(),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
     };
     app_router(state.clone()).with_state(state)

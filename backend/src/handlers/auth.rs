@@ -1,7 +1,7 @@
 use crate::{
     dtos::auth::{
         AuthResponse, ForgotPasswordRequest, LoginRequest, LogoutRequest, RefreshRequest,
-        RegisterRequest, ResetPasswordRequest,
+        RegisterRequest, ResetPasswordRequest, GoogleLoginRequest,
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
@@ -119,4 +119,24 @@ pub async fn reset_password(
     auth_service::reset_password(&state.pool, &payload.token, &payload.new_password).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+
+pub async fn google_login(
+    State(state): State<AppState>,
+    Json(payload): Json<GoogleLoginRequest>,
+) -> Result<Json<AuthResponse>, AppError> {
+    let (access_token, refresh_token) = auth_service::google_login(
+        &state.pool,
+        &state.jwt_secret,
+        &state.google_client_id,
+        &state.google_auth_url,
+        &payload.id_token,
+    )
+    .await?;
+
+    Ok(Json(AuthResponse {
+        access_token,
+        refresh_token,
+    }))
 }

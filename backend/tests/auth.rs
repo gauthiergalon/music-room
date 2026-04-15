@@ -13,6 +13,9 @@ fn create_app(pool: PgPool) -> axum::Router {
     let state = backend::state::AppState {
         pool: pool.clone(),
         jwt_secret: "test_secret".to_string(),
+        google_client_id: "test_client_id".to_string(),
+        google_client_secret: "test_client_secret".to_string(),
+        google_auth_url: "http://localhost:8080".to_string(),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
     };
     app_router(state.clone()).with_state(state)
@@ -439,4 +442,118 @@ async fn test_logout_invalid_auth_token(pool: PgPool) {
     let error_res = res.json::<ErrorResponse>();
     assert_eq!(error_res.error, "Unauthorized");
     assert_eq!(error_res.details.unwrap()[0], "Invalid token");
+}
+
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
+use backend::dtos::auth::GoogleLoginRequest;
+
+fn create_app_with_google_url(pool: PgPool, google_auth_url: String) -> axum::Router {
+    let state = backend::state::AppState {
+        pool: pool.clone(),
+        jwt_secret: "test_secret".to_string(),
+        google_client_id: "test_client_id".to_string(),
+        google_client_secret: "test_client_secret".to_string(),
+        google_auth_url,
+        active_rooms: Arc::new(RwLock::new(HashMap::new())),
+    };
+    app_router(state.clone()).with_state(state)
+}
+
+#[sqlx::test]
+async fn test_google_login_success(pool: PgPool) {
+    let mock_server = MockServer::start().await;
+    let google_auth_url = mock_server.uri();
+
+    let expected_token_info = json!({
+        "iss": "https://accounts.google.com",
+        "aud": "test_client_id",
+        "sub": "1234567890",
+        "email": "test.google@example.com",
+        "email_verified": "true",
+        "name": "Test Google",
+        "given_name": "Test",
+        "family_name": "Google"
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/tokeninfo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(expected_token_info))
+        .mount(&mock_server)
+        .await;
+
+    let app = create_app_with_google_url(pool, google_auth_url);
+    let server = TestServer::new(app);
+
+    let payload = GoogleLoginRequest {
+        id_token: "fake_valid_google_token".to_string(),
+    };
+
+    let res = server
+        .post("/auth/google-login")
+        .json(&payload)
+        .await;
+
+    res.assert_status(StatusCode::OK);
+
+    let json = res.json::<TestAuthResponse>();
+    assert!(!json.access_token.is_empty());
+    assert!(!json.refresh_token.is_empty());
+}
+
+#[sqlx::test]
+async fn test_google_login_existing_user(pool: PgPool) {
+    // 1. On crée d'abord un utilisateur classique (sans identifiant Google)
+    sqlx::query!(
+        "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)",
+        "existing_user",
+        "test.existing@example.com",
+        "dummy_hash"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mock_server = MockServer::start().await;
+    let google_auth_url = mock_server.uri();
+
+    let expected_token_info = json!({
+        "iss": "https://accounts.google.com",
+        "aud": "test_client_id",
+        "sub": "new_google_id_987",
+        "email": "test.existing@example.com", // Correspond à l'utilisateur en base
+        "email_verified": "true",
+        "name": "Existing User",
+        "given_name": "Existing",
+        "family_name": "User"
+    });
+
+    Mock::given(method("GET"))
+        .and(path("/tokeninfo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(expected_token_info))
+        .mount(&mock_server)
+        .await;
+
+    let app = create_app_with_google_url(pool.clone(), google_auth_url);
+    let server = TestServer::new(app);
+
+    let payload = GoogleLoginRequest {
+        id_token: "fake_valid_google_token".to_string(),
+    };
+
+    // 2. On tente de se connecter avec Google
+    let res = server
+        .post("/auth/google-login")
+        .json(&payload)
+        .await;
+
+    res.assert_status(StatusCode::OK);
+
+    // 3. On vérifie que son google_id a bien été rattaché
+    let db_user = sqlx::query!("SELECT google_id FROM users WHERE email = 'test.existing@example.com'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(db_user.google_id, Some("new_google_id_987".to_string()));
 }

@@ -1,5 +1,5 @@
 use crate::{
-    handlers::auth::{forgot_password, login, logout, refresh, register, reset_password},
+    handlers::auth::{forgot_password, login, logout, refresh, register, reset_password, google_login},
     middleware::auth::auth_middleware,
     state::AppState,
 };
@@ -10,6 +10,7 @@ pub fn router(state: AppState) -> Router<AppState> {
     let public = Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
+        .route("/google-login", post(google_login))
         .route("/refresh", post(refresh))
         .route("/forgot-password", post(forgot_password))
         .route("/reset-password", post(reset_password));

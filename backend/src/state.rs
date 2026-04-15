@@ -14,5 +14,8 @@ pub struct ActiveRoom {
 pub struct AppState {
     pub pool: PgPool,
     pub jwt_secret: String,
+    pub google_client_id: String,
+    pub google_client_secret: String,
+    pub google_auth_url: String,
     pub active_rooms: Arc<RwLock<HashMap<Uuid, ActiveRoom>>>,
 }

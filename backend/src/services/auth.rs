@@ -210,3 +210,83 @@ pub async fn reset_password(
 
     Ok(())
 }
+
+#[derive(serde::Deserialize, Debug)]
+pub struct GoogleTokenInfo {
+    pub iss: String,
+    pub aud: String,
+    pub sub: String,
+    pub email: String,
+    pub email_verified: String,
+    pub name: Option<String>,
+    pub given_name: Option<String>,
+    pub family_name: Option<String>,
+}
+
+pub async fn google_login(
+    pool: &PgPool,
+    jwt_secret: &str,
+    google_client_id: &str,
+    google_auth_url: &str,
+    id_token: &str,
+) -> Result<(String, String), AppError> {
+    let url = format!("{}/tokeninfo?id_token={}", google_auth_url, id_token);
+    let resp = reqwest::get(&url).await.map_err(|_| AppError::Internal)?;
+
+    if !resp.status().is_success() {
+        return Err(AppError::Unauthorized(ErrorMessage::InvalidCredentials));
+    }
+
+    let token_info: GoogleTokenInfo = resp.json().await.map_err(|_| AppError::Internal)?;
+
+    if token_info.aud != google_client_id {
+        return Err(AppError::Unauthorized(ErrorMessage::InvalidCredentials));
+    }
+
+    let email = token_info.email.to_lowercase();
+    let google_id = token_info.sub;
+
+    let user_opt = users_repo::find_by_email(pool, &email).await?;
+
+    let user_id = match user_opt {
+        Some(user) => {
+            // Update user to link Google ID if not already linked
+            if user.google_id != Some(google_id.clone()) {
+                users_repo::link_google_id(pool, user.id, &google_id).await?;
+            }
+            user.id
+        }
+        None => {
+            let base_username = token_info.given_name.unwrap_or_else(|| "User".to_string());
+            let random_suffix = uuid::Uuid::new_v4()
+                .to_string()
+                .chars()
+                .take(6)
+                .collect::<String>();
+            let username = format!("{}_{}", base_username, random_suffix);
+
+            users_repo::create(
+                pool,
+                NewUser {
+                    username: &username,
+                    email: &email,
+                    password_hash: None, // No password for Google users
+                    email_confirmed: Some(token_info.email_verified == "true"),
+                    google_id: Some(google_id),
+                    favorite_genres: None,
+                    privacy_level: crate::models::user::PrivacyLevel::Public,
+                },
+            )
+            .await?
+        }
+    };
+
+    let user_model = users_repo::find_by_id(pool, user_id)
+        .await?
+        .ok_or(AppError::Internal)?;
+
+    let access_token = generate_access_token(user_id, user_model.username, jwt_secret)?;
+    let refresh_token = store_refresh_token(pool, user_id).await?;
+
+    Ok((access_token, refresh_token))
+}

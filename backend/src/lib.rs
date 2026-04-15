@@ -39,6 +39,9 @@ pub async fn run() {
     let state = AppState {
         pool: pool.clone(),
         jwt_secret,
+        google_client_id: std::env::var("GOOGLE_CLIENT_ID").expect("GOOGLE_CLIENT_ID must be set"),
+        google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").expect("GOOGLE_CLIENT_SECRET must be set"),
+        google_auth_url: std::env::var("GOOGLE_AUTH_URL").unwrap_or_else(|_| "https://oauth2.googleapis.com".to_string()),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
     };
     tracing::info!("Connected to PostgreSQL");
