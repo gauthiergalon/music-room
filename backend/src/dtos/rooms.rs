@@ -7,6 +7,7 @@ pub struct RoomResponse {
     pub owner_id: Uuid,
     pub name: String,
     pub is_public: bool,
+    pub is_licensed: bool,
     pub current_track: Option<i64>,
     pub current_position: i32,
     pub is_playing: bool,

@@ -17,8 +17,10 @@ use crate::{
 pub async fn list(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<Json<Vec<Queue>>, AppError> {
-    let queues = queue_service::find_all_by_room_id(&state.pool, room_id).await?;
+    let queues = queue_service::find_all_by_room_id(&state.pool, room_id, claims.user_id).await?;
+    
     Ok(Json(queues))
 }
 

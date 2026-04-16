@@ -14,8 +14,9 @@ use crate::{
         rooms::{RoomResponse, TransferOwnershipRequest},
         ws::WsEvent,
     },
-    errors::AppError,
+    errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
+    services::invitations as invitation_service,
     services::rooms as room_service,
     state::AppState,
 };
@@ -29,6 +30,7 @@ pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<RoomResponse
             owner_id: room.owner_id,
             name: room.name,
             is_public: room.is_public,
+            is_licensed: room.is_licensed,
             current_track: room.current_track,
             current_position: room.current_position,
             is_playing: room.is_playing,
@@ -50,6 +52,7 @@ pub async fn create(
             owner_id: room.owner_id,
             name: room.name,
             is_public: room.is_public,
+            is_licensed: room.is_licensed,
             current_track: room.current_track,
             current_position: room.current_position,
             is_playing: room.is_playing,
@@ -66,16 +69,36 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+pub async fn enable_license(
+    State(state): State<AppState>,
+    Path(room_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
+) -> Result<StatusCode, AppError> {
+    room_service::enable_license(&state.pool, room_id, claims.user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn disable_license(
+    State(state): State<AppState>,
+    Path(room_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
+) -> Result<StatusCode, AppError> {
+    room_service::disable_license(&state.pool, room_id, claims.user_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 pub async fn get(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,
+    Extension(claims): Extension<Claims>,
 ) -> Result<Json<RoomResponse>, AppError> {
-    let room = room_service::get(&state.pool, room_id).await?;
+    let room = room_service::get(&state.pool, room_id, claims.user_id).await?;
     Ok(Json(RoomResponse {
         id: room.id,
         owner_id: room.owner_id,
         name: room.name,
         is_public: room.is_public,
+        is_licensed: room.is_licensed,
         current_track: room.current_track,
         current_position: room.current_position,
         is_playing: room.is_playing,
@@ -124,7 +147,7 @@ pub async fn ws(
     Path(room_id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
 ) -> Result<axum::response::Response, AppError> {
-    let room = room_service::get(&state.pool, room_id).await?;
+    let room = room_service::get(&state.pool, room_id, claims.user_id).await?;
     let is_owner = room.owner_id == claims.user_id;
 
     Ok(ws.on_upgrade(move |socket| {

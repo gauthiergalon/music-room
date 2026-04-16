@@ -148,6 +148,8 @@ async fn test_update_password(pool: PgPool) {
         }))
         .await;
 
+    println!("Expected 204, got {:?}", res.status_code());
+    println!("Body: {:?}", res.text());
     res.assert_status(StatusCode::NO_CONTENT);
 
     // Try to login with new password
@@ -254,6 +256,8 @@ async fn test_confirm_email_success(pool: PgPool) {
         )
         .await;
 
+    println!("Expected 204, got {:?}", res.status_code());
+    println!("Body: {:?}", res.text());
     res.assert_status(StatusCode::NO_CONTENT);
 
     let me_res2 = server

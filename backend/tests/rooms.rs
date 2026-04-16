@@ -151,7 +151,7 @@ async fn test_delete(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_publish_room(pool: PgPool) {
+async fn test_enable_license_room(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
     let token = register_and_login(&server, "test_pub", "pub@example.com").await;
@@ -166,7 +166,7 @@ async fn test_publish_room(pool: PgPool) {
     let room = create_res.json::<TestRoomResponse>();
 
     let res = server
-        .post(&format!("/rooms/{}/publish", room.id))
+        .post(&format!("/rooms/{}/enable-license", room.id))
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),
@@ -177,7 +177,7 @@ async fn test_publish_room(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_privatize_room(pool: PgPool) {
+async fn test_disable_license_room(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
     let token = register_and_login(&server, "test_priv", "priv@example.com").await;
@@ -191,16 +191,8 @@ async fn test_privatize_room(pool: PgPool) {
         .await;
     let room = create_res.json::<TestRoomResponse>();
 
-    server
-        .post(&format!("/rooms/{}/publish", room.id))
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
-
     let res = server
-        .post(&format!("/rooms/{}/privatize", room.id))
+        .post(&format!("/rooms/{}/disable-license", room.id))
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),

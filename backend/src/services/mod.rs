@@ -6,3 +6,4 @@ pub mod queue;
 pub mod rooms;
 pub mod tokens;
 pub mod user;
+pub mod invitations;

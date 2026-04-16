@@ -444,9 +444,9 @@ async fn test_logout_invalid_auth_token(pool: PgPool) {
     assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }
 
+use backend::dtos::auth::GoogleLoginRequest;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
-use backend::dtos::auth::GoogleLoginRequest;
 
 fn create_app_with_google_url(pool: PgPool, google_auth_url: String) -> axum::Router {
     let state = backend::state::AppState {
@@ -489,10 +489,7 @@ async fn test_google_login_success(pool: PgPool) {
         id_token: "fake_valid_google_token".to_string(),
     };
 
-    let res = server
-        .post("/auth/google-login")
-        .json(&payload)
-        .await;
+    let res = server.post("/auth/google-login").json(&payload).await;
 
     res.assert_status(StatusCode::OK);
 
@@ -542,18 +539,16 @@ async fn test_google_login_existing_user(pool: PgPool) {
     };
 
     // 2. On tente de se connecter avec Google
-    let res = server
-        .post("/auth/google-login")
-        .json(&payload)
-        .await;
+    let res = server.post("/auth/google-login").json(&payload).await;
 
     res.assert_status(StatusCode::OK);
 
     // 3. On vérifie que son google_id a bien été rattaché
-    let db_user = sqlx::query!("SELECT google_id FROM users WHERE email = 'test.existing@example.com'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let db_user =
+        sqlx::query!("SELECT google_id FROM users WHERE email = 'test.existing@example.com'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     assert_eq!(db_user.google_id, Some("new_google_id_987".to_string()));
 }

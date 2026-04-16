@@ -250,7 +250,6 @@ pub async fn google_login(
 
     let user_id = match user_opt {
         Some(user) => {
-            // Update user to link Google ID if not already linked
             if user.google_id != Some(google_id.clone()) {
                 users_repo::link_google_id(pool, user.id, &google_id).await?;
             }

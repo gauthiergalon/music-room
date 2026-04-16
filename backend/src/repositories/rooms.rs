@@ -4,17 +4,17 @@ use uuid::Uuid;
 use crate::{errors::AppError, models::room::Room};
 
 pub async fn find_all(pool: &PgPool) -> Result<Vec<Room>, AppError> {
-    let rooms = sqlx::query_as!(Room, "SELECT id, owner_id, name, is_public, current_track, current_position, is_playing FROM rooms").fetch_all(pool).await.map_err(AppError::Database)?;
+    let rooms = sqlx::query_as!(Room, "SELECT id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing FROM rooms").fetch_all(pool).await.map_err(AppError::Database)?;
     Ok(rooms)
 }
 
 pub async fn create(pool: &PgPool, owner_id: Uuid, name: &str) -> Result<Room, AppError> {
-    let room = sqlx::query_as!(Room, "INSERT INTO rooms (owner_id, name) VALUES ($1, $2) RETURNING id, owner_id, name, is_public, current_track, current_position, is_playing", owner_id, name).fetch_one(pool).await.map_err(AppError::Database)?;
+    let room = sqlx::query_as!(Room, "INSERT INTO rooms (owner_id, name) VALUES ($1, $2) RETURNING id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing", owner_id, name).fetch_one(pool).await.map_err(AppError::Database)?;
     Ok(room)
 }
 
 pub async fn find_by_id(pool: &PgPool, room_id: Uuid) -> Result<Option<Room>, AppError> {
-    let room = sqlx::query_as!(Room, "SELECT id, owner_id, name, is_public, current_track, current_position, is_playing FROM rooms WHERE id = $1", room_id).fetch_optional(pool).await.map_err(AppError::Database)?;
+    let room = sqlx::query_as!(Room, "SELECT id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing FROM rooms WHERE id = $1", room_id).fetch_optional(pool).await.map_err(AppError::Database)?;
     Ok(room)
 }
 
@@ -46,10 +46,12 @@ pub async fn update_visibility(
     pool: &PgPool,
     room_id: Uuid,
     is_public: bool,
+    is_licensed: bool,
 ) -> Result<(), AppError> {
     sqlx::query!(
-        "UPDATE rooms SET is_public = $1 WHERE id = $2",
+        "UPDATE rooms SET is_public = $1, is_licensed = $2 WHERE id = $3",
         is_public,
+        is_licensed,
         room_id
     )
     .execute(pool)

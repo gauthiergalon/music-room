@@ -89,9 +89,14 @@ pub enum ErrorMessage {
     FriendAlreadyExists,
     SelfFriendRequest,
     SenderCannotAcceptOwn,
+    InvitationNotFound,
+    AlreadyInvited,
+    NotInvitedUser,
 
     // Permissions
     NotRoomOwner,
+    NotInvited,
+    MissingLicense,
 
     // Serveur
     InternalError,
@@ -128,9 +133,14 @@ impl ErrorMessage {
             Self::FriendAlreadyExists => "Friendship or request already exists",
             Self::SelfFriendRequest => "Cannot be friend with yourself",
             Self::SenderCannotAcceptOwn => "Sender cannot accept their own request",
+            Self::InvitationNotFound => "Invitation not found",
+            Self::AlreadyInvited => "User is already invited",
+            Self::NotInvitedUser => "You are not the invited user",
 
             // Permissions
             Self::NotRoomOwner => "You are not the owner of this room",
+            Self::NotInvited => "You are not invited to this room",
+            Self::MissingLicense => "You need to be invited to edit this room's playlist",
 
             // Server
             Self::InternalError => "Internal server error",
