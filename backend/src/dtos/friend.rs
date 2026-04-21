@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct FriendRequestDto {
-    pub friend_id: Uuid,
+    pub username: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -23,43 +23,55 @@ pub mod state;
 
 pub async fn run() {
     dotenv().ok();
+    setup_tracing();
 
+    let pool = db::create_pool(&get_env("DATABASE_URL")).await;
+    tracing::info!("Connected to PostgreSQL");
+
+    let state = AppState {
+        pool: pool.clone(),
+        jwt_secret: get_env("JWT_SECRET"),
+        google_client_id: get_env("GOOGLE_CLIENT_ID"),
+        google_client_secret: get_env("GOOGLE_CLIENT_SECRET"),
+        google_auth_url: env::var("GOOGLE_AUTH_URL")
+            .unwrap_or_else(|_| "https://oauth2.googleapis.com".to_string()),
+        active_rooms: Arc::new(RwLock::new(HashMap::new())),
+    };
+
+    let app = build_router(state);
+
+    services::cleanup::spawn_token_cleanup_task(pool);
+
+    start_server(app, "0.0.0.0:3000").await;
+}
+
+fn get_env(var_name: &str) -> String {
+    env::var(var_name).unwrap_or_else(|_| panic!("{} must be set", var_name))
+}
+
+fn setup_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "backend=debug,tower_http=debug".into()),
         )
         .init();
+}
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-
-    let pool = db::create_pool(&database_url).await;
-    let jwt_secret = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
-
-    let state = AppState {
-        pool: pool.clone(),
-        jwt_secret,
-        google_client_id: std::env::var("GOOGLE_CLIENT_ID").expect("GOOGLE_CLIENT_ID must be set"),
-        google_client_secret: std::env::var("GOOGLE_CLIENT_SECRET").expect("GOOGLE_CLIENT_SECRET must be set"),
-        google_auth_url: std::env::var("GOOGLE_AUTH_URL").unwrap_or_else(|_| "https://oauth2.googleapis.com".to_string()),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-    };
-    tracing::info!("Connected to PostgreSQL");
-
+fn build_router(state: AppState) -> axum::Router {
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers(Any)
         .allow_origin(Any);
 
-    let app = routes::app_router(state.clone())
+    routes::app_router(state.clone())
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state)
+}
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-
-    services::cleanup::spawn_token_cleanup_task(pool);
-
-    tracing::info!("Backend running on port 3000");
+async fn start_server(app: axum::Router, addr: &str) {
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    tracing::info!("Backend running on {}", addr);
     axum::serve(listener, app).await.unwrap();
 }

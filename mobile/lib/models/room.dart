@@ -45,7 +45,9 @@ class Room {
       currentTrack: cTrack,
       isPublic: json['is_public'] ?? true,
       status: (json['is_playing'] == true) ? 1 : 0,
-      positionAtLastSync: Duration(milliseconds: (json['current_position']?.toDouble() ?? 0.0).toInt()),
+      positionAtLastSync: Duration(
+        milliseconds: (json['current_position']?.toDouble() ?? 0.0).toInt(),
+      ),
     );
   }
 

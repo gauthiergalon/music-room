@@ -41,19 +41,25 @@ void showQueueBottomSheet(BuildContext context) {
                   child: ReorderableListView(
                     onReorder: (oldIndex, newIndex) {
                       if (newIndex > oldIndex) newIndex -= 1;
-                      
+
                       final item = queue[oldIndex];
                       double newPos;
                       if (newIndex == 0) {
-                         newPos = queue.isNotEmpty ? queue.first.position - 100 : 0;
+                        newPos = queue.isNotEmpty
+                            ? queue.first.position - 100
+                            : 0;
                       } else if (newIndex == queue.length - 1) {
-                         newPos = queue.last.position + 100;
+                        newPos = queue.last.position + 100;
                       } else {
-                         final prev = queue[newIndex > oldIndex ? newIndex : newIndex - 1].position;
-                         final next = queue[newIndex > oldIndex ? newIndex + 1 : newIndex].position;
-                         newPos = (prev + next) / 2;
+                        final prev =
+                            queue[newIndex > oldIndex ? newIndex : newIndex - 1]
+                                .position;
+                        final next =
+                            queue[newIndex > oldIndex ? newIndex + 1 : newIndex]
+                                .position;
+                        newPos = (prev + next) / 2;
                       }
-                      
+
                       controller.moveQueueItem(currentRoom, item, newPos);
                     },
                     children: [
@@ -63,8 +69,10 @@ void showQueueBottomSheet(BuildContext context) {
                           child: TrackListTile(
                             track: queue[i].track,
                             trailingIcon: Icons.delete_outline,
-                            onTapTrailing: () =>
-                                controller.removeQueueItem(currentRoom, queue[i]),
+                            onTapTrailing: () => controller.removeQueueItem(
+                              currentRoom,
+                              queue[i],
+                            ),
                           ),
                         ),
                     ],

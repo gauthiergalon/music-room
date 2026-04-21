@@ -6,6 +6,7 @@ import '../widgets/profile_info_tile.dart';
 import '../controllers/auth_controller.dart';
 import '../core/utils/ui_utils.dart';
 import '../core/exceptions/api_exception.dart';
+import 'friends_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -141,6 +142,18 @@ class _ProfilePageState extends State<ProfilePage> {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.people_outline),
+                    title: const Text('Manage Friends'),
+                    subtitle: const Text('View and add friends'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const FriendsPage()),
+                      );
+                    },
+                  ),
                   ListTile(
                     leading: Icon(Icons.mark_email_read_outlined),
                     title: const Text('Email Verification'),

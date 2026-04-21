@@ -220,3 +220,27 @@ where
     .map_err(AppError::Database)?;
     Ok(())
 }
+
+pub async fn find_by_username<'c, E>(executor: E, username: &str) -> Result<Option<User>, AppError>
+where
+    E: sqlx::Executor<'c, Database = sqlx::Postgres>,
+{
+    let user = sqlx::query!(
+        r#"SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel" FROM users WHERE username = $1"#,
+        username
+    )
+        .fetch_optional(executor)
+        .await
+        .map_err(AppError::Database)?;
+
+    Ok(user.map(|u| User {
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        password_hash: u.password_hash,
+        email_confirmed: u.email_confirmed,
+        google_id: u.google_id,
+        favorite_genres: u.favorite_genres,
+        privacy_level: u.privacy_level,
+    }))
+}

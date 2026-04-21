@@ -11,8 +11,15 @@ fn order_ids(id1: Uuid, id2: Uuid) -> (Uuid, Uuid) {
 pub async fn send_request(
     pool: &PgPool,
     sender_id: Uuid,
-    target_id: Uuid,
+    username: &str,
 ) -> Result<FriendResponseDto, AppError> {
+    let target = crate::repositories::users::find_by_username(pool, username)
+        .await?
+        .ok_or(AppError::NotFound(
+            crate::errors::ErrorMessage::UserNotFound,
+        ))?;
+    let target_id = target.id;
+
     if sender_id == target_id {
         return Err(AppError::Conflict(
             crate::errors::ErrorMessage::SelfFriendRequest,

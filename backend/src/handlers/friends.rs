@@ -28,7 +28,7 @@ pub async fn send_request(
     Json(payload): Json<FriendRequestDto>,
 ) -> Result<(StatusCode, Json<FriendResponseDto>), AppError> {
     let friend =
-        friends_service::send_request(&state.pool, claims.user_id, payload.friend_id).await?;
+        friends_service::send_request(&state.pool, claims.user_id, &payload.username).await?;
     Ok((StatusCode::CREATED, Json(friend)))
 }
 

@@ -69,7 +69,7 @@ async fn test_send_friend_request(pool: PgPool) {
 
     let (token_a, id_a) =
         register_login_and_get_user(&server, "alice_s", "alice_s@example.com").await;
-    let (_token_b, id_b) = register_login_and_get_user(&server, "bob_s", "bob_s@example.com").await;
+    let (_token_b, _) = register_login_and_get_user(&server, "bob_s", "bob_s@example.com").await;
 
     let res = server
         .post("/friends")
@@ -77,7 +77,7 @@ async fn test_send_friend_request(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_s" }))
         .await;
 
     res.assert_status(StatusCode::CREATED);
@@ -93,7 +93,7 @@ async fn test_list_friend_requests(pool: PgPool) {
 
     let (token_a, id_a) =
         register_login_and_get_user(&server, "alice_l", "alice_l@example.com").await;
-    let (token_b, id_b) = register_login_and_get_user(&server, "bob_l", "bob_l@example.com").await;
+    let (token_b, _) = register_login_and_get_user(&server, "bob_l", "bob_l@example.com").await;
 
     server
         .post("/friends")
@@ -101,7 +101,7 @@ async fn test_list_friend_requests(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_l" }))
         .await
         .assert_status(StatusCode::CREATED);
 
@@ -127,7 +127,7 @@ async fn test_accept_friend_request_success(pool: PgPool) {
 
     let (token_a, id_a) =
         register_login_and_get_user(&server, "alice_acc", "alice_acc@test.com").await;
-    let (token_b, id_b) = register_login_and_get_user(&server, "bob_acc", "bob_acc@test.com").await;
+    let (token_b, _) = register_login_and_get_user(&server, "bob_acc", "bob_acc@test.com").await;
 
     server
         .post("/friends")
@@ -135,12 +135,12 @@ async fn test_accept_friend_request_success(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_acc" }))
         .await
         .assert_status(StatusCode::CREATED);
 
     let res = server
-        .put(&format!("/friends/{id_a}/accept"))
+        .post(&format!("/friends/{id_a}/accept"))
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_b),
@@ -168,12 +168,12 @@ async fn test_cannot_accept_own_friend_request(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_acc2" }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
-        .put(&format!("/friends/{id_b}/accept"))
+        .post(&format!("/friends/{id_b}/accept"))
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
@@ -189,7 +189,7 @@ async fn test_reject_friend_request(pool: PgPool) {
 
     let (token_a, id_a) =
         register_login_and_get_user(&server, "alice_rej", "alice_rej@test.com").await;
-    let (token_b, id_b) = register_login_and_get_user(&server, "bob_rej", "bob_rej@test.com").await;
+    let (token_b, _) = register_login_and_get_user(&server, "bob_rej", "bob_rej@test.com").await;
 
     server
         .post("/friends")
@@ -197,7 +197,7 @@ async fn test_reject_friend_request(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_rej" }))
         .await
         .assert_status(StatusCode::CREATED);
 
@@ -236,12 +236,12 @@ async fn test_remove_friend(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_rm" }))
         .await
         .assert_status(StatusCode::CREATED);
 
     server
-        .put(&format!("/friends/{id_a}/accept"))
+        .post(&format!("/friends/{id_a}/accept"))
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_b),
@@ -264,7 +264,7 @@ async fn test_cannot_send_request_to_self(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
 
-    let (token_a, id_a) =
+    let (token_a, _) =
         register_login_and_get_user(&server, "alice_e1", "alice_edge1@test.com").await;
 
     server
@@ -273,7 +273,7 @@ async fn test_cannot_send_request_to_self(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_a }))
+        .json(&json!({ "username": "alice_e1" }))
         .await
         .assert_status(StatusCode::CONFLICT);
 }
@@ -285,8 +285,7 @@ async fn test_cannot_send_duplicate_request(pool: PgPool) {
 
     let (token_a, _id_a) =
         register_login_and_get_user(&server, "alice_e2", "alice_edge2@test.com").await;
-    let (_token_b, id_b) =
-        register_login_and_get_user(&server, "bob_e2", "bob_edge2@test.com").await;
+    let (_token_b, _) = register_login_and_get_user(&server, "bob_e2", "bob_edge2@test.com").await;
 
     server
         .post("/friends")
@@ -294,7 +293,7 @@ async fn test_cannot_send_duplicate_request(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_e2" }))
         .await
         .assert_status(StatusCode::CREATED);
 
@@ -304,7 +303,7 @@ async fn test_cannot_send_duplicate_request(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_e2" }))
         .await
         .assert_status(StatusCode::CONFLICT);
 }
@@ -314,10 +313,9 @@ async fn test_mutual_request_auto_accepts(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
 
-    let (token_a, id_a) =
+    let (token_a, _) =
         register_login_and_get_user(&server, "alice_e3", "alice_edge3@test.com").await;
-    let (token_b, id_b) =
-        register_login_and_get_user(&server, "bob_e3", "bob_edge3@test.com").await;
+    let (token_b, _) = register_login_and_get_user(&server, "bob_e3", "bob_edge3@test.com").await;
 
     server
         .post("/friends")
@@ -325,7 +323,7 @@ async fn test_mutual_request_auto_accepts(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_a),
         )
-        .json(&json!({ "friend_id": id_b }))
+        .json(&json!({ "username": "bob_e3" }))
         .await
         .assert_status(StatusCode::CREATED);
 
@@ -335,7 +333,7 @@ async fn test_mutual_request_auto_accepts(pool: PgPool) {
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token_b),
         )
-        .json(&json!({ "friend_id": id_a }))
+        .json(&json!({ "username": "alice_e3" }))
         .await;
 
     auto_accept_res.assert_status(StatusCode::CREATED);

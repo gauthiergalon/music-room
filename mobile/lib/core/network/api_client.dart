@@ -11,8 +11,8 @@ class ApiClient {
   static final Dio _dio = Dio(
     BaseOptions(
       baseUrl: baseUrl,
-      connectTimeout: const Duration(seconds: 3),
-      receiveTimeout: const Duration(seconds: 3),
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 10),
       contentType: Headers.jsonContentType,
     ),
   )..interceptors.add(_AuthInterceptor());
@@ -32,16 +32,18 @@ class ApiClient {
       final data = e.response!.data;
       if (data is Map<String, dynamic>) {
         if (data.containsKey('details') && data['details'] is List) {
-          final details = List<String>.from(data['details']);
+          final details = List<dynamic>.from(data['details']);
           if (details.isNotEmpty && details.length > 1) {
             return details.map((err) => '• $err').join('\n');
           } else if (details.isNotEmpty) {
-            return details.first;
+            return details.first.toString();
           }
         }
         if (data.containsKey('error')) {
-          return data['error'];
+          return data['error'].toString();
         }
+      } else if (data is String) {
+        return data;
       }
     }
 
@@ -52,18 +54,16 @@ class ApiClient {
     }
 
     if (e.response?.statusCode != null) {
-      return 'Unknown error (${e.response!.statusCode})';
+      return 'Error ${e.response!.statusCode}: ${e.response!.statusMessage}';
     }
 
-    return e.message ?? 'Network error occurred';
+    return e.message ?? 'An unknown error occurred';
   }
 
   static Future<dynamic> get(String endpoint) async {
     try {
-      final response = await _dio.get(endpoint).timeout(const Duration(seconds: 3));
+      final response = await _dio.get(endpoint);
       return response.data;
-    } on TimeoutException {
-      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -76,10 +76,8 @@ class ApiClient {
     Map<String, dynamic>? body,
   }) async {
     try {
-      final response = await _dio.post(endpoint, data: body).timeout(const Duration(seconds: 3));
+      final response = await _dio.post(endpoint, data: body);
       return response.data;
-    } on TimeoutException {
-      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -92,10 +90,8 @@ class ApiClient {
     Map<String, dynamic>? body,
   }) async {
     try {
-      final response = await _dio.delete(endpoint, data: body).timeout(const Duration(seconds: 3));
+      final response = await _dio.delete(endpoint, data: body);
       return response.data;
-    } on TimeoutException {
-      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -103,16 +99,13 @@ class ApiClient {
     }
   }
 
-
   static Future<dynamic> patch(
     String endpoint, {
     Map<String, dynamic>? body,
   }) async {
     try {
-      final response = await _dio.patch(endpoint, data: body).timeout(const Duration(seconds: 3));
+      final response = await _dio.patch(endpoint, data: body);
       return response.data;
-    } on TimeoutException {
-      throw ApiException('Could not connect to the server, try again later');
     } on DioException catch (e) {
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e) {
@@ -167,13 +160,14 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
           return handler.resolve(retryResponse);
         } catch (_) {
           ApiClient.onUnauthorized?.call();
+          return handler.reject(err);
         }
       } else {
         ApiClient.onUnauthorized?.call();
+        return handler.reject(err);
       }
     }
 
-    // For all other errors, just forward them
     return handler.next(err);
   }
 }

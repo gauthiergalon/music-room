@@ -5,6 +5,7 @@ import 'package:app_links/app_links.dart';
 
 import 'controllers/room_controller.dart';
 import 'controllers/auth_controller.dart';
+import 'controllers/friends_controller.dart';
 import 'screens/main_screen.dart';
 import 'screens/login_page.dart';
 import 'screens/reset_password_page.dart';
@@ -19,6 +20,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthController()),
         ChangeNotifierProvider(create: (_) => RoomController()),
+        ChangeNotifierProvider(create: (_) => FriendsController()),
       ],
       child: const MyApp(),
     ),
