@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:mobile/models/track.dart';
 import 'package:mobile/models/queue_item.dart';
 import '../models/room.dart';
@@ -7,8 +7,10 @@ import '../core/network/api_client.dart';
 import '../core/network/ws_factory.dart';
 import '../models/room_user.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
-class RoomController extends ChangeNotifier {
+class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
 
@@ -16,6 +18,50 @@ class RoomController extends ChangeNotifier {
   List<Room> get availableRooms => _availableRooms;
 
   WebSocketChannel? _wsChannel;
+  final AudioPlayer _audioPlayer = AudioPlayer(); // Le lecteur en background
+
+  RoomController() {
+    WidgetsBinding.instance.addObserver(this);
+
+    // Écouter les événements du player pour les dispatcher au front
+    _audioPlayer.playerStateStream.listen((state) {
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Reconect to WebSocket when app resumes if we have a current room
+      if (_currentRoom != null && _wsChannel?.closeCode != null) {
+        debugPrint('App resumed, verifying if room still exists...');
+        _checkAndReconnect();
+      }
+    }
+  }
+
+  Future<void> _checkAndReconnect() async {
+    if (_currentRoom == null) return;
+    try {
+      // On vérifie si la room existe toujours sur le serveur (GET /rooms/:id)
+      await ApiClient.get('/rooms/${_currentRoom!.id}');
+
+      debugPrint('Room exists, reconnecting WS...');
+      _connectWebSocket(_currentRoom!.id);
+      await refreshQueue(_currentRoom!.id);
+    } catch (e) {
+      // Si on reçoit une 404, la room a été supprimée suite à la déconnexion
+      debugPrint('Room no longer exists, leaving room: $e');
+      leaveRoom();
+    }
+  }
 
   Future<void> refreshRooms() async {
     try {
@@ -48,10 +94,41 @@ class RoomController extends ChangeNotifier {
     _currentRoom = room;
     await refreshQueue(room.id);
     _connectWebSocket(room.id);
+
+    // Lancer une musique 'silencieuse' pour garder la room en vie en arrière-plan sans son
+    // tant que l'host n'a pas mis de vraie musique !
+    _playSilenceBackground();
+
     notifyListeners();
   }
 
+  Future<void> _playSilenceBackground() async {
+    try {
+      await _audioPlayer.stop();
+
+      // Plays a silent audio file in loop to keep the app awake in the background
+      // and maintain the WebSocket connection alive while the queue is empty.
+      final silenceSource = AudioSource.asset(
+        'assets/audio/silence.mp3',
+        tag: const MediaItem(
+          id: 'silence_placeholder',
+          title: 'Music Room Active',
+          artist: 'Waiting for a track...',
+        ),
+      );
+
+      await _audioPlayer.setLoopMode(LoopMode.one);
+      await _audioPlayer.setAudioSource(silenceSource);
+      _audioPlayer.play();
+      await Future.delayed(const Duration(seconds: 1));
+      await _audioPlayer.pause();
+    } catch (e) {
+      debugPrint('Failed to play silence background: $e');
+    }
+  }
+
   void leaveRoom() {
+    _audioPlayer.stop(); // Arrêter la musique en quittant
     _currentRoom = null;
     _wsChannel?.sink.close();
     _wsChannel = null;
@@ -77,8 +154,12 @@ class RoomController extends ChangeNotifier {
           final data = jsonDecode(message);
           _handleWsEvent(data);
         },
-        onError: (err) => debugPrint('WS Error: $err'),
-        onDone: () => debugPrint('WS Closed'),
+        onError: (err) {
+          debugPrint('WS Error: $err');
+        },
+        onDone: () {
+          debugPrint('WS Closed with code: ${_wsChannel?.closeCode}');
+        },
       );
     } catch (e) {
       debugPrint('Error listening to WS: $e');
@@ -182,20 +263,50 @@ class RoomController extends ChangeNotifier {
   }
 
   // Music control
+  bool get isPlaying => _audioPlayer.playing;
+
   void togglePlay(Room room) {
-    // Should call WS event or endpoint
+    if (_audioPlayer.playing) {
+      _audioPlayer.pause();
+    } else {
+      _audioPlayer.play();
+    }
+    // Should call WS event or endpoint to sync others if owner
+  }
+
+  Future<void> playTrack(Track track) async {
+    try {
+      debugPrint('Preparing to play: ${track.streamUrl}');
+      final audioSource = AudioSource.uri(
+        Uri.parse(track.streamUrl),
+        tag: MediaItem(
+          id: track.id.toString(),
+          title: track.title, // 'title' in Track
+          artist: track.artist,
+          artUri: track.imageUrl != null ? Uri.parse(track.imageUrl!) : null,
+        ),
+      );
+      await _audioPlayer.setAudioSource(audioSource);
+      debugPrint('Audio source loaded, calling play()');
+      _audioPlayer.play();
+      debugPrint('Play command sent');
+    } catch (e, stacktrace) {
+      debugPrint('Error playing track: $e\n$stacktrace');
+      rethrow;
+    }
   }
 
   void seekTo(Room room, Duration position) {
+    _audioPlayer.seek(position);
     // Should call WS event or endpoint
   }
 
   void skipNext() {
-    // Should call WS event or endpoint
+    // Logic for next
   }
 
   void skipPrev() {
-    // Should call WS event or endpoint
+    // Logic for prev
   }
 
   Future<void> togglePrivacy(Room room) async {
@@ -212,6 +323,22 @@ class RoomController extends ChangeNotifier {
     } catch (e) {
       debugPrint('Failed to toggle privacy: $e');
       notifyListeners(); // Keep UI in sync if the switch failed
+      rethrow;
+    }
+  }
+
+  Future<void> toggleLicense(Room room) async {
+    try {
+      if (!room.isLicensed) {
+        await ApiClient.post('/rooms/${room.id}/enable-license');
+      } else {
+        await ApiClient.post('/rooms/${room.id}/disable-license');
+      }
+      room.isLicensed = !room.isLicensed;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to toggle license: $e');
+      notifyListeners();
       rethrow;
     }
   }

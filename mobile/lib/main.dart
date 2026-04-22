@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:app_links/app_links.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 
 import 'controllers/room_controller.dart';
 import 'controllers/auth_controller.dart';
@@ -14,7 +15,15 @@ import 'core/utils/ui_utils.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
+    androidNotificationChannelName: 'Music Room Playback',
+    androidNotificationOngoing: true,
+  );
+
   runApp(
     MultiProvider(
       providers: [

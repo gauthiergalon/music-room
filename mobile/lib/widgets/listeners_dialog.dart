@@ -85,6 +85,33 @@ void showListenersDialog(BuildContext context) {
                                       'Failed to update room privacy',
                                     ),
                                     backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                        SwitchListTile(
+                          title: const Text('Room License'),
+                          subtitle: Text(
+                            currentRoom.isLicensed
+                                ? 'Licensed (Friends can edit queue)'
+                                : 'Unlicensed (Everyone can edit queue)',
+                          ),
+                          value: currentRoom.isLicensed,
+                          onChanged: (val) async {
+                            try {
+                              await controller.toggleLicense(currentRoom);
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Failed to update room license',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
                                   ),
                                 );
                               }
@@ -104,6 +131,7 @@ void showListenersDialog(BuildContext context) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text('Link copied to clipboard!'),
+                                behavior: SnackBarBehavior.floating,
                               ),
                             );
                           },

@@ -152,6 +152,7 @@ class _SearchPageState extends State<SearchPage> {
                 SnackBar(
                   content: Text('${track.title} added to the queue'),
                   duration: const Duration(seconds: 3),
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
             } else {
@@ -159,6 +160,7 @@ class _SearchPageState extends State<SearchPage> {
                 const SnackBar(
                   content: Text('Join a room to add a song.'),
                   duration: Duration(seconds: 3),
+                  behavior: SnackBarBehavior.floating,
                 ),
               );
             }

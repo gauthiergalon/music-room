@@ -12,6 +12,7 @@ class Room {
   int status; // 0 = waiting, 1 = playing
   List<RoomUser> listeners;
   bool isPublic;
+  bool isLicensed;
 
   Duration positionAtLastSync;
   DateTime updatedAt;
@@ -27,6 +28,7 @@ class Room {
     Duration? positionAtLastSync,
     DateTime? updatedAt,
     this.isPublic = true,
+    this.isLicensed = false,
   }) : queue = queue ?? [],
        listeners = listeners ?? [],
        positionAtLastSync = positionAtLastSync ?? Duration.zero,
@@ -44,6 +46,7 @@ class Room {
       name: json['name'] ?? 'Unnamed Room',
       currentTrack: cTrack,
       isPublic: json['is_public'] ?? true,
+      isLicensed: json['has_license'] ?? json['is_licensed'] ?? false,
       status: (json['is_playing'] == true) ? 1 : 0,
       positionAtLastSync: Duration(
         milliseconds: (json['current_position']?.toDouble() ?? 0.0).toInt(),
