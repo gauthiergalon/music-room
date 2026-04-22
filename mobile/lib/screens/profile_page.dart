@@ -203,11 +203,27 @@ class _ProfilePageState extends State<ProfilePage> {
                         : const Icon(Icons.link),
                     onTap: user.googleId != null
                         ? null
-                        : () {
-                            UiUtils.showError(
-                              context,
-                              'Google linking is not implemented yet',
-                            );
+                        : () async {
+                            try {
+                              await context
+                                  .read<AuthController>()
+                                  .linkGoogleAccount();
+                              if (context.mounted) {
+                                UiUtils.showSuccess(
+                                  context,
+                                  'Google account linked successfully!',
+                                );
+                              }
+                            } on ApiException catch (e) {
+                              if (context.mounted)
+                                UiUtils.showError(context, e.message);
+                            } catch (e) {
+                              if (context.mounted)
+                                UiUtils.showError(
+                                  context,
+                                  'An unexpected error occurred while linking Google.',
+                                );
+                            }
                           },
                   ),
                 ],

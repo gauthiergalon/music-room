@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/api_client.dart';
 import '../core/exceptions/api_exception.dart';
@@ -16,6 +17,10 @@ class AuthController extends ChangeNotifier {
   User? get user => _user;
 
   AuthController() {
+    GoogleSignIn.instance.initialize(
+      serverClientId:
+          '1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com',
+    );
     ApiClient.onUnauthorized = () => logout();
     _loadToken();
   }
@@ -150,7 +155,75 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> loginWithGoogle() async {
-    throw ApiException('Google login is not implemented yet');
+    try {
+      final GoogleSignInAccount account = await GoogleSignIn.instance
+          .authenticate(scopeHint: ['email', 'profile']);
+
+      final GoogleSignInAuthentication auth = account.authentication;
+      final String? idToken = auth.idToken;
+
+      if (idToken == null) {
+        throw ApiException('Échec de la récupération du token Google.');
+      }
+
+      final data = await ApiClient.post(
+        '/auth/google-login',
+        body: {'id_token': idToken},
+      );
+
+      if (data != null) {
+        _token = data['access_token'];
+        _isAuthenticated = true;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', _token!);
+        if (data['refresh_token'] != null) {
+          await prefs.setString('refresh_token', data['refresh_token']);
+        }
+
+        notifyListeners();
+        await fetchUserInfo();
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de la connexion Google: $e');
+      throw ApiException('La connexion Google a échoué: $e');
+    }
+  }
+
+  Future<void> linkGoogleAccount() async {
+    try {
+      final GoogleSignInAccount account = await GoogleSignIn.instance
+          .authenticate(scopeHint: ['email', 'profile']);
+
+      final GoogleSignInAuthentication auth = account.authentication;
+      final String? idToken = auth.idToken;
+
+      if (idToken == null) {
+        throw ApiException('Échec de la récupération du token Google.');
+      }
+
+      final data = await ApiClient.post(
+        '/auth/google-login',
+        body: {'id_token': idToken},
+      );
+
+      if (data != null) {
+        _token = data['access_token'];
+        _isAuthenticated = true;
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', _token!);
+        if (data['refresh_token'] != null) {
+          await prefs.setString('refresh_token', data['refresh_token']);
+        }
+
+        notifyListeners();
+        await fetchUserInfo();
+      }
+    } catch (e) {
+      debugPrint('Erreur lors de la liaison du compte Google: $e');
+      throw ApiException('Google link failed');
+    }
   }
 
   Future<void> logout() async {
