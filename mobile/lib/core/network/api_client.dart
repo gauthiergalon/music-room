@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../exceptions/api_exception.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://192.168.1.29:3000';
+  static const String baseUrl = String.fromEnvironment(
+    'BACKEND_URL',
+    defaultValue: 'http://192.168.1.29:3000',
+  );
 
   static Function()? onUnauthorized;
 
