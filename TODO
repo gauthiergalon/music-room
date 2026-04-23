@@ -1,6 +1,3 @@
-Add env variables for mobile app (Backend URL)
-Add Google Auth (Mobile Side)
-Add Invitation for Friends and Store Invited Users for others functionalities (Playlist Editor and Room Access) (Use URL Invitation with Room ID, and store User ID to check permision)
 Implement Music Api (squid.wtf)
 
 Generate logs for any Actions on the FrontEnd to the BackEnd

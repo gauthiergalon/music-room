@@ -307,7 +307,7 @@ class _RoomPageState extends State<RoomPage> {
                       : ListView.separated(
                           padding: const EdgeInsets.all(12),
                           itemCount: _pendingInvitations.length,
-                          separatorBuilder: (_, __) =>
+                          separatorBuilder: (_, index) =>
                               const SizedBox(height: 10),
                           itemBuilder: (context, index) {
                             final invitation = _pendingInvitations[index];

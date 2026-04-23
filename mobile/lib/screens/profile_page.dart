@@ -16,6 +16,9 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  bool _isUpdatingGenres = false;
+  bool _isUpdatingPrivacy = false;
+
   @override
   Widget build(BuildContext context) {
     final authController = context.watch<AuthController>();
@@ -135,6 +138,41 @@ class _ProfilePageState extends State<ProfilePage> {
                       _showPasswordDialog(context);
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.library_music_outlined),
+                    title: const Text('Music Tastes'),
+                    subtitle: Text(
+                      (user.favoriteGenres == null ||
+                              user.favoriteGenres!.isEmpty)
+                          ? 'Tap to add your favorite genres'
+                          : user.favoriteGenres!.join(', '),
+                    ),
+                    trailing: _isUpdatingGenres
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _isUpdatingGenres
+                        ? null
+                        : () => _showFavoriteGenresDialog(context),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.visibility_outlined),
+                    title: const Text('Profile Privacy'),
+                    subtitle: Text(_privacyLabel(user.privacyLevel)),
+                    trailing: _isUpdatingPrivacy
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.chevron_right),
+                    onTap: _isUpdatingPrivacy
+                        ? null
+                        : () => _showPrivacyDialog(context, user.privacyLevel),
+                  ),
                 ],
               ),
             ),
@@ -215,14 +253,16 @@ class _ProfilePageState extends State<ProfilePage> {
                                 );
                               }
                             } on ApiException catch (e) {
-                              if (context.mounted)
+                              if (context.mounted) {
                                 UiUtils.showError(context, e.message);
+                              }
                             } catch (e) {
-                              if (context.mounted)
+                              if (context.mounted) {
                                 UiUtils.showError(
                                   context,
                                   'An unexpected error occurred while linking Google.',
                                 );
+                              }
                             }
                           },
                   ),
@@ -347,5 +387,201 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       },
     );
+  }
+
+  Future<void> _showFavoriteGenresDialog(BuildContext context) async {
+    final auth = context.read<AuthController>();
+    final existing = auth.user?.favoriteGenres ?? [];
+    final controller = TextEditingController(text: existing.join(', '));
+    final currentContext = context;
+
+    return showDialog(
+      context: currentContext,
+      builder: (dialogContext) {
+        bool isSaving = false;
+
+        return StatefulBuilder(
+          builder: (builderContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Music Tastes'),
+              content: TextField(
+                controller: controller,
+                enabled: !isSaving,
+                decoration: const InputDecoration(
+                  hintText: 'house, techno, jazz',
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          setDialogState(() => isSaving = true);
+                          setState(() => _isUpdatingGenres = true);
+
+                          try {
+                            final parsed = controller.text
+                                .split(',')
+                                .map((e) => e.trim())
+                                .where((e) => e.isNotEmpty)
+                                .toSet()
+                                .toList();
+
+                            await currentContext
+                                .read<AuthController>()
+                                .updateFavoriteGenres(
+                                  parsed.isEmpty ? <String>[] : parsed,
+                                );
+
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showSuccess(
+                                currentContext,
+                                'Music tastes updated successfully',
+                              );
+                            }
+                          } on ApiException catch (e) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isSaving = false);
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.message);
+                            }
+                          } catch (e) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => isSaving = false);
+                            }
+                            if (currentContext.mounted) {
+                              UiUtils.showError(currentContext, e.toString());
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isUpdatingGenres = false);
+                            }
+                          }
+                        },
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showPrivacyDialog(
+    BuildContext context,
+    String currentPrivacy,
+  ) async {
+    final currentContext = context;
+    var selected = currentPrivacy;
+
+    return showDialog(
+      context: currentContext,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (builderContext, setDialogState) {
+            return AlertDialog(
+              title: const Text('Profile Privacy'),
+              content: RadioGroup<String>(
+                groupValue: selected,
+                onChanged: (value) {
+                  if (value != null) {
+                    setDialogState(() => selected = value);
+                  }
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<String>(
+                      value: 'Public',
+                      title: const Text('Public'),
+                      subtitle: const Text(
+                        'Everyone can see your profile genres',
+                      ),
+                    ),
+                    RadioListTile<String>(
+                      value: 'Friends',
+                      title: const Text('Friends'),
+                      subtitle: const Text('Only friends can see your genres'),
+                    ),
+                    RadioListTile<String>(
+                      value: 'Private',
+                      title: const Text('Private'),
+                      subtitle: const Text('Only you can see your genres'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(dialogContext);
+                    setState(() => _isUpdatingPrivacy = true);
+
+                    try {
+                      await currentContext
+                          .read<AuthController>()
+                          .updatePrivacyLevel(selected);
+
+                      if (currentContext.mounted) {
+                        UiUtils.showSuccess(
+                          currentContext,
+                          'Privacy updated successfully',
+                        );
+                      }
+                    } on ApiException catch (e) {
+                      if (currentContext.mounted) {
+                        UiUtils.showError(currentContext, e.message);
+                      }
+                    } catch (e) {
+                      if (currentContext.mounted) {
+                        UiUtils.showError(currentContext, e.toString());
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isUpdatingPrivacy = false);
+                      }
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _privacyLabel(String value) {
+    switch (value) {
+      case 'public':
+        return 'Public';
+      case 'private':
+        return 'Private';
+      case 'friends':
+      default:
+        return 'Friends only';
+    }
   }
 }

@@ -44,12 +44,22 @@ class AuthController extends ChangeNotifier {
 
       final data = await ApiClient.get('/users/me');
       if (data != null) {
+        final rawFavoriteGenres = data['favorite_genres'];
+        final favoriteGenres = rawFavoriteGenres is List
+            ? rawFavoriteGenres
+                  .map((item) => item.toString())
+                  .where((item) => item.isNotEmpty)
+                  .toList()
+            : null;
+
         _user = User(
           id: data['id'],
           username: data['username'],
           email: data['email'],
           emailConfirmed: data['email_confirmed'],
           googleId: data['google_id'],
+          favoriteGenres: favoriteGenres,
+          privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
         );
       }
     } on ApiException catch (e) {
@@ -95,6 +105,40 @@ class AuthController extends ChangeNotifier {
       '/users/me/password',
       body: {'current_password': currentPassword, 'new_password': newPassword},
     );
+  }
+
+  Future<void> updateFavoriteGenres(List<String>? favoriteGenres) async {
+    final data = await ApiClient.patch(
+      '/users/me/favorite-genres',
+      body: {'favorite_genres': favoriteGenres},
+    );
+
+    if (data != null) {
+      final rawFavoriteGenres = data['favorite_genres'];
+      final updatedFavoriteGenres = rawFavoriteGenres is List
+          ? rawFavoriteGenres
+                .map((item) => item.toString())
+                .where((item) => item.isNotEmpty)
+                .toList()
+          : null;
+
+      _user = _user?.copyWith(favoriteGenres: updatedFavoriteGenres);
+      notifyListeners();
+    }
+  }
+
+  Future<void> updatePrivacyLevel(String privacyLevel) async {
+    final data = await ApiClient.patch(
+      '/users/me/privacy',
+      body: {'privacy_level': privacyLevel},
+    );
+
+    if (data != null) {
+      _user = _user?.copyWith(
+        privacyLevel: data['privacy_level']?.toString() ?? privacyLevel,
+      );
+      notifyListeners();
+    }
   }
 
   Future<void> sendEmailConfirmation() async {

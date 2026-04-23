@@ -96,7 +96,7 @@ void showListenersDialog(BuildContext context) {
                           title: const Text('Room License'),
                           subtitle: Text(
                             currentRoom.isLicensed
-                                ? 'Licensed (Friends can edit queue)'
+                                ? 'Licensed (Invited users can edit queue)'
                                 : 'Unlicensed (Everyone can edit queue)',
                           ),
                           value: currentRoom.isLicensed,
