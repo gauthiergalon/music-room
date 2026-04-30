@@ -29,6 +29,9 @@ pub enum AppError {
     #[error("Database Error")]
     Database(#[from] sqlx::Error),
 
+    #[error("Request Error")]
+    Request(#[from] reqwest::Error),
+
     #[error("Internal Server Error")]
     Internal,
 }
@@ -52,6 +55,10 @@ impl IntoResponse for AppError {
             }
             AppError::Database(e) => {
                 tracing::error!("DB error: {e}");
+                (StatusCode::INTERNAL_SERVER_ERROR, None)
+            }
+            AppError::Request(e) => {
+                tracing::error!("Request error: {e}");
                 (StatusCode::INTERNAL_SERVER_ERROR, None)
             }
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, None),
