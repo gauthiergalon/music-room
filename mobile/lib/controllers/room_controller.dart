@@ -319,6 +319,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       case _eventPlay:
         _currentRoom!.status = 1; // 1 = playing
         _currentRoom!.updatedAt = DateTime.now();
+        // Sync audio player state for listeners (owner already called play locally)
+        if (!_audioPlayer.playing) {
+          unawaited(_audioPlayer.play());
+        }
         break;
       case _eventPause:
         _currentRoom!.status = 0; // 0 = paused
@@ -327,6 +331,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           _currentRoom!.positionAtLastSync = Duration(milliseconds: position);
         }
         _currentRoom!.updatedAt = DateTime.now();
+        // Sync audio player state for listeners (owner already called pause locally)
+        if (_audioPlayer.playing) {
+          unawaited(_audioPlayer.pause());
+        }
         break;
       case _eventSeekTo:
         final position = payload['position'];
