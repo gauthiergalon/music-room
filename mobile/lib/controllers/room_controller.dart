@@ -1,16 +1,35 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
-import 'package:mobile/models/track.dart';
-import 'package:mobile/models/queue_item.dart';
-import '../models/room.dart';
-import '../core/network/api_client.dart';
-import '../core/network/ws_factory.dart';
-import '../models/room_user.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../core/network/api_client.dart';
+import '../core/network/ws_factory.dart';
+import '../models/queue_item.dart';
+import '../models/room.dart';
+import '../models/room_user.dart';
+import '../models/track.dart';
 
 class RoomController extends ChangeNotifier with WidgetsBindingObserver {
+  static const String _silenceTrackId = 'silence_placeholder';
+  static const String _silenceAssetPath = 'assets/audio/silence.mp3';
+  static const Duration _silencePrimeDelay = Duration(seconds: 1);
+
+  static const String _eventSyncUsers = 'SyncUsers';
+  static const String _eventUserJoin = 'UserJoin';
+  static const String _eventUserLeave = 'UserLeave';
+  static const String _eventRoomClosed = 'RoomClosed';
+  static const String _eventPlay = 'Play';
+  static const String _eventPause = 'Pause';
+  static const String _eventSeekTo = 'SeekTo';
+  static const String _eventNextTrack = 'NextTrack';
+  static const String _eventQueueAdd = 'QueueAdd';
+  static const String _eventQueueRemove = 'QueueRemove';
+  static const String _eventQueueReorder = 'QueueReorder';
+
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
   Track? get currentTrack => _currentRoom?.currentTrack;
@@ -22,24 +41,29 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   List<Room> get availableRooms => _availableRooms;
 
   WebSocketChannel? _wsChannel;
-  final AudioPlayer _audioPlayer = AudioPlayer(); // Le lecteur en background
+  StreamSubscription? _wsSubscription;
+  late final StreamSubscription<PlayerState> _playerStateSubscription;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   RoomController() {
     WidgetsBinding.instance.addObserver(this);
 
-    // Écouter les événements du player pour les dispatcher au front
-    _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
-        _playNextInQueue();
-      }
-      notifyListeners();
-    });
+    _playerStateSubscription = _audioPlayer.playerStateStream.listen(
+      _handlePlayerState,
+    );
+  }
+
+  void _handlePlayerState(PlayerState state) {
+    if (state.processingState == ProcessingState.completed) {
+      _playNextInQueue();
+    }
+
+    notifyListeners();
   }
 
   void _playNextInQueue() {
     final room = _currentRoom;
     if (room != null && room.queue.isNotEmpty) {
-      // Find the first track by position
       final queueList = room.queue.toList();
       queueList.sort((a, b) => a.position.compareTo(b.position));
       final nextItem = queueList.first;
@@ -54,6 +78,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _wsSubscription?.cancel();
+    _wsChannel?.sink.close();
+    _playerStateSubscription.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -61,9 +88,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Reconect to WebSocket when app resumes if we have a current room
       if (_currentRoom != null && _wsChannel?.closeCode != null) {
-        debugPrint('App resumed, verifying if room still exists...');
         _checkAndReconnect();
       }
     }
@@ -72,15 +97,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _checkAndReconnect() async {
     if (_currentRoom == null) return;
     try {
-      // On vérifie si la room existe toujours sur le serveur (GET /rooms/:id)
       await ApiClient.get('/rooms/${_currentRoom!.id}');
 
-      debugPrint('Room exists, reconnecting WS...');
-      _connectWebSocket(_currentRoom!.id);
+      await _connectWebSocket(_currentRoom!.id);
       await refreshQueue(_currentRoom!.id);
     } catch (e) {
-      // Si on reçoit une 404, la room a été supprimée suite à la déconnexion
-      debugPrint('Room no longer exists, leaving room: $e');
       leaveRoom();
     }
   }
@@ -130,10 +151,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> openRoom(Room room) async {
     _currentRoom = room;
     await refreshQueue(room.id);
-    _connectWebSocket(room.id);
+    await _connectWebSocket(room.id);
 
-    // Lancer une musique 'silencieuse' pour garder la room en vie en arrière-plan sans son
-    // tant que l'host n'a pas mis de vraie musique !
     _playSilenceBackground();
 
     notifyListeners();
@@ -149,12 +168,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
       }
 
-      // Plays a silent audio file in loop to keep the app awake in the background
-      // and maintain the WebSocket connection alive while the queue is empty.
       final silenceSource = AudioSource.asset(
-        'assets/audio/silence.mp3',
+        _silenceAssetPath,
         tag: const MediaItem(
-          id: 'silence_placeholder',
+          id: _silenceTrackId,
           title: 'Music Room Active',
           artist: 'Waiting for a track...',
         ),
@@ -163,101 +180,149 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       await _audioPlayer.setLoopMode(LoopMode.one);
       await _audioPlayer.setAudioSource(silenceSource);
       _audioPlayer.play();
-      await Future.delayed(const Duration(seconds: 1));
+      await Future.delayed(_silencePrimeDelay);
       await _audioPlayer.pause();
     } catch (e) {
-      debugPrint('Failed to play silence background: $e');
+      debugPrint('Failed to start silence background playback: $e');
     }
   }
 
   void leaveRoom() {
-    _audioPlayer.stop(); // Arrêter la musique en quittant
+    unawaited(_audioPlayer.stop());
     _currentRoom = null;
-    _wsChannel?.sink.close();
-    _wsChannel = null;
+    _disposeWebSocket();
     notifyListeners();
 
-    Future.delayed(const Duration(milliseconds: 100), () {
-      refreshRooms();
-    });
+    unawaited(refreshRooms());
   }
 
-  void _connectWebSocket(String roomId) async {
+  void _disposeWebSocket() {
+    _wsSubscription?.cancel();
+    _wsSubscription = null;
+    _wsChannel?.sink.close();
+    _wsChannel = null;
+  }
+
+  Future<void> _connectWebSocket(String roomId) async {
     final token = await ApiClient.getToken();
     if (token == null) return;
 
+    _disposeWebSocket();
+
     final baseUrl =
         '${ApiClient.baseUrl.replaceFirst('http', 'ws')}/rooms/$roomId/ws';
-    _wsChannel = createWsChannel(baseUrl, token);
-
     try {
-      _wsChannel!.stream.listen(
+      _wsChannel = createWsChannel(baseUrl, token);
+      _wsSubscription = _wsChannel!.stream.listen(
         (message) {
-          debugPrint('WS Message: $message');
-          final data = jsonDecode(message);
-          _handleWsEvent(data);
+          final data = jsonDecode(message as String);
+          if (data is Map<String, dynamic>) {
+            _handleWsEvent(data);
+          }
         },
         onError: (err) {
-          debugPrint('WS Error: $err');
-        },
-        onDone: () {
-          debugPrint('WS Closed with code: ${_wsChannel?.closeCode}');
+          debugPrint('WebSocket error: $err');
         },
       );
     } catch (e) {
-      debugPrint('Error listening to WS: $e');
+      debugPrint('Failed to connect to WebSocket: $e');
+      _disposeWebSocket();
+      if (_currentRoom?.id == roomId) {
+        leaveRoom();
+      }
     }
   }
 
   void _handleWsEvent(Map<String, dynamic> data) {
     if (_currentRoom == null) return;
-    final type = data['type'];
-    final payload = data['payload'] ?? {};
-    if (type == 'SyncUsers') {
-      final users = payload['users'] as List?;
-      if (users != null) {
-        _currentRoom!.listeners.clear();
-        for (var u in users) {
-          final id = u['user_id'] as String?;
-          final name = u['username'] as String?;
-          if (id != null && name != null) {
-            _currentRoom!.listeners.add(RoomUser(id: id, username: name));
-          }
-        }
-      }
-    } else if (type == 'UserJoin') {
-      final id = payload['user_id'] as String?;
-      final name = payload['username'] as String?;
-      if (id != null && name != null) {
-        final existing = _currentRoom!.listeners.indexWhere((u) => u.id == id);
-        if (existing == -1) {
-          _currentRoom!.listeners.add(RoomUser(id: id, username: name));
-        }
-      }
-    } else if (type == 'UserLeave') {
-      final id = payload['user_id'] as String?;
-      if (id != null) {
-        _currentRoom!.listeners.removeWhere((u) => u.id == id);
-      }
-    } else if (type == 'RoomClosed') {
-      leaveRoom();
-      return;
+
+    final type = data['type']?.toString();
+    final payload = Map<String, dynamic>.from(
+      data['payload'] as Map? ?? const {},
+    );
+
+    switch (type) {
+      case _eventSyncUsers:
+        _syncUsers(payload);
+        break;
+      case _eventUserJoin:
+        _addListener(payload);
+        break;
+      case _eventUserLeave:
+        _removeListener(payload);
+        break;
+      case _eventRoomClosed:
+        leaveRoom();
+        return;
     }
 
-    if (type == 'Play' ||
-        type == 'Pause' ||
-        type == 'SeekTo' ||
-        type == 'NextTrack') {
-      _refreshCurrentRoom(_currentRoom!.id);
+    if (_isPlaybackEvent(type)) {
+      unawaited(_refreshCurrentRoom(_currentRoom!.id));
     }
 
-    // React to events (add simple logs or state updates)
-    if (type == 'QueueAdd' || type == 'QueueRemove' || type == 'QueueReorder') {
-      refreshQueue(_currentRoom!.id);
-    } else if (type == 'NextTrack') {
-      refreshQueue(_currentRoom!.id);
+    if (_isQueueEvent(type)) {
+      unawaited(refreshQueue(_currentRoom!.id));
     }
+
     notifyListeners();
+  }
+
+  void _syncUsers(Map<String, dynamic> payload) {
+    final users = payload['users'];
+    if (users is! List) return;
+
+    _currentRoom!.listeners
+      ..clear()
+      ..addAll(
+        users.map((user) => _roomUserFromPayload(user)).whereType<RoomUser>(),
+      );
+  }
+
+  void _addListener(Map<String, dynamic> payload) {
+    final listener = _roomUserFromPayload(payload);
+    if (listener == null) return;
+
+    final existingIndex = _currentRoom!.listeners.indexWhere(
+      (user) => user.id == listener.id,
+    );
+    if (existingIndex == -1) {
+      _currentRoom!.listeners.add(listener);
+    }
+  }
+
+  void _removeListener(Map<String, dynamic> payload) {
+    final id = payload['user_id']?.toString();
+    if (id == null) return;
+
+    _currentRoom!.listeners.removeWhere((listener) => listener.id == id);
+  }
+
+  RoomUser? _roomUserFromPayload(dynamic payload) {
+    if (payload is! Map) return null;
+
+    final id = payload['user_id']?.toString();
+    final username = payload['username']?.toString();
+
+    if (id == null || username == null) return null;
+    return RoomUser(id: id, username: username);
+  }
+
+  bool _isPlaybackEvent(String? type) {
+    return const {
+      _eventPlay,
+      _eventPause,
+      _eventSeekTo,
+      _eventNextTrack,
+    }.contains(type);
+  }
+
+  bool _isQueueEvent(String? type) {
+    return const {
+      _eventQueueAdd,
+      _eventQueueRemove,
+      _eventQueueReorder,
+      _eventNextTrack,
+    }.contains(type);
   }
 
   Future<void> refreshQueue(String roomId) async {
@@ -281,9 +346,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   void _checkAutoPlayNext() {
     if (_currentRoom == null || _currentRoom!.queue.isEmpty) return;
 
-    final currentTag = _audioPlayer.audioSource?.sequence.first.tag;
+    final sequence = _audioPlayer.audioSource?.sequence;
+    final currentTag = sequence != null && sequence.isNotEmpty
+        ? sequence.first.tag
+        : null;
     final isSilence =
-        currentTag is MediaItem && currentTag.id == 'silence_placeholder';
+        currentTag is MediaItem && currentTag.id == _silenceTrackId;
 
     if (isSilence || _audioPlayer.processingState == ProcessingState.idle) {
       _playNextInQueue();
@@ -352,19 +420,17 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> playTrack(Track track) async {
     try {
       final streamUrl = await _resolveStreamUrl(track.id);
-      debugPrint('Preparing to play: $streamUrl');
       final audioSource = AudioSource.uri(
         Uri.parse(streamUrl),
         tag: MediaItem(
           id: track.id.toString(),
-          title: track.title, // 'title' in Track
+          title: track.title,
           artist: track.artist,
           artUri: track.imageUrl != null ? Uri.parse(track.imageUrl!) : null,
         ),
       );
       await _audioPlayer.setLoopMode(LoopMode.off);
       await _audioPlayer.setAudioSource(audioSource);
-      debugPrint('Audio source loaded, calling play()');
 
       if (_currentRoom != null) {
         _currentRoom!.currentTrack = track;
@@ -375,7 +441,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       _audioPlayer.play();
-      debugPrint('Play command sent');
     } catch (e, stacktrace) {
       debugPrint('Error playing track: $e\n$stacktrace');
       rethrow;
@@ -388,7 +453,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _currentRoom!.positionAtLastSync = position;
       _currentRoom!.updatedAt = DateTime.now();
     }
-    // Should call WS event or endpoint
   }
 
   void skipNext() {
@@ -409,10 +473,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       room.isPublic = !room.isPublic;
       notifyListeners();
 
-      refreshRooms(); // Update available list
+      unawaited(refreshRooms());
     } catch (e) {
       debugPrint('Failed to toggle privacy: $e');
-      notifyListeners(); // Keep UI in sync if the switch failed
+      notifyListeners();
       rethrow;
     }
   }
@@ -434,6 +498,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void kickListener(Room room, RoomUser listener) {}
+
   Future<void> promoteToOwner(Room room, RoomUser listener) async {
     try {
       await ApiClient.post(

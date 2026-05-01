@@ -1,4 +1,4 @@
-import 'track_cache.dart';
+import 'package:mobile/models/track_cache.dart';
 
 class Track {
   final int id;
@@ -6,7 +6,7 @@ class Track {
   final String artist;
   final String? imageUrl;
   final Duration duration;
-  final String streamUrl; // L'URL de la musique pour just_audio
+  final String streamUrl;
 
   Track({
     required this.id,
@@ -15,7 +15,7 @@ class Track {
     this.imageUrl,
     required this.duration,
     this.streamUrl =
-        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', // Vraie musique de test
+        'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
   });
 
   factory Track.fromJson(Map<String, dynamic> json) {
@@ -40,7 +40,6 @@ class Track {
       imageUrl: coverUrl,
     );
 
-    // Save to local cache so the queue can display it properly
     cacheTrack(track);
     return track;
   }

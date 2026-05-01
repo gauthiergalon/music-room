@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import 'package:dio/dio.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
 import '../exceptions/api_exception.dart';
+import '../storage/session_storage.dart';
 
 class ApiClient {
   static const String baseUrl = String.fromEnvironment(
@@ -9,7 +11,7 @@ class ApiClient {
     defaultValue: 'http://192.168.1.29:3000',
   );
 
-  static Function()? onUnauthorized;
+  static FutureOr<void> Function()? onUnauthorized;
 
   static final Dio _dio = Dio(
     BaseOptions(
@@ -20,14 +22,21 @@ class ApiClient {
     ),
   )..interceptors.add(_AuthInterceptor());
 
-  static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('jwt_token');
-  }
+  static Future<String?> getToken() => SessionStorage.getAccessToken();
 
-  static Future<String?> getRefreshToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('refresh_token');
+  static Future<String?> getRefreshToken() => SessionStorage.getRefreshToken();
+
+  static Future<dynamic> _sendRequest(
+    Future<Response<dynamic>> Function() request,
+  ) async {
+    try {
+      final response = await request();
+      return response.data;
+    } on DioException catch (e) {
+      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
+    } catch (_) {
+      throw ApiException('An unexpected error occurred');
+    }
   }
 
   static String _parseErrorResponse(DioException e) {
@@ -63,62 +72,29 @@ class ApiClient {
     return e.message ?? 'An unknown error occurred';
   }
 
-  static Future<dynamic> get(String endpoint) async {
-    try {
-      final response = await _dio.get(endpoint);
-      return response.data;
-    } on DioException catch (e) {
-      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
-    } catch (e) {
-      throw ApiException('An unexpected error occurred');
-    }
-  }
+  static Future<dynamic> get(String endpoint) =>
+      _sendRequest(() => _dio.get(endpoint));
 
-  static Future<dynamic> post(
-    String endpoint, {
-    Map<String, dynamic>? body,
-  }) async {
-    try {
-      final response = await _dio.post(endpoint, data: body);
-      return response.data;
-    } on DioException catch (e) {
-      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
-    } catch (e) {
-      throw ApiException('An unexpected error occurred');
-    }
-  }
+  static Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) =>
+      _sendRequest(() => _dio.post(endpoint, data: body));
 
   static Future<dynamic> delete(
     String endpoint, {
     Map<String, dynamic>? body,
-  }) async {
-    try {
-      final response = await _dio.delete(endpoint, data: body);
-      return response.data;
-    } on DioException catch (e) {
-      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
-    } catch (e) {
-      throw ApiException('An unexpected error occurred');
-    }
-  }
+  }) => _sendRequest(() => _dio.delete(endpoint, data: body));
 
-  static Future<dynamic> patch(
-    String endpoint, {
-    Map<String, dynamic>? body,
-  }) async {
-    try {
-      final response = await _dio.patch(endpoint, data: body);
-      return response.data;
-    } on DioException catch (e) {
-      throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
-    } catch (e) {
-      throw ApiException('An unexpected error occurred');
-    }
-  }
+  static Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) =>
+      _sendRequest(() => _dio.patch(endpoint, data: body));
 }
 
 class _AuthInterceptor extends QueuedInterceptorsWrapper {
   final Dio _refreshDio = Dio(BaseOptions(baseUrl: ApiClient.baseUrl));
+
+  static const List<String> _excludedPaths = [
+    '/auth/login',
+    '/auth/register',
+    '/auth/refresh',
+  ];
 
   @override
   void onRequest(
@@ -135,9 +111,7 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     if (err.response?.statusCode == 401 &&
-        !err.requestOptions.path.contains('/auth/login') &&
-        !err.requestOptions.path.contains('/auth/register') &&
-        !err.requestOptions.path.contains('/auth/refresh')) {
+        !_shouldSkipRefresh(err.requestOptions.path)) {
       final refreshToken = await ApiClient.getRefreshToken();
 
       if (refreshToken != null) {
@@ -150,11 +124,10 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
           final newAccessToken = response.data['access_token'];
           final newRefreshToken = response.data['refresh_token'];
 
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('jwt_token', newAccessToken);
-          if (newRefreshToken != null) {
-            await prefs.setString('refresh_token', newRefreshToken);
-          }
+          await SessionStorage.saveSession(
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+          );
 
           final requestOptions = err.requestOptions;
           requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
@@ -162,15 +135,19 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
           final retryResponse = await ApiClient._dio.fetch(requestOptions);
           return handler.resolve(retryResponse);
         } catch (_) {
-          ApiClient.onUnauthorized?.call();
+          await ApiClient.onUnauthorized?.call();
           return handler.reject(err);
         }
       } else {
-        ApiClient.onUnauthorized?.call();
+        await ApiClient.onUnauthorized?.call();
         return handler.reject(err);
       }
     }
 
     return handler.next(err);
+  }
+
+  bool _shouldSkipRefresh(String path) {
+    return _excludedPaths.any(path.contains);
   }
 }

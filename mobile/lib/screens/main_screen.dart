@@ -23,7 +23,7 @@ class _MainScreenState extends State<MainScreen> {
     ];
 
     return Scaffold(
-      body: pages[_selectedIndex],
+      body: IndexedStack(index: _selectedIndex, children: pages),
       bottomNavigationBar: AppNavBar(
         selectedIndex: _selectedIndex,
         onIndexSelected: (int index) => setState(() => _selectedIndex = index),

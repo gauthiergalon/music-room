@@ -1,17 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:app_links/app_links.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:provider/provider.dart';
 
-import 'controllers/room_controller.dart';
-import 'controllers/auth_controller.dart';
-import 'controllers/friends_controller.dart';
-import 'screens/main_screen.dart';
-import 'screens/login_page.dart';
-import 'screens/reset_password_page.dart';
 import 'core/theme.dart';
 import 'core/utils/ui_utils.dart';
+import 'controllers/auth_controller.dart';
+import 'controllers/friends_controller.dart';
+import 'controllers/room_controller.dart';
+import 'screens/login_page.dart';
+import 'screens/main_screen.dart';
+import 'screens/reset_password_page.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -61,21 +62,25 @@ class _MyAppState extends State<MyApp> {
 
   void _initDeepLinks() {
     _linkSubscription = _appLinks.uriLinkStream.listen(
-      (uri) async {
-        debugPrint('Received Deep Link: $uri');
-
-        final token = uri.queryParameters['token'];
-
-        if (uri.host == 'confirm-email' && token != null) {
-          _handleConfirmEmail(token);
-        } else if (uri.host == 'reset-password' && token != null) {
-          _handleResetPassword(token);
-        }
-      },
-      onError: (err) {
-        debugPrint('Deep Link Error: $err');
-      },
+      _handleIncomingUri,
+      onError: (err) => debugPrint('Deep Link Error: $err'),
     );
+  }
+
+  void _handleIncomingUri(Uri uri) {
+    debugPrint('Received Deep Link: $uri');
+
+    final token = uri.queryParameters['token'];
+    if (token == null) return;
+
+    switch (uri.host) {
+      case 'confirm-email':
+        _handleConfirmEmail(token);
+        break;
+      case 'reset-password':
+        _handleResetPassword(token);
+        break;
+    }
   }
 
   Future<void> _handleConfirmEmail(String token) async {

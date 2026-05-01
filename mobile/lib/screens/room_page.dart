@@ -41,8 +41,7 @@ class _RoomPageState extends State<RoomPage> {
 
     final controller = context.read<RoomController>();
     try {
-      final room = await controller.createRoom();
-      controller.openRoom(room);
+      await controller.createRoom();
     } catch (e) {
       if (mounted) {
         UiUtils.showError(context, e.toString());

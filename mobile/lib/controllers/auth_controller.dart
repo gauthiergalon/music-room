@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../core/network/api_client.dart';
+
 import '../core/exceptions/api_exception.dart';
+import '../core/network/api_client.dart';
+import '../core/storage/session_storage.dart';
 import '../models/user.dart';
 
 class AuthController extends ChangeNotifier {
@@ -21,19 +22,80 @@ class AuthController extends ChangeNotifier {
       serverClientId:
           '1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com',
     );
-    ApiClient.onUnauthorized = () => logout();
-    _loadToken();
+    ApiClient.onUnauthorized = logout;
+    _loadSession();
   }
 
-  Future<void> _loadToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('jwt_token');
+  Future<void> _loadSession() async {
+    _token = await SessionStorage.getAccessToken();
 
     if (_token != null) {
       _isAuthenticated = true;
       notifyListeners();
       await fetchUserInfo();
     }
+  }
+
+  List<String>? _parseFavoriteGenres(dynamic rawFavoriteGenres) {
+    if (rawFavoriteGenres is! List) {
+      return null;
+    }
+
+    final favoriteGenres = rawFavoriteGenres
+        .map((item) => item.toString())
+        .where((item) => item.isNotEmpty)
+        .toList();
+
+    return favoriteGenres.isEmpty ? null : favoriteGenres;
+  }
+
+  User _buildUser(Map<String, dynamic> data) {
+    return User(
+      id: data['id'],
+      username: data['username'],
+      email: data['email'],
+      emailConfirmed: data['email_confirmed'],
+      googleId: data['google_id'],
+      favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
+      privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
+    );
+  }
+
+  Future<void> _storeAuthenticatedSession(Map<String, dynamic> data) async {
+    final accessToken = data['access_token']?.toString();
+    if (accessToken == null || accessToken.isEmpty) {
+      throw ApiException('Authentication response is missing an access token.');
+    }
+
+    _token = accessToken;
+    _isAuthenticated = true;
+
+    await SessionStorage.saveSession(
+      accessToken: accessToken,
+      refreshToken: data['refresh_token']?.toString(),
+    );
+
+    notifyListeners();
+    await fetchUserInfo();
+  }
+
+  Future<Map<String, dynamic>> _authenticateWithGoogle() async {
+    final GoogleSignInAccount account = await GoogleSignIn.instance
+        .authenticate(scopeHint: ['email', 'profile']);
+
+    final GoogleSignInAuthentication auth = account.authentication;
+    final String? idToken = auth.idToken;
+
+    if (idToken == null) {
+      throw ApiException('Échec de la récupération du token Google.');
+    }
+
+    final response = await ApiClient.post(
+      '/auth/google-login',
+      body: {'id_token': idToken},
+    );
+
+    return Map<String, dynamic>.from(response as Map);
   }
 
   Future<void> fetchUserInfo() async {
@@ -44,23 +106,7 @@ class AuthController extends ChangeNotifier {
 
       final data = await ApiClient.get('/users/me');
       if (data != null) {
-        final rawFavoriteGenres = data['favorite_genres'];
-        final favoriteGenres = rawFavoriteGenres is List
-            ? rawFavoriteGenres
-                  .map((item) => item.toString())
-                  .where((item) => item.isNotEmpty)
-                  .toList()
-            : null;
-
-        _user = User(
-          id: data['id'],
-          username: data['username'],
-          email: data['email'],
-          emailConfirmed: data['email_confirmed'],
-          googleId: data['google_id'],
-          favoriteGenres: favoriteGenres,
-          privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
-        );
+        _user = _buildUser(Map<String, dynamic>.from(data as Map));
       }
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
@@ -81,7 +127,7 @@ class AuthController extends ChangeNotifier {
       body: {'username': newUsername},
     );
     if (data != null) {
-      _user = _user!.copyWith(username: data['username']);
+      _user = _user?.copyWith(username: data['username']);
       notifyListeners();
     }
   }
@@ -92,7 +138,7 @@ class AuthController extends ChangeNotifier {
       body: {'new_email': newEmail},
     );
     if (data != null) {
-      _user = _user!.copyWith(email: data['email'], emailConfirmed: false);
+      _user = _user?.copyWith(email: data['email'], emailConfirmed: false);
       notifyListeners();
     }
   }
@@ -114,15 +160,9 @@ class AuthController extends ChangeNotifier {
     );
 
     if (data != null) {
-      final rawFavoriteGenres = data['favorite_genres'];
-      final updatedFavoriteGenres = rawFavoriteGenres is List
-          ? rawFavoriteGenres
-                .map((item) => item.toString())
-                .where((item) => item.isNotEmpty)
-                .toList()
-          : null;
-
-      _user = _user?.copyWith(favoriteGenres: updatedFavoriteGenres);
+      _user = _user?.copyWith(
+        favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
+      );
       notifyListeners();
     }
   }
@@ -152,17 +192,7 @@ class AuthController extends ChangeNotifier {
     );
 
     if (data != null) {
-      _token = data['access_token'];
-      _isAuthenticated = true;
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jwt_token', _token!);
-      if (data['refresh_token'] != null) {
-        await prefs.setString('refresh_token', data['refresh_token']);
-      }
-
-      notifyListeners();
-      await fetchUserInfo();
+      await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
     }
   }
 
@@ -173,17 +203,7 @@ class AuthController extends ChangeNotifier {
     );
 
     if (data != null) {
-      _token = data['access_token'];
-      _isAuthenticated = true;
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jwt_token', _token!);
-      if (data['refresh_token'] != null) {
-        await prefs.setString('refresh_token', data['refresh_token']);
-      }
-
-      notifyListeners();
-      await fetchUserInfo();
+      await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
     }
   }
 
@@ -200,34 +220,8 @@ class AuthController extends ChangeNotifier {
 
   Future<void> loginWithGoogle() async {
     try {
-      final GoogleSignInAccount account = await GoogleSignIn.instance
-          .authenticate(scopeHint: ['email', 'profile']);
-
-      final GoogleSignInAuthentication auth = account.authentication;
-      final String? idToken = auth.idToken;
-
-      if (idToken == null) {
-        throw ApiException('Échec de la récupération du token Google.');
-      }
-
-      final data = await ApiClient.post(
-        '/auth/google-login',
-        body: {'id_token': idToken},
-      );
-
-      if (data != null) {
-        _token = data['access_token'];
-        _isAuthenticated = true;
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', _token!);
-        if (data['refresh_token'] != null) {
-          await prefs.setString('refresh_token', data['refresh_token']);
-        }
-
-        notifyListeners();
-        await fetchUserInfo();
-      }
+      final data = await _authenticateWithGoogle();
+      await _storeAuthenticatedSession(data);
     } catch (e) {
       debugPrint('Erreur lors de la connexion Google: $e');
       throw ApiException('La connexion Google a échoué: $e');
@@ -236,34 +230,8 @@ class AuthController extends ChangeNotifier {
 
   Future<void> linkGoogleAccount() async {
     try {
-      final GoogleSignInAccount account = await GoogleSignIn.instance
-          .authenticate(scopeHint: ['email', 'profile']);
-
-      final GoogleSignInAuthentication auth = account.authentication;
-      final String? idToken = auth.idToken;
-
-      if (idToken == null) {
-        throw ApiException('Échec de la récupération du token Google.');
-      }
-
-      final data = await ApiClient.post(
-        '/auth/google-login',
-        body: {'id_token': idToken},
-      );
-
-      if (data != null) {
-        _token = data['access_token'];
-        _isAuthenticated = true;
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('jwt_token', _token!);
-        if (data['refresh_token'] != null) {
-          await prefs.setString('refresh_token', data['refresh_token']);
-        }
-
-        notifyListeners();
-        await fetchUserInfo();
-      }
+      final data = await _authenticateWithGoogle();
+      await _storeAuthenticatedSession(data);
     } catch (e) {
       debugPrint('Erreur lors de la liaison du compte Google: $e');
       throw ApiException('Google link failed');
@@ -271,8 +239,7 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString('refresh_token');
+    final refreshToken = await SessionStorage.getRefreshToken();
 
     if (_token != null && refreshToken != null) {
       try {
@@ -289,8 +256,7 @@ class AuthController extends ChangeNotifier {
     _token = null;
     _user = null;
 
-    await prefs.remove('jwt_token');
-    await prefs.remove('refresh_token');
+    await SessionStorage.clear();
 
     notifyListeners();
   }

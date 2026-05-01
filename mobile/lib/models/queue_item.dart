@@ -6,7 +6,7 @@ class QueueItem {
   final String roomId;
   final int trackId;
   final double position;
-  final Track track; // Resolves for UI
+  final Track track;
 
   QueueItem({
     required this.id,
