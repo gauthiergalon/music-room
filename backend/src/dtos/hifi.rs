@@ -23,6 +23,21 @@ pub struct TrackItem {
     pub title: String,
     pub duration: i32,
     pub audio_quality: Option<String>,
+    pub album: Option<AlbumData>,
+    pub artists: Option<Vec<ArtistData>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumData {
+    pub title: Option<String>,
+    pub cover: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistData {
+    pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,4 +45,9 @@ pub struct TrackItem {
 pub struct TrackResponse {
     pub version: String,
     pub data: Value, // The API returns various manifest data
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StreamUrlResponse {
+    pub stream_url: String,
 }

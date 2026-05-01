@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/models/track.dart';
 import '../controllers/room_controller.dart';
 import '../widgets/player.dart';
 import '../widgets/listeners_dialog.dart';
@@ -77,22 +76,6 @@ class RoomOverlay extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                FloatingActionButton(
-                  heroTag: 'test_audio',
-                  backgroundColor: Colors.amber,
-                  onPressed: () {
-                    // MOCK: Test the background audio!
-                    final testTrack = Track(
-                      id: 999,
-                      title: 'Test Audio Background',
-                      artist: 'Sample Lib',
-                      duration: const Duration(seconds: 15),
-                    );
-                    context.read<RoomController>().playTrack(testTrack);
-                  },
-                  child: const Icon(Icons.bug_report),
-                ),
-                const SizedBox(height: 16),
                 FloatingActionButton(
                   heroTag: 'queue',
                   onPressed: () => showQueueBottomSheet(context),

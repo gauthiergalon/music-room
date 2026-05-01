@@ -17,7 +17,7 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
     androidNotificationChannelName: 'Music Room Playback',

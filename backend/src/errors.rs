@@ -26,6 +26,9 @@ pub enum AppError {
     #[error("Validation Error")]
     Validation(Vec<ErrorMessage>),
 
+    #[error("{0}")]
+    InternalError(String),
+
     #[error("Database Error")]
     Database(#[from] sqlx::Error),
 
@@ -52,6 +55,10 @@ impl IntoResponse for AppError {
             AppError::Validation(msgs) => {
                 let string_msgs: Vec<String> = msgs.iter().map(|m| m.to_string()).collect();
                 (StatusCode::UNPROCESSABLE_ENTITY, Some(json!(string_msgs)))
+            }
+            AppError::InternalError(msg) => {
+                tracing::error!("Internal error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, Some(json!([msg])))
             }
             AppError::Database(e) => {
                 tracing::error!("DB error: {e}");

@@ -64,16 +64,21 @@ void showQueueBottomSheet(BuildContext context) {
                     },
                     children: [
                       for (var i = 0; i < queue.length; i++)
-                        Container(
+                        Dismissible(
                           key: ValueKey(queue[i].id),
-                          child: TrackListTile(
-                            track: queue[i].track,
-                            trailingIcon: Icons.delete_outline,
-                            onTapTrailing: () => controller.removeQueueItem(
-                              currentRoom,
-                              queue[i],
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            color: Colors.red,
+                            child: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.white,
                             ),
                           ),
+                          onDismissed: (_) =>
+                              controller.removeQueueItem(currentRoom, queue[i]),
+                          child: TrackListTile(track: queue[i].track),
                         ),
                     ],
                   ),

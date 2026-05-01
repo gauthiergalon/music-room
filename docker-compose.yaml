@@ -34,7 +34,8 @@ services:
   hifi-api:
     build: https://github.com/binimum/hifi-api.git#main
     env_file: .env
-    restart: unless-stopped
+    ports:
+      - "8000:8000"
 
 volumes:
   postgres_data:

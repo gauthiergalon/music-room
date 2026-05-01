@@ -33,14 +33,8 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
       final controller = context.read<RoomController>();
       final room = controller.currentRoom;
-      if (room != null && room.status == 1) {
+      if (room != null) {
         setState(() {});
-
-        // Auto-skip next feature
-        if (room.currentTrack != null &&
-            room.currentPosition >= room.currentTrack!.duration) {
-          controller.skipNext();
-        }
       }
     });
   }
@@ -58,9 +52,16 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     final room = controller.currentRoom;
     final track = room?.currentTrack;
 
-    final isPlaying = room?.status == 1;
-    final position = room?.currentPosition ?? Duration.zero;
-    final duration = track?.duration ?? Duration.zero;
+    final isPlaying = controller.isPlaying;
+    final position = controller.playbackPosition;
+    final duration =
+        controller.playbackDuration ?? track?.duration ?? Duration.zero;
+    final sliderMax = duration.inMilliseconds > 0
+        ? duration.inMilliseconds.toDouble()
+        : 1.0;
+    final sliderValue = position.inMilliseconds
+        .clamp(0, duration.inMilliseconds > 0 ? duration.inMilliseconds : 1)
+        .toDouble();
 
     return Padding(
       padding: AppTheme.paddingLg,
@@ -121,10 +122,8 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             children: [
               Slider(
                 min: 0,
-                max: duration.inMilliseconds.toDouble(),
-                value: position.inMilliseconds
-                    .clamp(0, duration.inMilliseconds)
-                    .toDouble(),
+                max: sliderMax,
+                value: sliderValue,
                 onChanged: (v) {
                   if (room != null) {
                     controller.seekTo(room, Duration(milliseconds: v.toInt()));

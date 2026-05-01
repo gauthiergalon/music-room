@@ -13,6 +13,10 @@ import 'package:just_audio_background/just_audio_background.dart';
 class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
+  Track? get currentTrack => _currentRoom?.currentTrack;
+  bool get isPlaying => _audioPlayer.playing;
+  Duration get playbackPosition => _audioPlayer.position;
+  Duration? get playbackDuration => _audioPlayer.duration;
 
   List<Room> _availableRooms = [];
   List<Room> get availableRooms => _availableRooms;
@@ -25,8 +29,26 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     // Écouter les événements du player pour les dispatcher au front
     _audioPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        _playNextInQueue();
+      }
       notifyListeners();
     });
+  }
+
+  void _playNextInQueue() {
+    final room = _currentRoom;
+    if (room != null && room.queue.isNotEmpty) {
+      // Find the first track by position
+      final queueList = room.queue.toList();
+      queueList.sort((a, b) => a.position.compareTo(b.position));
+      final nextItem = queueList.first;
+
+      playTrack(nextItem.track);
+      removeQueueItem(room, nextItem);
+    } else {
+      _playSilenceBackground();
+    }
   }
 
   @override
@@ -60,6 +82,21 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       // Si on reçoit une 404, la room a été supprimée suite à la déconnexion
       debugPrint('Room no longer exists, leaving room: $e');
       leaveRoom();
+    }
+  }
+
+  Future<void> _refreshCurrentRoom(String roomId) async {
+    try {
+      final response = await ApiClient.get('/rooms/$roomId');
+      if (_currentRoom == null || _currentRoom!.id != roomId) return;
+
+      final refreshedRoom = Room.fromJson(response);
+      refreshedRoom.queue = _currentRoom!.queue;
+      refreshedRoom.listeners = _currentRoom!.listeners;
+      _currentRoom = refreshedRoom;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Failed to refresh current room: $e');
     }
   }
 
@@ -105,6 +142,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _playSilenceBackground() async {
     try {
       await _audioPlayer.stop();
+
+      if (_currentRoom != null) {
+        _currentRoom!.currentTrack = null;
+        _currentRoom!.status = 0;
+        notifyListeners();
+      }
 
       // Plays a silent audio file in loop to keep the app awake in the background
       // and maintain the WebSocket connection alive while the queue is empty.
@@ -201,8 +244,17 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
+    if (type == 'Play' ||
+        type == 'Pause' ||
+        type == 'SeekTo' ||
+        type == 'NextTrack') {
+      _refreshCurrentRoom(_currentRoom!.id);
+    }
+
     // React to events (add simple logs or state updates)
     if (type == 'QueueAdd' || type == 'QueueRemove' || type == 'QueueReorder') {
+      refreshQueue(_currentRoom!.id);
+    } else if (type == 'NextTrack') {
       refreshQueue(_currentRoom!.id);
     }
     notifyListeners();
@@ -216,12 +268,37 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           _currentRoom!.queue = response
               .map((data) => QueueItem.fromJson(data))
               .toList();
+
+          _checkAutoPlayNext();
           notifyListeners();
         }
       }
     } catch (e) {
       debugPrint('Failed to refresh queue: $e');
     }
+  }
+
+  void _checkAutoPlayNext() {
+    if (_currentRoom == null || _currentRoom!.queue.isEmpty) return;
+
+    final currentTag = _audioPlayer.audioSource?.sequence.first.tag;
+    final isSilence =
+        currentTag is MediaItem && currentTag.id == 'silence_placeholder';
+
+    if (isSilence || _audioPlayer.processingState == ProcessingState.idle) {
+      _playNextInQueue();
+    }
+  }
+
+  Future<String> _resolveStreamUrl(int trackId) async {
+    final response = await ApiClient.get('/hifi/track/$trackId/stream-url');
+    final streamUrl = response['stream_url'] as String?;
+
+    if (streamUrl == null || streamUrl.isEmpty) {
+      throw Exception('No stream URL found for track $trackId');
+    }
+
+    return streamUrl;
   }
 
   // Queue management
@@ -263,8 +340,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // Music control
-  bool get isPlaying => _audioPlayer.playing;
-
   void togglePlay(Room room) {
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
@@ -276,9 +351,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> playTrack(Track track) async {
     try {
-      debugPrint('Preparing to play: ${track.streamUrl}');
+      final streamUrl = await _resolveStreamUrl(track.id);
+      debugPrint('Preparing to play: $streamUrl');
       final audioSource = AudioSource.uri(
-        Uri.parse(track.streamUrl),
+        Uri.parse(streamUrl),
         tag: MediaItem(
           id: track.id.toString(),
           title: track.title, // 'title' in Track
@@ -286,8 +362,18 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           artUri: track.imageUrl != null ? Uri.parse(track.imageUrl!) : null,
         ),
       );
+      await _audioPlayer.setLoopMode(LoopMode.off);
       await _audioPlayer.setAudioSource(audioSource);
       debugPrint('Audio source loaded, calling play()');
+
+      if (_currentRoom != null) {
+        _currentRoom!.currentTrack = track;
+        _currentRoom!.status = 1;
+        _currentRoom!.positionAtLastSync = Duration.zero;
+        _currentRoom!.updatedAt = DateTime.now();
+        notifyListeners();
+      }
+
       _audioPlayer.play();
       debugPrint('Play command sent');
     } catch (e, stacktrace) {
@@ -298,15 +384,19 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void seekTo(Room room, Duration position) {
     _audioPlayer.seek(position);
+    if (_currentRoom != null && _currentRoom!.id == room.id) {
+      _currentRoom!.positionAtLastSync = position;
+      _currentRoom!.updatedAt = DateTime.now();
+    }
     // Should call WS event or endpoint
   }
 
   void skipNext() {
-    // Logic for next
+    _playNextInQueue();
   }
 
   void skipPrev() {
-    // Logic for prev
+    _audioPlayer.seek(Duration.zero);
   }
 
   Future<void> togglePrivacy(Room room) async {

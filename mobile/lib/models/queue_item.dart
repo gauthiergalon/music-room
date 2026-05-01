@@ -1,5 +1,5 @@
 import 'package:mobile/models/track.dart';
-import 'package:mobile/models/mock_tracks.dart';
+import 'package:mobile/models/track_cache.dart';
 
 class QueueItem {
   final String id;
@@ -13,7 +13,7 @@ class QueueItem {
     required this.roomId,
     required this.trackId,
     required this.position,
-  }) : track = getMockTrack(trackId);
+  }) : track = getCachedTrack(trackId);
 
   factory QueueItem.fromJson(Map<String, dynamic> json) {
     return QueueItem(

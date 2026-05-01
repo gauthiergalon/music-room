@@ -4,7 +4,7 @@ use axum::{
 };
 
 use crate::{
-    dtos::hifi::{SearchResponse, TrackResponse},
+    dtos::hifi::{SearchResponse, StreamUrlResponse, TrackResponse},
     errors::AppError,
     middleware::auth::Claims,
     services::hifi as hifi_service,
@@ -29,4 +29,14 @@ pub async fn get_track(
     let track = hifi_service::get_track_details(track_id).await?;
 
     Ok(Json(track))
+}
+
+pub async fn get_stream_url(
+    State(_state): State<AppState>,
+    Path(track_id): Path<i64>,
+    Extension(_claims): Extension<Claims>,
+) -> Result<Json<StreamUrlResponse>, AppError> {
+    let stream_url = hifi_service::get_stream_url(track_id).await?;
+
+    Ok(Json(StreamUrlResponse { stream_url }))
 }

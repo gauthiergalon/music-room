@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:mobile/models/track.dart';
 import 'package:mobile/controllers/room_controller.dart';
 import '../core/theme.dart';
+import '../core/network/api_client.dart';
 import '../widgets/track_list_tile.dart';
 
 class SearchPage extends StatefulWidget {
@@ -32,37 +33,39 @@ class _SearchPageState extends State<SearchPage> {
       _hasSearched = true;
     });
 
-    // Simulation d'un appel API (à remplacer plus tard)
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final response = await ApiClient.get('/hifi/search/$query');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isLoading = false;
-      // Fausses données de test
-      _results = [
-        Track(
-          id: 1,
-          title: '$query (Radio Edit)',
-          artist: 'Unknown Artist',
-          duration: const Duration(minutes: 3, seconds: 12),
-          imageUrl: 'https://picsum.photos/seed/1/200',
+      if (response != null &&
+          response['data'] != null &&
+          response['data']['items'] != null) {
+        final List<dynamic> itemsJson = response['data']['items'];
+        setState(() {
+          _results = itemsJson.map((json) => Track.fromJson(json)).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _results = [];
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
         ),
-        Track(
-          id: 2,
-          title: '$query - Remix',
-          artist: 'DJ Test',
-          duration: const Duration(minutes: 4, seconds: 5),
-        ),
-        Track(
-          id: 3,
-          title: '$query (Acoustic)',
-          artist: 'Unknown Artist',
-          duration: const Duration(minutes: 2, seconds: 45),
-          imageUrl: 'https://picsum.photos/seed/3/200',
-        ),
-      ];
-    });
+      );
+    }
   }
 
   @override

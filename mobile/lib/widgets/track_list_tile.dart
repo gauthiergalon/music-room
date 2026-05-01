@@ -4,14 +4,18 @@ import '../core/theme.dart';
 
 class TrackListTile extends StatelessWidget {
   final Track track;
-  final VoidCallback onTapTrailing;
+  final VoidCallback? onTapTrailing;
   final IconData trailingIcon;
+  final VoidCallback? onTap;
+  final Widget? customTrailing;
 
   const TrackListTile({
     super.key,
     required this.track,
-    required this.onTapTrailing,
+    this.onTapTrailing,
     this.trailingIcon = Icons.add_circle_outline,
+    this.onTap,
+    this.customTrailing,
   });
 
   @override
@@ -19,6 +23,7 @@ class TrackListTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     return ListTile(
+      onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: AppTheme.spacingMd,
         vertical: 0.0,
@@ -48,7 +53,11 @@ class TrackListTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: IconButton(icon: Icon(trailingIcon), onPressed: onTapTrailing),
+      trailing:
+          customTrailing ??
+          (onTapTrailing != null
+              ? IconButton(icon: Icon(trailingIcon), onPressed: onTapTrailing)
+              : null),
     );
   }
 }

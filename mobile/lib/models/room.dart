@@ -1,5 +1,5 @@
 import 'package:mobile/models/track.dart';
-import 'package:mobile/models/mock_tracks.dart';
+import 'package:mobile/models/track_cache.dart';
 import 'package:mobile/models/queue_item.dart';
 import 'package:mobile/models/room_user.dart';
 
@@ -37,7 +37,7 @@ class Room {
   factory Room.fromJson(Map<String, dynamic> json) {
     Track? cTrack;
     if (json['current_track'] != null) {
-      cTrack = getMockTrack(json['current_track']);
+      cTrack = getCachedTrack(json['current_track']);
     }
 
     return Room(
