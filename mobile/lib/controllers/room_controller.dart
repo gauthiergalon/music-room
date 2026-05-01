@@ -106,21 +106,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _refreshCurrentRoom(String roomId) async {
-    try {
-      final response = await ApiClient.get('/rooms/$roomId');
-      if (_currentRoom == null || _currentRoom!.id != roomId) return;
-
-      final refreshedRoom = Room.fromJson(response);
-      refreshedRoom.queue = _currentRoom!.queue;
-      refreshedRoom.listeners = _currentRoom!.listeners;
-      _currentRoom = refreshedRoom;
-      notifyListeners();
-    } catch (e) {
-      debugPrint('Failed to refresh current room: $e');
-    }
-  }
-
   Future<void> refreshRooms() async {
     try {
       final response = await ApiClient.get('/rooms');
@@ -233,6 +218,19 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void _sendWsEvent(String eventType, Map<String, dynamic> payload) {
+    if (_wsChannel == null) {
+      debugPrint('WebSocket not connected, cannot send event: $eventType');
+      return;
+    }
+    try {
+      final event = {'type': eventType, 'payload': payload};
+      _wsChannel!.sink.add(jsonEncode(event));
+    } catch (e) {
+      debugPrint('Error sending WS event: $e');
+    }
+  }
+
   void _handleWsEvent(Map<String, dynamic> data) {
     if (_currentRoom == null) return;
 
@@ -257,7 +255,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_isPlaybackEvent(type)) {
-      unawaited(_refreshCurrentRoom(_currentRoom!.id));
+      _updateRoomFromPlaybackEvent(type, payload);
+      // Refresh queue only for NextTrack, otherwise just update playback state
+      if (type == _eventNextTrack) {
+        unawaited(refreshQueue(_currentRoom!.id));
+      }
     }
 
     if (_isQueueEvent(type)) {
@@ -305,6 +307,37 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (id == null || username == null) return null;
     return RoomUser(id: id, username: username);
+  }
+
+  void _updateRoomFromPlaybackEvent(
+    String? type,
+    Map<String, dynamic> payload,
+  ) {
+    if (_currentRoom == null) return;
+
+    switch (type) {
+      case _eventPlay:
+        _currentRoom!.status = 1; // 1 = playing
+        _currentRoom!.updatedAt = DateTime.now();
+        break;
+      case _eventPause:
+        _currentRoom!.status = 0; // 0 = paused
+        final position = payload['position'];
+        if (position is int) {
+          _currentRoom!.positionAtLastSync = Duration(milliseconds: position);
+        }
+        _currentRoom!.updatedAt = DateTime.now();
+        break;
+      case _eventSeekTo:
+        final position = payload['position'];
+        if (position is int) {
+          _currentRoom!.positionAtLastSync = Duration(milliseconds: position);
+        }
+        _currentRoom!.updatedAt = DateTime.now();
+        break;
+      default:
+        break;
+    }
   }
 
   bool _isPlaybackEvent(String? type) {
@@ -411,10 +444,16 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   void togglePlay(Room room) {
     if (_audioPlayer.playing) {
       _audioPlayer.pause();
+      _sendWsEvent(_eventPause, {
+        'position': _audioPlayer.position.inMilliseconds,
+      });
     } else {
       _audioPlayer.play();
+      _sendWsEvent(_eventPlay, {
+        'position': _audioPlayer.position.inMilliseconds,
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
     }
-    // Should call WS event or endpoint to sync others if owner
   }
 
   Future<void> playTrack(Track track) async {
@@ -452,15 +491,26 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     if (_currentRoom != null && _currentRoom!.id == room.id) {
       _currentRoom!.positionAtLastSync = position;
       _currentRoom!.updatedAt = DateTime.now();
+      _sendWsEvent(_eventSeekTo, {
+        'position': position.inMilliseconds,
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
     }
   }
 
   void skipNext() {
     _playNextInQueue();
+    _sendWsEvent(_eventNextTrack, {
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   void skipPrev() {
     _audioPlayer.seek(Duration.zero);
+    _sendWsEvent(_eventSeekTo, {
+      'position': 0,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   Future<void> togglePrivacy(Room room) async {
