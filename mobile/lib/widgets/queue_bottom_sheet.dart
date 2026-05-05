@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
 import '../core/theme.dart';
+import '../core/utils/ui_utils.dart';
 import '../widgets/track_list_tile.dart';
 
 void showQueueBottomSheet(BuildContext context) {
@@ -39,33 +40,24 @@ void showQueueBottomSheet(BuildContext context) {
                 ),
                 Expanded(
                   child: ReorderableListView(
-                    onReorder: (oldIndex, newIndex) {
-                      if (newIndex > oldIndex) newIndex -= 1;
-
-                      final item = queue[oldIndex];
-                      double newPos;
-                      if (newIndex == 0) {
-                        newPos = queue.isNotEmpty
-                            ? queue.first.position - 100
-                            : 0;
-                      } else if (newIndex == queue.length - 1) {
-                        newPos = queue.last.position + 100;
-                      } else {
-                        final prev =
-                            queue[newIndex > oldIndex ? newIndex : newIndex - 1]
-                                .position;
-                        final next =
-                            queue[newIndex > oldIndex ? newIndex + 1 : newIndex]
-                                .position;
-                        newPos = (prev + next) / 2;
+                    onReorder: (oldIndex, newIndex) async {
+                      try {
+                        await controller.reorderQueueItem(
+                          currentRoom,
+                          queue,
+                          oldIndex,
+                          newIndex,
+                        );
+                      } catch (_) {
+                        if (ctx2.mounted) {
+                          UiUtils.showError(ctx2, 'Failed to reorder queue.');
+                        }
                       }
-
-                      controller.moveQueueItem(currentRoom, item, newPos);
                     },
                     children: [
-                      for (var i = 0; i < queue.length; i++)
+                      for (final item in queue)
                         Dismissible(
-                          key: ValueKey(queue[i].id),
+                          key: ValueKey(item.id),
                           direction: DismissDirection.endToStart,
                           background: Container(
                             alignment: Alignment.centerRight,
@@ -76,9 +68,22 @@ void showQueueBottomSheet(BuildContext context) {
                               color: Colors.white,
                             ),
                           ),
-                          onDismissed: (_) =>
-                              controller.removeQueueItem(currentRoom, queue[i]),
-                          child: TrackListTile(track: queue[i].track),
+                          onDismissed: (_) async {
+                            try {
+                              await controller.removeQueueItem(
+                                currentRoom,
+                                item,
+                              );
+                            } catch (_) {
+                              if (ctx2.mounted) {
+                                UiUtils.showError(
+                                  ctx2,
+                                  'Failed to remove song from queue.',
+                                );
+                              }
+                            }
+                          },
+                          child: TrackListTile(track: item.track),
                         ),
                     ],
                   ),

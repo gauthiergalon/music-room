@@ -68,7 +68,6 @@ class _PlayerWidgetState extends State<PlayerWidget> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Cover art
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: track?.imageUrl != null
@@ -97,7 +96,6 @@ class _PlayerWidgetState extends State<PlayerWidget> {
           ),
           const SizedBox(height: 20),
 
-          // Title & artist
           Column(
             children: [
               Text(
@@ -117,7 +115,6 @@ class _PlayerWidgetState extends State<PlayerWidget> {
 
           const SizedBox(height: 18),
 
-          // Progress bar
           Column(
             children: [
               Slider(
@@ -148,7 +145,6 @@ class _PlayerWidgetState extends State<PlayerWidget> {
 
           const SizedBox(height: 12),
 
-          // Controls
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

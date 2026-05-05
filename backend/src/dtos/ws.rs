@@ -1,3 +1,4 @@
+use crate::dtos::hifi::TrackItem;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -10,7 +11,7 @@ pub struct UserInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "payload")]
-pub enum WsEvent {
+pub enum WsEventClient {
     Play {
         position: i32,
         timestamp: DateTime<Utc>,
@@ -25,32 +26,24 @@ pub enum WsEvent {
     NextTrack {
         timestamp: DateTime<Utc>,
     },
-    QueueAdd {
-        track_id: i64,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(tag = "type", content = "payload")]
+pub enum WsEventServer {
+    RoomState {
+        current_track: Option<TrackItem>,
+        is_playing: bool,
+        current_position: i32,
+        timestamp: DateTime<Utc>,
+        queue: Vec<TrackItem>,
     },
-    QueueRemove {
-        track_id: i64,
+    UserState {
+        user_list: Vec<UserInfo>,
+        owner: Uuid,
     },
-    QueueReorder {
-        from_index: usize,
-        to_index: usize,
-    },
+    RoomClosed,
     Error {
         message: String,
     },
-    UserJoin {
-        user_id: Uuid,
-        username: String,
-    },
-    UserLeave {
-        user_id: Uuid,
-        username: String,
-    },
-    SyncUsers {
-        users: Vec<UserInfo>,
-    },
-    UserOwnershipTransferred {
-        new_owner_id: Uuid,
-    },
-    RoomClosed,
 }

@@ -1,5 +1,7 @@
 use crate::{
-    handlers::auth::{forgot_password, login, logout, refresh, register, reset_password, google_login},
+    handlers::auth::{
+        forgot_password, google_login, login, logout, refresh, register, reset_password,
+    },
     middleware::auth::auth_middleware,
     state::AppState,
 };

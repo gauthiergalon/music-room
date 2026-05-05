@@ -1,7 +1,6 @@
 import 'track.dart';
 
-final Map<int, Track> trackCache =
-    {}; // Start with an empty cache of known tracks
+final Map<int, Track> trackCache = {};
 
 Track getCachedTrack(int id) {
   return trackCache[id] ??

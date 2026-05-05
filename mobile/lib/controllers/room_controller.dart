@@ -18,17 +18,15 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   static const String _silenceAssetPath = 'assets/audio/silence.mp3';
   static const Duration _silencePrimeDelay = Duration(seconds: 1);
 
-  static const String _eventSyncUsers = 'SyncUsers';
-  static const String _eventUserJoin = 'UserJoin';
-  static const String _eventUserLeave = 'UserLeave';
+  static const String _eventRoomState = 'RoomState';
+  static const String _eventUserState = 'UserState';
   static const String _eventRoomClosed = 'RoomClosed';
+  static const String _eventError = 'Error';
+
   static const String _eventPlay = 'Play';
   static const String _eventPause = 'Pause';
   static const String _eventSeekTo = 'SeekTo';
   static const String _eventNextTrack = 'NextTrack';
-  static const String _eventQueueAdd = 'QueueAdd';
-  static const String _eventQueueRemove = 'QueueRemove';
-  static const String _eventQueueReorder = 'QueueReorder';
 
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
@@ -64,12 +62,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   void _playNextInQueue() {
     final room = _currentRoom;
     if (room != null && room.queue.isNotEmpty) {
-      final queueList = room.queue.toList();
-      queueList.sort((a, b) => a.position.compareTo(b.position));
-      final nextItem = queueList.first;
-
-      playTrack(nextItem.track);
-      removeQueueItem(room, nextItem);
+      _sendWsEvent(_eventNextTrack, {
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
     } else {
       _playSilenceBackground();
     }
@@ -100,7 +95,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       await ApiClient.get('/rooms/${_currentRoom!.id}');
 
       await _connectWebSocket(_currentRoom!.id);
-      await refreshQueue(_currentRoom!.id);
     } catch (e) {
       leaveRoom();
     }
@@ -135,7 +129,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> openRoom(Room room) async {
     _currentRoom = room;
-    await refreshQueue(room.id);
     await _connectWebSocket(room.id);
 
     _playSilenceBackground();
@@ -240,37 +233,81 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     );
 
     switch (type) {
-      case _eventSyncUsers:
-        _syncUsers(payload);
+      case _eventRoomState:
+        _handleRoomState(payload);
         break;
-      case _eventUserJoin:
-        _addListener(payload);
-        break;
-      case _eventUserLeave:
-        _removeListener(payload);
+      case _eventUserState:
+        _handleUserState(payload);
         break;
       case _eventRoomClosed:
         leaveRoom();
         return;
-    }
-
-    if (_isPlaybackEvent(type)) {
-      _updateRoomFromPlaybackEvent(type, payload);
-      // Refresh queue only for NextTrack, otherwise just update playback state
-      if (type == _eventNextTrack) {
-        unawaited(refreshQueue(_currentRoom!.id));
-      }
-    }
-
-    if (_isQueueEvent(type)) {
-      unawaited(refreshQueue(_currentRoom!.id));
+      case _eventError:
+        debugPrint('WebSocket Server Error: ${payload['message']}');
+        break;
     }
 
     notifyListeners();
   }
 
-  void _syncUsers(Map<String, dynamic> payload) {
-    final users = payload['users'];
+  void _handleRoomState(Map<String, dynamic> payload) {
+    if (payload['queue'] is List) {
+      final queueList = payload['queue'] as List;
+      _currentRoom!.queue = queueList.asMap().entries.map<QueueItem>((entry) {
+        final trackJson = entry.value as Map<String, dynamic>;
+        // Parse and cache full track metadata before creating QueueItem.
+        Track.fromJson(trackJson);
+        return QueueItem(
+          id: trackJson['id'].toString(),
+          roomId: _currentRoom!.id,
+          trackId: trackJson['id'],
+          position: entry.key.toDouble(),
+        );
+      }).toList();
+    }
+
+    if (payload['current_track'] != null) {
+      final track = Track.fromJson(payload['current_track']);
+      final bool trackChanged = currentTrack?.id != track.id;
+      _currentRoom!.currentTrack = track;
+      if (trackChanged) {
+        playTrack(track);
+      }
+    } else {
+      _currentRoom!.currentTrack = null;
+      _playSilenceBackground();
+    }
+
+    final isPlaying = payload['is_playing'] == true;
+    _currentRoom!.status = isPlaying ? 1 : 0;
+    if (isPlaying && !_audioPlayer.playing) {
+      _audioPlayer.play();
+    } else if (!isPlaying && _audioPlayer.playing) {
+      _audioPlayer.pause();
+    }
+
+    if (payload['current_position'] != null) {
+      int posMs = payload['current_position'] as int;
+      if (isPlaying && payload['timestamp'] != null) {
+        final playedAt = DateTime.parse(
+          payload['timestamp'].toString(),
+        ).toUtc();
+        final now = DateTime.now().toUtc();
+        final diff = now.difference(playedAt).inMilliseconds;
+        if (diff > 0) {
+          posMs += diff;
+        }
+      }
+      final position = Duration(milliseconds: posMs);
+
+      if ((_audioPlayer.position - position).inMilliseconds.abs() > 2000) {
+        _audioPlayer.seek(position);
+      }
+    }
+  }
+
+  void _handleUserState(Map<String, dynamic> payload) {
+    final users = payload['user_list'];
     if (users is! List) return;
 
     _currentRoom!.listeners
@@ -278,25 +315,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       ..addAll(
         users.map((user) => _roomUserFromPayload(user)).whereType<RoomUser>(),
       );
-  }
 
-  void _addListener(Map<String, dynamic> payload) {
-    final listener = _roomUserFromPayload(payload);
-    if (listener == null) return;
-
-    final existingIndex = _currentRoom!.listeners.indexWhere(
-      (user) => user.id == listener.id,
-    );
-    if (existingIndex == -1) {
-      _currentRoom!.listeners.add(listener);
+    final ownerId = payload['owner']?.toString();
+    if (ownerId != null) {
+      _currentRoom!.owner = ownerId;
     }
-  }
-
-  void _removeListener(Map<String, dynamic> payload) {
-    final id = payload['user_id']?.toString();
-    if (id == null) return;
-
-    _currentRoom!.listeners.removeWhere((listener) => listener.id == id);
   }
 
   RoomUser? _roomUserFromPayload(dynamic payload) {
@@ -307,96 +330,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (id == null || username == null) return null;
     return RoomUser(id: id, username: username);
-  }
-
-  void _updateRoomFromPlaybackEvent(
-    String? type,
-    Map<String, dynamic> payload,
-  ) {
-    if (_currentRoom == null) return;
-
-    switch (type) {
-      case _eventPlay:
-        _currentRoom!.status = 1; // 1 = playing
-        _currentRoom!.updatedAt = DateTime.now();
-        // Sync audio player state for listeners (owner already called play locally)
-        if (!_audioPlayer.playing) {
-          unawaited(_audioPlayer.play());
-        }
-        break;
-      case _eventPause:
-        _currentRoom!.status = 0; // 0 = paused
-        final position = payload['position'];
-        if (position is int) {
-          _currentRoom!.positionAtLastSync = Duration(milliseconds: position);
-        }
-        _currentRoom!.updatedAt = DateTime.now();
-        // Sync audio player state for listeners (owner already called pause locally)
-        if (_audioPlayer.playing) {
-          unawaited(_audioPlayer.pause());
-        }
-        break;
-      case _eventSeekTo:
-        final position = payload['position'];
-        if (position is int) {
-          _currentRoom!.positionAtLastSync = Duration(milliseconds: position);
-        }
-        _currentRoom!.updatedAt = DateTime.now();
-        break;
-      default:
-        break;
-    }
-  }
-
-  bool _isPlaybackEvent(String? type) {
-    return const {
-      _eventPlay,
-      _eventPause,
-      _eventSeekTo,
-      _eventNextTrack,
-    }.contains(type);
-  }
-
-  bool _isQueueEvent(String? type) {
-    return const {
-      _eventQueueAdd,
-      _eventQueueRemove,
-      _eventQueueReorder,
-      _eventNextTrack,
-    }.contains(type);
-  }
-
-  Future<void> refreshQueue(String roomId) async {
-    try {
-      final response = await ApiClient.get('/rooms/$roomId/queue');
-      if (response is List) {
-        if (_currentRoom != null && _currentRoom!.id == roomId) {
-          _currentRoom!.queue = response
-              .map((data) => QueueItem.fromJson(data))
-              .toList();
-
-          _checkAutoPlayNext();
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to refresh queue: $e');
-    }
-  }
-
-  void _checkAutoPlayNext() {
-    if (_currentRoom == null || _currentRoom!.queue.isEmpty) return;
-
-    final sequence = _audioPlayer.audioSource?.sequence;
-    final currentTag = sequence != null && sequence.isNotEmpty
-        ? sequence.first.tag
-        : null;
-    final isSilence =
-        currentTag is MediaItem && currentTag.id == _silenceTrackId;
-
-    if (isSilence || _audioPlayer.processingState == ProcessingState.idle) {
-      _playNextInQueue();
-    }
   }
 
   Future<String> _resolveStreamUrl(int trackId) async {
@@ -410,26 +343,15 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     return streamUrl;
   }
 
-  // Queue management
   Future<void> addTrack(Room room, Track track) async {
-    try {
-      await ApiClient.post(
-        '/rooms/${room.id}/queue',
-        body: {'track_id': track.id},
-      );
-      await refreshQueue(room.id);
-    } catch (e) {
-      debugPrint('Failed to add track: $e');
-    }
+    await ApiClient.post(
+      '/rooms/${room.id}/queue',
+      body: {'track_id': track.id},
+    );
   }
 
   Future<void> removeQueueItem(Room room, QueueItem item) async {
-    try {
-      await ApiClient.delete('/rooms/${room.id}/queue', body: {'id': item.id});
-      await refreshQueue(room.id);
-    } catch (e) {
-      debugPrint('Failed to remove track: $e');
-    }
+    await ApiClient.delete('/rooms/${room.id}/queue', body: {'id': item.id});
   }
 
   Future<void> moveQueueItem(
@@ -437,26 +359,44 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     QueueItem item,
     double newPosition,
   ) async {
-    try {
-      await ApiClient.patch(
-        '/rooms/${room.id}/queue',
-        body: {'id': item.id, 'new_position': newPosition},
-      );
-      await refreshQueue(room.id);
-    } catch (e) {
-      debugPrint('Failed to reorder track: $e');
-    }
+    await ApiClient.patch(
+      '/rooms/${room.id}/queue',
+      body: {'id': item.id, 'new_position': newPosition},
+    );
   }
 
-  // Music control
+  Future<void> reorderQueueItem(
+    Room room,
+    List<QueueItem> queue,
+    int oldIndex,
+    int newIndex,
+  ) async {
+    if (newIndex > oldIndex) newIndex -= 1;
+
+    final item = queue[oldIndex];
+    double newPos;
+
+    if (queue.isEmpty) {
+      newPos = 0;
+    } else if (newIndex == 0) {
+      newPos = queue.first.position - 100;
+    } else if (newIndex >= queue.length - 1) {
+      newPos = queue.last.position + 100;
+    } else {
+      final prev = queue[newIndex - 1].position;
+      final next = queue[newIndex].position;
+      newPos = (prev + next) / 2;
+    }
+
+    await moveQueueItem(room, item, newPos);
+  }
+
   void togglePlay(Room room) {
     if (_audioPlayer.playing) {
-      _audioPlayer.pause();
       _sendWsEvent(_eventPause, {
         'position': _audioPlayer.position.inMilliseconds,
       });
     } else {
-      _audioPlayer.play();
       _sendWsEvent(_eventPlay, {
         'position': _audioPlayer.position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -467,6 +407,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> playTrack(Track track) async {
     try {
       final streamUrl = await _resolveStreamUrl(track.id);
+
+      if (_currentRoom?.currentTrack?.id != track.id) {
+        return;
+      }
+
       final audioSource = AudioSource.uri(
         Uri.parse(streamUrl),
         tag: MediaItem(
@@ -495,10 +440,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void seekTo(Room room, Duration position) {
-    _audioPlayer.seek(position);
     if (_currentRoom != null && _currentRoom!.id == room.id) {
-      _currentRoom!.positionAtLastSync = position;
-      _currentRoom!.updatedAt = DateTime.now();
       _sendWsEvent(_eventSeekTo, {
         'position': position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -507,14 +449,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void skipNext() {
-    _playNextInQueue();
     _sendWsEvent(_eventNextTrack, {
       'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
   }
 
   void skipPrev() {
-    _audioPlayer.seek(Duration.zero);
     _sendWsEvent(_eventSeekTo, {
       'position': 0,
       'timestamp': DateTime.now().toUtc().toIso8601String(),

@@ -16,7 +16,7 @@ pub struct SearchData {
     pub items: Vec<TrackItem>, // Restricted to tracks only!
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct TrackItem {
     pub id: i64,
@@ -27,14 +27,14 @@ pub struct TrackItem {
     pub artists: Option<Vec<ArtistData>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AlbumData {
     pub title: Option<String>,
     pub cover: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ArtistData {
     pub name: Option<String>,

@@ -349,7 +349,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 .read<AuthController>()
                                 .updatePassword(currentPwd, newPwd);
                             if (dialogContext.mounted) {
-                              Navigator.pop(dialogContext); // Close dialog
+                              Navigator.pop(dialogContext);
                             }
                             if (currentContext.mounted) {
                               UiUtils.showSuccess(

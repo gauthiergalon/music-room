@@ -57,8 +57,7 @@ pub async fn accept(
     Path(invitation_id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<InvitationResponse>, AppError> {
-    let invitation =
-        invitation_service::accept(&state.pool, invitation_id, claims.user_id).await?;
+    let invitation = invitation_service::accept(&state.pool, invitation_id, claims.user_id).await?;
 
     let response = InvitationResponse {
         id: invitation.id,

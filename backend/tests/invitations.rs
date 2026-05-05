@@ -1,8 +1,5 @@
 use axum_test::TestServer;
-use backend::{
-    routes::app_router,
-    state::AppState,
-};
+use backend::{routes::app_router, state::AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
@@ -55,7 +52,11 @@ async fn create_test_user(server: &TestServer) -> (String, String) {
         "password": "password123"
     });
 
-    server.post("/auth/register").json(&body).await.assert_status(axum::http::StatusCode::CREATED);
+    server
+        .post("/auth/register")
+        .json(&body)
+        .await
+        .assert_status(axum::http::StatusCode::CREATED);
 
     let login_body = json!({
         "email": email,
@@ -64,10 +65,17 @@ async fn create_test_user(server: &TestServer) -> (String, String) {
 
     let resp = server.post("/auth/login").json(&login_body).await;
     resp.assert_status(axum::http::StatusCode::OK);
-    
+
     let auth_resp: TestAuthResponse = resp.json();
-    
-    let get_me = server.get("/users/me").add_header("Authorization", format!("Bearer {}", auth_resp.access_token)).await.json::<serde_json::Value>();
+
+    let get_me = server
+        .get("/users/me")
+        .add_header(
+            "Authorization",
+            format!("Bearer {}", auth_resp.access_token),
+        )
+        .await
+        .json::<serde_json::Value>();
     let user_id = get_me["id"].as_str().unwrap().to_string();
 
     (auth_resp.access_token, user_id)
@@ -85,7 +93,8 @@ async fn test_invite_flow(pool: PgPool) {
     let room_body = json!({
         "name": "Test Room"
     });
-    let create_room_resp = server.post("/rooms")
+    let create_room_resp = server
+        .post("/rooms")
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .json(&room_body)
         .await;
@@ -94,7 +103,8 @@ async fn test_invite_flow(pool: PgPool) {
 
     // Invite friend
     let invite_uri = format!("/rooms/{}/invite/{}", room.id, friend_id);
-    let invite_resp = server.post(&invite_uri)
+    let invite_resp = server
+        .post(&invite_uri)
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .await;
     invite_resp.assert_status(axum::http::StatusCode::CREATED);
@@ -102,7 +112,8 @@ async fn test_invite_flow(pool: PgPool) {
     assert_eq!(invitation.is_pending, true);
 
     // List pending invitations as friend
-    let list_resp = server.get("/me/invitations")
+    let list_resp = server
+        .get("/me/invitations")
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await;
     list_resp.assert_status(axum::http::StatusCode::OK);
@@ -112,7 +123,8 @@ async fn test_invite_flow(pool: PgPool) {
 
     // Accept invitation
     let accept_uri = format!("/me/invitations/{}/accept", invitation.id);
-    let accept_resp = server.post(&accept_uri)
+    let accept_resp = server
+        .post(&accept_uri)
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await;
     accept_resp.assert_status(axum::http::StatusCode::OK);
@@ -132,7 +144,8 @@ async fn test_reject_invitation(pool: PgPool) {
     let room_body = json!({
         "name": "Test Room Reject"
     });
-    let create_room_resp = server.post("/rooms")
+    let create_room_resp = server
+        .post("/rooms")
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .json(&room_body)
         .await;
@@ -141,7 +154,8 @@ async fn test_reject_invitation(pool: PgPool) {
 
     // Invite friend
     let invite_uri = format!("/rooms/{}/invite/{}", room.id, friend_id);
-    let invite_resp = server.post(&invite_uri)
+    let invite_resp = server
+        .post(&invite_uri)
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .await;
     invite_resp.assert_status(axum::http::StatusCode::CREATED);
@@ -149,13 +163,15 @@ async fn test_reject_invitation(pool: PgPool) {
 
     // Reject invitation
     let reject_uri = format!("/me/invitations/{}/reject", invitation.id);
-    let reject_resp = server.post(&reject_uri)
+    let reject_resp = server
+        .post(&reject_uri)
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await;
     reject_resp.assert_status(axum::http::StatusCode::NO_CONTENT);
 
     // Verify it's deleted
-    let list_resp = server.get("/me/invitations")
+    let list_resp = server
+        .get("/me/invitations")
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await;
     list_resp.assert_status(axum::http::StatusCode::OK);
@@ -175,7 +191,8 @@ async fn test_revoke_invitation(pool: PgPool) {
     let room_body = json!({
         "name": "Test Room Revoke"
     });
-    let create_room_resp = server.post("/rooms")
+    let create_room_resp = server
+        .post("/rooms")
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .json(&room_body)
         .await;
@@ -184,7 +201,8 @@ async fn test_revoke_invitation(pool: PgPool) {
 
     // Invite friend
     let invite_uri = format!("/rooms/{}/invite/{}", room.id, friend_id);
-    let invite_resp = server.post(&invite_uri)
+    let invite_resp = server
+        .post(&invite_uri)
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .await;
     invite_resp.assert_status(axum::http::StatusCode::CREATED);
@@ -192,7 +210,8 @@ async fn test_revoke_invitation(pool: PgPool) {
 
     // Revoke invitation
     let revoke_uri = format!("/invitations/{}/revoke", invitation.id);
-    let revoke_resp = server.post(&revoke_uri)
+    let revoke_resp = server
+        .post(&revoke_uri)
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .await;
     revoke_resp.assert_status(axum::http::StatusCode::NO_CONTENT);
@@ -211,7 +230,8 @@ async fn test_unauthorized_actions(pool: PgPool) {
     let room_body = json!({
         "name": "Test Room Unauth"
     });
-    let create_room_resp = server.post("/rooms")
+    let create_room_resp = server
+        .post("/rooms")
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .json(&room_body)
         .await;
@@ -220,7 +240,8 @@ async fn test_unauthorized_actions(pool: PgPool) {
 
     // Invite friend
     let invite_uri = format!("/rooms/{}/invite/{}", room.id, friend_id);
-    let invite_resp = server.post(&invite_uri)
+    let invite_resp = server
+        .post(&invite_uri)
         .add_header("Authorization", format!("Bearer {}", owner_token))
         .await;
     invite_resp.assert_status(axum::http::StatusCode::CREATED);
@@ -228,28 +249,32 @@ async fn test_unauthorized_actions(pool: PgPool) {
 
     // Non-owner cannot invite
     let invite_uri2 = format!("/rooms/{}/invite/{}", room.id, friend_id);
-    server.post(&invite_uri2)
+    server
+        .post(&invite_uri2)
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await
         .assert_status(axum::http::StatusCode::FORBIDDEN);
 
     // Other user cannot accept
     let accept_uri = format!("/me/invitations/{}/accept", invitation.id);
-    server.post(&accept_uri)
+    server
+        .post(&accept_uri)
         .add_header("Authorization", format!("Bearer {}", other_token))
         .await
         .assert_status(axum::http::StatusCode::FORBIDDEN);
 
     // Other user cannot reject
     let reject_uri = format!("/me/invitations/{}/reject", invitation.id);
-    server.post(&reject_uri)
+    server
+        .post(&reject_uri)
         .add_header("Authorization", format!("Bearer {}", other_token))
         .await
         .assert_status(axum::http::StatusCode::FORBIDDEN);
 
     // Other user cannot revoke
     let revoke_uri = format!("/invitations/{}/revoke", invitation.id);
-    server.post(&revoke_uri)
+    server
+        .post(&revoke_uri)
         .add_header("Authorization", format!("Bearer {}", other_token))
         .await
         .assert_status(axum::http::StatusCode::FORBIDDEN);

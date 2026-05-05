@@ -1,7 +1,7 @@
 use crate::{
     dtos::auth::{
-        AuthResponse, ForgotPasswordRequest, LoginRequest, LogoutRequest, RefreshRequest,
-        RegisterRequest, ResetPasswordRequest, GoogleLoginRequest,
+        AuthResponse, ForgotPasswordRequest, GoogleLoginRequest, LoginRequest, LogoutRequest,
+        RefreshRequest, RegisterRequest, ResetPasswordRequest,
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
@@ -120,7 +120,6 @@ pub async fn reset_password(
 
     Ok(StatusCode::NO_CONTENT)
 }
-
 
 pub async fn google_login(
     State(state): State<AppState>,

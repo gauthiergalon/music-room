@@ -42,7 +42,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
       if (mounted) {
         UiUtils.showSuccess(context, 'Password successfully reset');
-        // Let's pop back to the login page (or main app start)
         Navigator.of(context).pop();
       }
     } on ApiException catch (e) {

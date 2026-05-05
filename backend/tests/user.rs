@@ -307,7 +307,10 @@ async fn test_update_favorite_genres(pool: PgPool) {
         .await;
 
     let user = res.json::<PrivacyTestUserResponse>();
-    assert_eq!(user.favorite_genres, Some(vec!["Rock".to_string(), "Electro".to_string()]));
+    assert_eq!(
+        user.favorite_genres,
+        Some(vec!["Rock".to_string(), "Electro".to_string()])
+    );
 }
 
 #[sqlx::test]
@@ -338,14 +341,17 @@ async fn test_update_privacy_level(pool: PgPool) {
         .await;
 
     let user = res.json::<PrivacyTestUserResponse>();
-    assert_eq!(user.privacy_level, backend::models::user::PrivacyLevel::Private);
+    assert_eq!(
+        user.privacy_level,
+        backend::models::user::PrivacyLevel::Private
+    );
 }
 
 #[sqlx::test]
 async fn test_get_user_privacy_control(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
-    
+
     // Alice
     let token_alice = register_and_login(&server, "alice_priv", "alice_p@test.com").await;
     let me_res_alice = server
@@ -356,41 +362,68 @@ async fn test_get_user_privacy_control(pool: PgPool) {
         )
         .await;
     let alice = me_res_alice.json::<PrivacyTestUserResponse>();
-    
+
     // Bob
     let token_bob = register_and_login(&server, "bob_priv", "bob_p@test.com").await;
 
     // Alice sets genres and privacy level to Private
-    server.patch("/users/me/favorite-genres")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+    server
+        .patch("/users/me/favorite-genres")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_alice),
+        )
         .json(&json!({ "favorite_genres": ["Jazz"] }))
         .await;
-    
-    let res = server.patch("/users/me/privacy")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+
+    let res = server
+        .patch("/users/me/privacy")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_alice),
+        )
         .json(&json!({ "privacy_level": "Private" }))
         .await;
     res.assert_status(StatusCode::OK);
 
     // Bob tries to get Alice's profile -> should be None
-    let res = server.get(&format!("/users/{}", alice.id))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_bob))
+    let res = server
+        .get(&format!("/users/{}", alice.id))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_bob),
+        )
         .await;
     res.assert_status(StatusCode::OK);
     let public_alice_priv = res.json::<PrivacyTestUserResponse>();
-    assert_eq!(public_alice_priv.favorite_genres, None, "Bob should not see Alice's genres");
+    assert_eq!(
+        public_alice_priv.favorite_genres, None,
+        "Bob should not see Alice's genres"
+    );
 
     // Alice sets to Public
-    let res = server.patch("/users/me/privacy")
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_alice))
+    let res = server
+        .patch("/users/me/privacy")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_alice),
+        )
         .json(&json!({ "privacy_level": "Public" }))
         .await;
     res.assert_status(StatusCode::OK);
 
     // Bob tries to get Alice's profile -> should see Some(["Jazz"])
-    let res = server.get(&format!("/users/{}", alice.id))
-        .add_header(axum::http::header::AUTHORIZATION, format!("Bearer {}", token_bob))
+    let res = server
+        .get(&format!("/users/{}", alice.id))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token_bob),
+        )
         .await;
     let public_alice_pub = res.json::<PrivacyTestUserResponse>();
-    assert_eq!(public_alice_pub.favorite_genres, Some(vec!["Jazz".to_string()]), "Bob should see Alice's genres now");
+    assert_eq!(
+        public_alice_pub.favorite_genres,
+        Some(vec!["Jazz".to_string()]),
+        "Bob should see Alice's genres now"
+    );
 }

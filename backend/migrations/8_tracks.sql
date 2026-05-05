@@ -1,8 +1,8 @@
 CREATE TABLE tracks (
-    id          BIGINT PRIMARY KEY DEFAULT nextval('tracks_id_seq'),
+    id          BIGINT PRIMARY KEY,
     title       VARCHAR(255) NOT NULL,
     artist      VARCHAR(255) NOT NULL,
     album       VARCHAR(255),
     duration    INTEGER NOT NULL,
-    cover 		VARCHAR(255),
+    cover 		VARCHAR(255)
 );

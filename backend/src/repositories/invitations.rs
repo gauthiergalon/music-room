@@ -26,10 +26,7 @@ pub async fn exists_accepted(
 
 use crate::models::invitation::Invitation;
 
-pub async fn find_by_id(
-    pool: &PgPool,
-    id: Uuid,
-) -> Result<Option<Invitation>, AppError> {
+pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Invitation>, AppError> {
     sqlx::query_as!(
         Invitation,
         r#"
@@ -106,17 +103,11 @@ pub async fn update_status(
     .map_err(AppError::Database)
 }
 
-pub async fn delete(
-    pool: &PgPool,
-    id: Uuid,
-) -> Result<(), AppError> {
-    sqlx::query!(
-        "DELETE FROM invitations WHERE id = $1",
-        id
-    )
-    .execute(pool)
-    .await
-    .map_err(AppError::Database)?;
+pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query!("DELETE FROM invitations WHERE id = $1", id)
+        .execute(pool)
+        .await
+        .map_err(AppError::Database)?;
 
     Ok(())
 }

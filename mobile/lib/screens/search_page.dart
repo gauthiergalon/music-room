@@ -4,6 +4,7 @@ import 'package:mobile/models/track.dart';
 import 'package:mobile/controllers/room_controller.dart';
 import '../core/theme.dart';
 import '../core/network/api_client.dart';
+import '../core/utils/ui_utils.dart';
 import '../widgets/track_list_tile.dart';
 
 class SearchPage extends StatefulWidget {
@@ -57,14 +58,7 @@ class _SearchPageState extends State<SearchPage> {
       setState(() {
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      UiUtils.showError(context, 'Error: $e');
     }
   }
 
@@ -145,27 +139,29 @@ class _SearchPageState extends State<SearchPage> {
         return TrackListTile(
           track: track,
           trailingIcon: Icons.add_circle_outline,
-          onTapTrailing: () {
+          onTapTrailing: () async {
             final controller = context.read<RoomController>();
             final currentRoom = controller.currentRoom;
 
             if (currentRoom != null) {
-              controller.addTrack(currentRoom, track);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${track.title} added to the queue'),
-                  duration: const Duration(seconds: 3),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              try {
+                await controller.addTrack(currentRoom, track);
+                if (context.mounted) {
+                  UiUtils.showSuccess(
+                    context,
+                    '${track.title} added to the queue',
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  UiUtils.showError(
+                    context,
+                    'Failed to add the song to the queue.',
+                  );
+                }
+              }
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Join a room to add a song.'),
-                  duration: Duration(seconds: 3),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              UiUtils.showError(context, 'Join a room to add a song.');
             }
           },
         );

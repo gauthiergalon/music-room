@@ -13,8 +13,7 @@ pub async fn check_read_access(pool: &PgPool, room: &Room, user_id: Uuid) -> Res
         return Ok(());
     }
 
-    let is_invited =
-        invitation_service::check_accepted_invitation(pool, room.id, user_id).await?;
+    let is_invited = invitation_service::check_accepted_invitation(pool, room.id, user_id).await?;
     if !is_invited {
         return Err(AppError::Forbidden(ErrorMessage::NotInvited));
     }
@@ -33,8 +32,7 @@ pub async fn check_edit_queue_access(
         return Ok(());
     }
 
-    let is_invited =
-        invitation_service::check_accepted_invitation(pool, room.id, user_id).await?;
+    let is_invited = invitation_service::check_accepted_invitation(pool, room.id, user_id).await?;
     if !is_invited {
         return Err(AppError::Forbidden(ErrorMessage::MissingLicense));
     }
