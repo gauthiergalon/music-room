@@ -162,18 +162,8 @@ pub async fn ws(
     Path(room_id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
 ) -> Result<axum::response::Response, AppError> {
-    let room = room_service::get(&state.pool, room_id, claims.user_id).await?;
-    let is_owner = room.owner_id == claims.user_id;
-
     Ok(ws.on_upgrade(move |socket| {
-        handle_socket(
-            socket,
-            state,
-            room_id,
-            is_owner,
-            claims.user_id,
-            claims.username,
-        )
+        handle_socket(socket, state, room_id, claims.user_id, claims.username)
     }))
 }
 
@@ -181,7 +171,6 @@ async fn handle_socket(
     socket: WebSocket,
     state: AppState,
     room_id: Uuid,
-    is_owner: bool,
     user_id: Uuid,
     username: String,
 ) {
@@ -255,6 +244,14 @@ async fn handle_socket(
                     user_id,
                     event_type
                 );
+                let is_owner = sqlx::query!("SELECT owner_id FROM rooms WHERE id = $1", room_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|row| row.owner_id == user_id)
+                    .unwrap_or(false);
+
                 let is_authorized = match &event {
                     WsEventClient::Play { .. }
                     | WsEventClient::Pause { .. }
@@ -372,7 +369,14 @@ async fn handle_socket(
     _ = (&mut send_task) => recv_task.abort(),
     };
 
-    let mut should_close_room = is_owner;
+    let current_owner_id = sqlx::query!("SELECT owner_id FROM rooms WHERE id = $1", room_id)
+        .fetch_optional(&state.pool)
+        .await
+        .ok()
+        .flatten()
+        .map(|row| row.owner_id);
+
+    let mut should_close_room = current_owner_id == Some(user_id);
     let mut updated_users_list = vec![];
     {
         let mut channels = state.active_rooms.write().await;
@@ -396,11 +400,7 @@ async fn handle_socket(
     }
 
     if !should_close_room {
-        let current_owner_id = sqlx::query!("SELECT owner_id FROM rooms WHERE id = $1", room_id)
-            .fetch_one(&state.pool)
-            .await
-            .map(|r| r.owner_id)
-            .unwrap_or(user_id);
+        let current_owner_id = current_owner_id.unwrap_or(user_id);
 
         tracing::info!("[WS SEND] Room: {}, Type: UserState", room_id);
 
