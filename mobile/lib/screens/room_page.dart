@@ -233,6 +233,11 @@ class _RoomPageState extends State<RoomPage> {
         appBar: current == null
             ? AppBar(
                 actions: [
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh rooms',
+                    onPressed: _refreshRooms,
+                  ),
                   Stack(
                     clipBehavior: Clip.none,
                     children: [

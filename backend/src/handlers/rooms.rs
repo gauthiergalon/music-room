@@ -128,6 +128,11 @@ pub async fn transfer_ownership(
             user_list: users,
             owner: payload.new_owner_id,
         });
+        tracing::info!(
+            "[WS USER STATE] Room: {}, Ownership transferred to {}",
+            room_id,
+            payload.new_owner_id
+        );
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -214,6 +219,11 @@ async fn handle_socket(
     };
 
     if let Ok(sync_msg) = serde_json::to_string(&user_state_msg) {
+        tracing::debug!(
+            "[WS SEND] Room: {}, User: {}, Type: UserState",
+            room_id,
+            user_id
+        );
         let _ = sender.send(Message::Text(sync_msg.into())).await;
     }
 
@@ -221,6 +231,11 @@ async fn handle_socket(
 
     let tx_clone = tx.clone();
     let mut rx = tx.subscribe();
+
+    // Send initial room state so client knows current track
+    tracing::debug!("[WS CONNECT] Room: {}, User: {}", room_id, user_id);
+    broadcast_room_state(&state, room_id).await;
+
     let pool = state.pool.clone();
 
     let state_for_recv = state.clone();
@@ -228,6 +243,18 @@ async fn handle_socket(
         let state = state_for_recv;
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             if let Ok(event) = serde_json::from_str::<WsEventClient>(&text) {
+                let event_type = match &event {
+                    WsEventClient::Play { .. } => "Play",
+                    WsEventClient::Pause { .. } => "Pause",
+                    WsEventClient::SeekTo { .. } => "SeekTo",
+                    WsEventClient::NextTrack { .. } => "NextTrack",
+                };
+                tracing::debug!(
+                    "[WS RECV] Room: {}, User: {}, Type: {}",
+                    room_id,
+                    user_id,
+                    event_type
+                );
                 let is_authorized = match &event {
                     WsEventClient::Play { .. }
                     | WsEventClient::Pause { .. }
@@ -313,6 +340,11 @@ async fn handle_socket(
                 let error_event = WsEventServer::Error {
                     message: "Invalid event format".to_string(),
                 };
+                tracing::warn!(
+                    "[WS ERROR] Room: {}, User: {}, Type: InvalidMessage",
+                    room_id,
+                    user_id
+                );
                 let _ = tx_clone.send(error_event);
             }
         }
@@ -320,10 +352,17 @@ async fn handle_socket(
 
     let mut send_task = tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
-            if let Ok(text) = serde_json::to_string(&msg)
-                && sender.send(Message::Text(text.into())).await.is_err()
-            {
-                break;
+            if let Ok(text) = serde_json::to_string(&msg) {
+                let event_type = match &msg {
+                    WsEventServer::RoomState { .. } => "RoomState",
+                    WsEventServer::UserState { .. } => "UserState",
+                    WsEventServer::RoomClosed => "RoomClosed",
+                    WsEventServer::Error { .. } => "Error",
+                };
+                tracing::debug!("[WS SEND] Room: {}, Type: {}", room_id, event_type);
+                if sender.send(Message::Text(text.into())).await.is_err() {
+                    break;
+                }
             }
         }
     });
@@ -333,14 +372,14 @@ async fn handle_socket(
     _ = (&mut send_task) => recv_task.abort(),
     };
 
-    let mut is_empty = false;
+    let mut should_close_room = is_owner;
     let mut updated_users_list = vec![];
     {
         let mut channels = state.active_rooms.write().await;
         if let std::collections::hash_map::Entry::Occupied(mut entry) = channels.entry(room_id) {
             entry.get_mut().users.remove(&user_id);
-            if entry.get().users.is_empty() {
-                is_empty = true;
+            if should_close_room || entry.get().users.is_empty() {
+                should_close_room = true;
                 entry.remove();
             } else {
                 updated_users_list = entry
@@ -356,12 +395,14 @@ async fn handle_socket(
         }
     }
 
-    if !is_empty {
+    if !should_close_room {
         let current_owner_id = sqlx::query!("SELECT owner_id FROM rooms WHERE id = $1", room_id)
             .fetch_one(&state.pool)
             .await
             .map(|r| r.owner_id)
             .unwrap_or(user_id);
+
+        tracing::info!("[WS SEND] Room: {}, Type: UserState", room_id);
 
         let _ = tx.send(WsEventServer::UserState {
             user_list: updated_users_list,
@@ -369,10 +410,11 @@ async fn handle_socket(
         });
     }
 
-    if is_empty {
+    if should_close_room {
         let _ = sqlx::query!("DELETE FROM rooms WHERE id = $1", room_id)
             .execute(&state.pool)
             .await;
+        tracing::warn!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
         let _ = tx.send(WsEventServer::RoomClosed);
     }
 }
@@ -383,6 +425,7 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
         if let Some(r) = rooms.get(&room_id) {
             r.tx.clone()
         } else {
+            tracing::debug!("[WS BROADCAST] Room: {}, Type: SkipInactive", room_id);
             return;
         }
     };
@@ -465,6 +508,7 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
             .collect();
 
         let queue_items: Vec<_> = futures_util::future::join_all(futures).await;
+        tracing::debug!("[WS SEND] Room: {}, Type: RoomState", room_id);
 
         let _ = tx.send(crate::dtos::ws::WsEventServer::RoomState {
             current_track: current_track_item,

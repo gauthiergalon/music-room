@@ -18,13 +18,30 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Result<Response, AppError> {
+    // Try to get token from Authorization header
     let token = req
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?
-        .to_string();
+        .map(|s| s.to_string())
+        // If not in header, try to get from query params
+        .or_else(|| {
+            req.uri()
+                .query()
+                .and_then(|q| {
+                    q.split('&')
+                        .find_map(|param| {
+                            let mut parts = param.split('=');
+                            if parts.next() == Some("token") {
+                                parts.next().map(|s| s.to_string())
+                            } else {
+                                None
+                            }
+                        })
+                })
+        })
+        .ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 
     let jwt_secret = &state.jwt_secret;
 

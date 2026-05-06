@@ -60,7 +60,14 @@ fn setup_tracing() {
 
 fn build_router(state: AppState) -> axum::Router {
     let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+            Method::OPTIONS,
+        ])
         .allow_headers(Any)
         .allow_origin(Any);
 
