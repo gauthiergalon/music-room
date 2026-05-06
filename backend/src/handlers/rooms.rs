@@ -449,28 +449,27 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
             None
         };
 
-        let queue_track_ids = sqlx::query!(
-            "SELECT track_id FROM queue WHERE room_id = $1 ORDER BY position ASC",
+        let queue_records = sqlx::query!(
+            "SELECT id, track_id FROM queue WHERE room_id = $1 ORDER BY position ASC",
             room_id
         )
         .fetch_all(pool)
         .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|q| q.track_id)
-        .collect::<Vec<i64>>();
+        .unwrap_or_default();
 
-        let futures: Vec<_> = queue_track_ids
+        let futures: Vec<_> = queue_records
             .into_iter()
-            .map(|id| {
+            .map(|q| {
                 let pool = pool.clone();
+                let queue_id = q.id;
+                let track_id = q.track_id;
                 async move {
-                    match crate::services::hifi::get_track_info(&pool, id).await {
+                    let track = match crate::services::hifi::get_track_info(&pool, track_id).await {
                         Ok(track) => track,
                         Err(_) => {
                             let db_fallback = sqlx::query!(
                                 "SELECT title, artist, album, cover, duration FROM tracks WHERE id = $1",
-                                id
+                                track_id
                             )
                             .fetch_optional(&pool)
                             .await
@@ -479,7 +478,7 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
 
                             if let Some(t) = db_fallback {
                                 crate::dtos::hifi::TrackItem {
-                                    id,
+                                    id: track_id,
                                     title: t.title,
                                     duration: t.duration,
                                     audio_quality: None,
@@ -493,8 +492,8 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
                                 }
                             } else {
                                 crate::dtos::hifi::TrackItem {
-                                    id,
-                                    title: format!("Track {}", id),
+                                    id: track_id,
+                                    title: format!("Track {}", track_id),
                                     duration: 0,
                                     audio_quality: None,
                                     album: None,
@@ -502,6 +501,11 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
                                 }
                             }
                         }
+                    };
+                    
+                    crate::dtos::ws::QueuedTrack {
+                        id: queue_id,
+                        track,
                     }
                 }
             })

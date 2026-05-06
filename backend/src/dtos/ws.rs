@@ -10,6 +10,12 @@ pub struct UserInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct QueuedTrack {
+    pub id: Uuid,
+    pub track: TrackItem,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsEventClient {
     Play {
@@ -36,7 +42,7 @@ pub enum WsEventServer {
         is_playing: bool,
         current_position: i32,
         timestamp: DateTime<Utc>,
-        queue: Vec<TrackItem>,
+        queue: Vec<QueuedTrack>,
     },
     UserState {
         user_list: Vec<UserInfo>,

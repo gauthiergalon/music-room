@@ -220,13 +220,19 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     if (payload['queue'] is List) {
       final queueList = payload['queue'] as List;
       _currentRoom!.queue = queueList.asMap().entries.map<QueueItem>((entry) {
-        final trackJson = entry.value as Map<String, dynamic>;
-        // Parse and cache full track metadata before creating QueueItem.
+        final queuedTrackJson = entry.value as Map<String, dynamic>;
+
+        final queueId = queuedTrackJson['id'] as String;
+        final trackJson = queuedTrackJson['track'] as Map<String, dynamic>;
+        final trackId = trackJson['id'] as int;
+
+        // Parse and cache full track metadata before creating QueueItem
         Track.fromJson(trackJson);
+
         return QueueItem(
-          id: trackJson['id'].toString(),
+          id: queueId,
           roomId: _currentRoom!.id,
-          trackId: trackJson['id'],
+          trackId: trackId,
           position: entry.key.toDouble(),
         );
       }).toList();
