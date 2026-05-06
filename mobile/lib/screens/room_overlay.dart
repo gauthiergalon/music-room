@@ -19,12 +19,7 @@ class RoomOverlay extends StatelessWidget {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          Center(
-            child: PlayerWidget(
-              track: room.currentTrack,
-              initiallyPlaying: room.status == 1,
-            ),
-          ),
+          Center(child: const PlayerWidget()),
           Positioned(
             top: AppTheme.spacingSm,
             left: 0,

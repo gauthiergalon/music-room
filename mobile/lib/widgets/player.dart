@@ -2,19 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/models/track.dart';
 import 'package:mobile/controllers/room_controller.dart';
 import '../core/theme.dart';
 
 class PlayerWidget extends StatefulWidget {
-  final Track? track;
-  final bool initiallyPlaying;
-
-  const PlayerWidget({
-    super.key,
-    required this.track,
-    this.initiallyPlaying = false,
-  });
+  const PlayerWidget({super.key});
 
   @override
   State<PlayerWidget> createState() => _PlayerWidgetState();
@@ -22,6 +14,7 @@ class PlayerWidget extends StatefulWidget {
 
 class _PlayerWidgetState extends State<PlayerWidget> {
   Timer? _timer;
+  double? _dragValue;
 
   @override
   void initState() {
@@ -120,8 +113,21 @@ class _PlayerWidgetState extends State<PlayerWidget> {
               Slider(
                 min: 0,
                 max: sliderMax,
-                value: sliderValue,
+                value: _dragValue ?? sliderValue,
+                onChangeStart: (v) {
+                  setState(() {
+                    _dragValue = v;
+                  });
+                },
                 onChanged: (v) {
+                  setState(() {
+                    _dragValue = v;
+                  });
+                },
+                onChangeEnd: (v) {
+                  setState(() {
+                    _dragValue = null;
+                  });
                   if (room != null) {
                     controller.seekTo(room, Duration(milliseconds: v.toInt()));
                   }

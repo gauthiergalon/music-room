@@ -14,10 +14,6 @@ import '../models/room_user.dart';
 import '../models/track.dart';
 
 class RoomController extends ChangeNotifier with WidgetsBindingObserver {
-  static const String _silenceTrackId = 'silence_placeholder';
-  static const String _silenceAssetPath = 'assets/audio/silence.mp3';
-  static const Duration _silencePrimeDelay = Duration(seconds: 1);
-
   static const String _eventRoomState = 'RoomState';
   static const String _eventUserState = 'UserState';
   static const String _eventRoomClosed = 'RoomClosed';
@@ -42,6 +38,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription? _wsSubscription;
   late final StreamSubscription<PlayerState> _playerStateSubscription;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  int _playbackRequestId = 0;
 
   RoomController() {
     WidgetsBinding.instance.addObserver(this);
@@ -66,7 +63,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
     } else {
-      _playSilenceBackground();
+      unawaited(_audioPlayer.stop());
     }
   }
 
@@ -131,38 +128,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     _currentRoom = room;
     await _connectWebSocket(room.id);
 
-    _playSilenceBackground();
-
     notifyListeners();
-  }
-
-  Future<void> _playSilenceBackground() async {
-    try {
-      await _audioPlayer.stop();
-
-      if (_currentRoom != null) {
-        _currentRoom!.currentTrack = null;
-        _currentRoom!.status = 0;
-        notifyListeners();
-      }
-
-      final silenceSource = AudioSource.asset(
-        _silenceAssetPath,
-        tag: const MediaItem(
-          id: _silenceTrackId,
-          title: 'Music Room Active',
-          artist: 'Waiting for a track...',
-        ),
-      );
-
-      await _audioPlayer.setLoopMode(LoopMode.one);
-      await _audioPlayer.setAudioSource(silenceSource);
-      _audioPlayer.play();
-      await Future.delayed(_silencePrimeDelay);
-      await _audioPlayer.pause();
-    } catch (e) {
-      debugPrint('Failed to start silence background playback: $e');
-    }
   }
 
   void leaveRoom() {
@@ -275,7 +241,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       }
     } else {
       _currentRoom!.currentTrack = null;
-      _playSilenceBackground();
+      _audioPlayer.stop();
     }
 
     final isPlaying = payload['is_playing'] == true;
@@ -405,8 +371,19 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> playTrack(Track track) async {
+    final requestId = ++_playbackRequestId;
     try {
       final streamUrl = await _resolveStreamUrl(track.id);
+
+      if (requestId != _playbackRequestId) {
+        return;
+      }
+
+      await _audioPlayer.stop();
+
+      if (requestId != _playbackRequestId) {
+        return;
+      }
 
       if (_currentRoom?.currentTrack?.id != track.id) {
         return;
@@ -423,6 +400,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       );
       await _audioPlayer.setLoopMode(LoopMode.off);
       await _audioPlayer.setAudioSource(audioSource);
+
+      if (requestId != _playbackRequestId) {
+        return;
+      }
 
       if (_currentRoom != null) {
         _currentRoom!.currentTrack = track;

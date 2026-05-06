@@ -508,7 +508,10 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
             .collect();
 
         let queue_items: Vec<_> = futures_util::future::join_all(futures).await;
-        tracing::debug!("[WS SEND] Room: {}, Type: RoomState", room_id);
+        tracing::debug!(
+            "[WS BROADCAST] Room: {}, Type: RoomState (enqueued)",
+            room_id
+        );
 
         let _ = tx.send(crate::dtos::ws::WsEventServer::RoomState {
             current_track: current_track_item,
