@@ -225,6 +225,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         final queueId = queuedTrackJson['id'] as String;
         final trackJson = queuedTrackJson['track'] as Map<String, dynamic>;
         final trackId = trackJson['id'] as int;
+        final position =
+            (queuedTrackJson['position'] as num?)?.toDouble() ??
+            entry.key.toDouble();
 
         // Parse and cache full track metadata before creating QueueItem
         Track.fromJson(trackJson);
@@ -233,7 +236,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           id: queueId,
           roomId: _currentRoom!.id,
           trackId: trackId,
-          position: entry.key.toDouble(),
+          position: position,
         );
       }).toList();
     }
@@ -343,24 +346,88 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     int oldIndex,
     int newIndex,
   ) async {
+    debugPrint(
+      'reorderQueueItem(room=${room.id}, oldIndex=$oldIndex, newIndex=$newIndex, queueLength=${queue.length})',
+    );
+
     if (newIndex > oldIndex) newIndex -= 1;
 
+    if (oldIndex < 0 || oldIndex >= queue.length) {
+      debugPrint(
+        'reorderQueueItem aborted: oldIndex out of range (oldIndex=$oldIndex, queueLength=${queue.length})',
+      );
+      return;
+    }
+
     final item = queue[oldIndex];
+    final reorderedQueue = [...queue];
+    final moved = reorderedQueue.removeAt(oldIndex);
+    final insertIndex = newIndex.clamp(0, reorderedQueue.length);
+    reorderedQueue.insert(insertIndex, moved);
+
+    // Save previous queue so we can restore on error, and perform
+    // optimistic local reorder so UI updates immediately.
+    List<QueueItem>? previousQueue;
+    if (_currentRoom != null && _currentRoom!.id == room.id) {
+      previousQueue = _currentRoom!.queue
+          .map(
+            (q) => QueueItem(
+              id: q.id,
+              roomId: q.roomId,
+              trackId: q.trackId,
+              position: q.position,
+            ),
+          )
+          .toList();
+
+      debugPrint(
+        'reorderQueueItem optimistic update: previousQueueLength=${previousQueue.length}, reorderedQueueLength=${reorderedQueue.length}, insertIndex=$insertIndex, itemId=${item.id}, itemTrackId=${item.trackId}, itemPosition=${item.position}',
+      );
+
+      _currentRoom!.queue = reorderedQueue;
+      notifyListeners();
+    }
+
+    // Compute a new position value for the moved item based on its new neighbors.
     double newPos;
 
-    if (queue.isEmpty) {
+    if (reorderedQueue.length == 1) {
       newPos = 0;
-    } else if (newIndex == 0) {
-      newPos = queue.first.position - 100;
-    } else if (newIndex >= queue.length - 1) {
-      newPos = queue.last.position + 100;
+    } else if (insertIndex == 0) {
+      newPos = reorderedQueue[1].position - 100;
+    } else if (insertIndex == reorderedQueue.length - 1) {
+      newPos = reorderedQueue[reorderedQueue.length - 2].position + 100;
     } else {
-      final prev = queue[newIndex - 1].position;
-      final next = queue[newIndex].position;
+      final prev = reorderedQueue[insertIndex - 1].position;
+      final next = reorderedQueue[insertIndex + 1].position;
       newPos = (prev + next) / 2;
     }
 
-    await moveQueueItem(room, item, newPos);
+    try {
+      debugPrint(
+        'reorderQueueItem sending PATCH: room=${room.id}, itemId=${item.id}, newPosition=$newPos',
+      );
+      await moveQueueItem(room, item, newPos);
+      debugPrint(
+        'reorderQueueItem PATCH succeeded: room=${room.id}, itemId=${item.id}, newPosition=$newPos',
+      );
+    } catch (e) {
+      debugPrint('Failed to reorder queue on server: $e');
+      if (_currentRoom != null &&
+          _currentRoom!.id == room.id &&
+          previousQueue != null) {
+        _currentRoom!.queue = previousQueue;
+        notifyListeners();
+        debugPrint(
+          'reorderQueueItem rollback applied: room=${room.id}, restoredQueueLength=${previousQueue.length}',
+        );
+      } else {
+        debugPrint(
+          'reorderQueueItem rollback skipped: currentRoom=${_currentRoom?.id}, expectedRoom=${room.id}, hasPreviousQueue=${previousQueue != null}',
+        );
+      }
+      rethrow;
+    }
   }
 
   void togglePlay(Room room) {

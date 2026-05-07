@@ -12,6 +12,7 @@ pub struct UserInfo {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QueuedTrack {
     pub id: Uuid,
+    pub position: f64,
     pub track: TrackItem,
 }
 

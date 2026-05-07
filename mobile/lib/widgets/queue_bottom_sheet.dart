@@ -18,7 +18,6 @@ void showQueueBottomSheet(BuildContext context) {
           final currentRoom = controller.currentRoom;
           if (currentRoom == null) return const SizedBox.shrink();
           final queue = currentRoom.queue.toList();
-          queue.sort((a, b) => a.position.compareTo(b.position));
 
           return SizedBox(
             height: MediaQuery.of(ctx).size.height * 0.6,

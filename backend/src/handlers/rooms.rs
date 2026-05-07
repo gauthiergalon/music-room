@@ -450,7 +450,7 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
         };
 
         let queue_records = sqlx::query!(
-            "SELECT id, track_id FROM queue WHERE room_id = $1 ORDER BY position ASC",
+            "SELECT id, track_id, position FROM queue WHERE room_id = $1 ORDER BY position ASC",
             room_id
         )
         .fetch_all(pool)
@@ -505,6 +505,7 @@ pub async fn broadcast_room_state(state: &crate::state::AppState, room_id: uuid:
                     
                     crate::dtos::ws::QueuedTrack {
                         id: queue_id,
+                        position: q.position,
                         track,
                     }
                 }
