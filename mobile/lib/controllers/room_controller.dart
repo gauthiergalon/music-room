@@ -133,6 +133,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void leaveRoom() {
     unawaited(_audioPlayer.stop());
+
     _currentRoom = null;
     _disposeWebSocket();
     notifyListeners();
@@ -548,8 +549,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       rethrow;
     }
   }
-
-  void kickListener(Room room, RoomUser listener) {}
 
   Future<void> promoteToOwner(Room room, RoomUser listener) async {
     try {

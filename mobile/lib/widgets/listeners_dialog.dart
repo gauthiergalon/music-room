@@ -1,9 +1,112 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../controllers/friends_controller.dart';
 import '../controllers/room_controller.dart';
 import '../controllers/auth_controller.dart';
 import '../core/theme.dart';
+import '../models/room_user.dart';
+
+Future<void> _showInviteFriendDialog(
+  BuildContext context,
+  String roomId,
+  List<RoomUser> listeners,
+) async {
+  final authController = context.read<AuthController>();
+  final friendsController = context.read<FriendsController>();
+  final currentUser = authController.user;
+
+  if (currentUser == null) {
+    return;
+  }
+
+  try {
+    await friendsController.fetchFriends(currentUser.id);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+    return;
+  }
+
+  if (!context.mounted) {
+    return;
+  }
+
+  final listenerIds = listeners.map((listener) => listener.id).toSet();
+  final availableFriends = friendsController.acceptedFriends
+      .where(
+        (friend) =>
+            friend.friendId != currentUser.id &&
+            !listenerIds.contains(friend.friendId),
+      )
+      .toList();
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Invite a friend'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: availableFriends.isEmpty
+            ? const Text('No friends available to invite.')
+            : ListView.separated(
+                shrinkWrap: true,
+                itemCount: availableFriends.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (itemContext, index) {
+                  final friend = availableFriends[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.person),
+                    title: Text(friend.username ?? 'Unknown User'),
+                    onTap: () async {
+                      Navigator.of(dialogContext).pop();
+                      try {
+                        await friendsController.inviteToRoom(
+                          roomId,
+                          friend.friendId,
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Invitation sent to ${friend.username ?? 'friend'}',
+                              ),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(e.toString()),
+                              backgroundColor: Colors.red,
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
 
 void showListenersDialog(BuildContext context) {
   showGeneralDialog(
@@ -71,7 +174,7 @@ void showListenersDialog(BuildContext context) {
                           subtitle: Text(
                             currentRoom.isPublic
                                 ? 'Public'
-                                : 'Private (invitation link only)',
+                                : 'Private (friends invitations only)',
                           ),
                           value: currentRoom.isPublic,
                           onChanged: (val) async {
@@ -119,22 +222,14 @@ void showListenersDialog(BuildContext context) {
                           },
                         ),
                         ListTile(
-                          leading: const Icon(Icons.link),
-                          title: const Text('Copy Invitation Link'),
-                          onTap: () {
-                            Clipboard.setData(
-                              ClipboardData(
-                                text:
-                                    'musicroom://join/${currentRoom.id.toString()}',
-                              ),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Link copied to clipboard!'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
+                          leading: const Icon(Icons.person_add),
+                          title: const Text('Invite a friend'),
+                          subtitle: const Text('Choose from your friends list'),
+                          onTap: () => _showInviteFriendDialog(
+                            context,
+                            currentRoom.id,
+                            otherListeners,
+                          ),
                         ),
                         const Divider(),
                       ],
@@ -142,13 +237,6 @@ void showListenersDialog(BuildContext context) {
                         padding: EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 8,
-                        ),
-                        child: Text(
-                          'Members of the room',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey,
-                          ),
                         ),
                       ),
                       Expanded(
@@ -199,14 +287,10 @@ void showListenersDialog(BuildContext context) {
                                         ),
                                         IconButton(
                                           icon: const Icon(
-                                            Icons.remove_circle_outline,
+                                            Icons.card_membership,
                                             size: 20,
                                           ),
-                                          onPressed: () =>
-                                              controller.kickListener(
-                                                currentRoom,
-                                                roomUser,
-                                              ),
+                                          onPressed: null,
                                         ),
                                       ],
                                     )

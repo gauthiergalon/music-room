@@ -162,6 +162,21 @@ class _RoomPageState extends State<RoomPage> {
           accept ? 'Invitation accepted' : 'Invitation rejected',
         );
       }
+
+      if (accept && mounted) {
+        final roomController = context.read<RoomController>();
+        Room? roomToJoin;
+        try {
+          roomToJoin = roomController.availableRooms.firstWhere(
+            (room) => room.id == invitation.roomId,
+          );
+        } catch (e) {
+          // Room not found, that's ok
+        }
+        if (roomToJoin != null) {
+          await roomController.openRoom(roomToJoin);
+        }
+      }
     } catch (e) {
       if (mounted) {
         UiUtils.showError(

@@ -111,3 +111,21 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
 
     Ok(())
 }
+
+pub async fn exists_any(pool: &PgPool, room_id: Uuid, invitee_id: Uuid) -> Result<bool, AppError> {
+    let result = sqlx::query!(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM invitations 
+            WHERE room_id = $1 AND invitee_id = $2
+        ) as "exists!"
+        "#,
+        room_id,
+        invitee_id
+    )
+    .fetch_one(pool)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(result.exists)
+}

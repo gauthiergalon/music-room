@@ -58,6 +58,16 @@ class FriendsController extends ChangeNotifier {
     }
   }
 
+  Future<void> inviteToRoom(String roomId, String inviteeId) async {
+    try {
+      await ApiClient.post('/rooms/$roomId/invite/$inviteeId');
+    } on ApiException catch (e) {
+      throw e.message;
+    } catch (e) {
+      throw 'An error occurred';
+    }
+  }
+
   Future<void> handleAction(String endpoint, String? myUserId) async {
     try {
       if (endpoint.endsWith('/accept')) {
