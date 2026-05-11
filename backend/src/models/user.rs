@@ -1,9 +1,11 @@
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq, Eq)]
 #[sqlx(type_name = "privacy_level", rename_all = "lowercase")]
+#[derive(ToSchema)]
 pub enum PrivacyLevel {
     Public,
     Friends,

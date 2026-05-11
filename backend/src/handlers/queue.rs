@@ -14,6 +14,7 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(get, path = "/rooms/{id}/queue", responses((status = 200, body = [Queue])), tag = "Queue")]
 pub async fn list(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,
@@ -24,6 +25,7 @@ pub async fn list(
     Ok(Json(queues))
 }
 
+#[utoipa::path(post, path = "/rooms/{id}/queue", request_body = AddToQueueRequest, responses((status = 204)), tag = "Queue")]
 pub async fn add(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,
@@ -42,6 +44,7 @@ pub async fn add(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(delete, path = "/rooms/{id}/queue", request_body = RemoveFromQueueRequest, responses((status = 204)), tag = "Queue")]
 pub async fn delete(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,
@@ -53,6 +56,7 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(patch, path = "/rooms/{id}/queue", request_body = ReorderQueueRequest, responses((status = 204)), tag = "Queue")]
 pub async fn reorder(
     State(state): State<AppState>,
     Path(room_id): Path<Uuid>,

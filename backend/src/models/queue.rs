@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Queue {
     pub id: Uuid,
     pub room_id: Uuid,

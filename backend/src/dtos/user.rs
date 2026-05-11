@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UserResponse {
     pub id: Uuid,
     pub username: String,
@@ -12,6 +13,7 @@ pub struct UserResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[derive(utoipa::ToSchema)]
 pub struct PublicUserResponse {
     pub id: Uuid,
     pub username: String,
@@ -20,37 +22,44 @@ pub struct PublicUserResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UpdateFavoriteGenresRequest {
     pub favorite_genres: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UpdatePrivacyLevelRequest {
     pub privacy_level: PrivacyLevel,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UpdateUsernameRequest {
     pub username: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UpdateEmailRequest {
     pub new_email: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct UpdatePasswordRequest {
     pub current_password: String,
     pub new_password: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct ConfirmEmailQuery {
     pub token: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct ResetPasswordRequest {
     pub token: String,
     pub new_password: String,

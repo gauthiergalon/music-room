@@ -36,6 +36,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   WebSocketChannel? _wsChannel;
   StreamSubscription? _wsSubscription;
+  bool _isInitialRoomState = false;
   late final StreamSubscription<PlayerState> _playerStateSubscription;
   final AudioPlayer _audioPlayer = AudioPlayer();
   int _playbackRequestId = 0;
@@ -105,7 +106,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> openRoom(Room room) async {
-    room.currentTrack = null;
     _currentRoom = room;
 
     await _connectWebSocket(room.id);
@@ -135,6 +135,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     if (token == null) return;
 
     _disposeWebSocket();
+    _isInitialRoomState = true;
 
     final baseUrl =
         '${ApiClient.baseUrl.replaceFirst('http', 'ws')}/rooms/$roomId/ws';
@@ -226,7 +227,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (payload['current_track'] != null) {
       final track = Track.fromJson(payload['current_track']);
-      final bool trackChanged = currentTrack?.id != track.id;
+      final bool trackChanged =
+          currentTrack?.id != track.id ||
+          _isInitialRoomState ||
+          _audioPlayer.audioSource == null;
       _currentRoom!.currentTrack = track;
       if (trackChanged) {
         final now = DateTime.now().toUtc();
@@ -274,6 +278,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
       _audioPlayer.seek(position);
     }
+
+    _isInitialRoomState = false;
   }
 
   void _handleUserState(Map<String, dynamic> payload) {

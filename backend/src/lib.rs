@@ -1,4 +1,5 @@
 #![allow(unused_variables, unused_imports, dead_code)]
+pub mod openapi;
 
 use crate::state::AppState;
 use axum::http::Method;

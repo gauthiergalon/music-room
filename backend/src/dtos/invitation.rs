@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct InvitationResponse {
     pub id: Uuid,
     pub room_id: Uuid,

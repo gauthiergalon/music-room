@@ -3,11 +3,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct FriendRequestDto {
     pub username: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct FriendResponseDto {
     pub user_id_1: Uuid,
     pub user_id_2: Uuid,

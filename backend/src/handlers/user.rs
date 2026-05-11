@@ -7,8 +7,8 @@ use uuid::Uuid;
 
 use crate::{
     dtos::user::{
-        ConfirmEmailQuery, PublicUserResponse, UpdateEmailRequest, UpdatePasswordRequest,
-        UpdateUsernameRequest, UserResponse,
+        ConfirmEmailQuery, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest,
+        UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
@@ -18,6 +18,7 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(get, path = "/users/me", responses((status = 200, body = UserResponse)), tag = "Users")]
 pub async fn get_me(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -33,6 +34,7 @@ pub async fn get_me(
     }))
 }
 
+#[utoipa::path(get, path = "/users/{id}", responses((status = 200, body = PublicUserResponse)), tag = "Users")]
 pub async fn get_user(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,
@@ -57,6 +59,7 @@ pub async fn get_user(
     }))
 }
 
+#[utoipa::path(patch, path = "/users/me/username", request_body = UpdateUsernameRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
 pub async fn update_username(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -80,6 +83,7 @@ pub async fn update_username(
     }))
 }
 
+#[utoipa::path(patch, path = "/users/me/email", request_body = UpdateEmailRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
 pub async fn update_email(
     Extension(claims): Extension<Claims>,
     State(state): State<AppState>,
@@ -100,6 +104,7 @@ pub async fn update_email(
     }))
 }
 
+#[utoipa::path(patch, path = "/users/me/password", request_body = UpdatePasswordRequest, responses((status = 204)), tag = "Users")]
 pub async fn update_password(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -122,6 +127,7 @@ pub async fn update_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(patch, path = "/users/me/confirm-email", responses((status = 204)), tag = "Users")]
 pub async fn confirm_email(
     State(state): State<AppState>,
     Query(query): Query<ConfirmEmailQuery>,
@@ -131,6 +137,7 @@ pub async fn confirm_email(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/users/me/send-confirmation-email", responses((status = 204)), tag = "Users")]
 pub async fn send_email_confirmation_email(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -140,6 +147,7 @@ pub async fn send_email_confirmation_email(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(patch, path = "/users/me/favorite-genres", request_body = UpdateFavoriteGenresRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
 pub async fn update_favorite_genres(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -158,6 +166,7 @@ pub async fn update_favorite_genres(
     }))
 }
 
+#[utoipa::path(patch, path = "/users/me/privacy", request_body = UpdatePrivacyLevelRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
 pub async fn update_privacy_level(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,

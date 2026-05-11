@@ -11,6 +11,7 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(get, path = "/hifi/search/{query}", responses((status = 200, body = SearchResponse)), tag = "Hifi")]
 pub async fn search(
     State(_state): State<AppState>,
     Path(query): Path<String>,
@@ -21,6 +22,7 @@ pub async fn search(
     Ok(Json(tracks))
 }
 
+#[utoipa::path(get, path = "/hifi/track/{id}", responses((status = 200, body = TrackResponse)), tag = "Hifi")]
 pub async fn get_track(
     State(_state): State<AppState>,
     Path(track_id): Path<i64>,
@@ -31,6 +33,7 @@ pub async fn get_track(
     Ok(Json(track))
 }
 
+#[utoipa::path(get, path = "/hifi/track/{id}/stream-url", responses((status = 200, body = StreamUrlResponse)), tag = "Hifi")]
 pub async fn get_stream_url(
     State(_state): State<AppState>,
     Path(track_id): Path<i64>,

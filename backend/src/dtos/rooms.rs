@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Serialize)]
+#[derive(utoipa::ToSchema)]
 pub struct RoomResponse {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -14,6 +15,7 @@ pub struct RoomResponse {
 }
 
 #[derive(Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct TransferOwnershipRequest {
     pub new_owner_id: Uuid,
 }

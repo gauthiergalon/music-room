@@ -21,6 +21,7 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(get, path = "/rooms", responses((status = 200, body = [RoomResponse])), tag = "Rooms")]
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<RoomResponse>>, AppError> {
     let rooms = room_service::list(&state.pool).await?;
     let responses = rooms
@@ -39,6 +40,7 @@ pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<RoomResponse
     Ok(Json(responses))
 }
 
+#[utoipa::path(post, path = "/rooms", responses((status = 201, body = RoomResponse)), tag = "Rooms")]
 pub async fn create(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,

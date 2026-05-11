@@ -10,6 +10,7 @@ use crate::{
     services::invitations as invitation_service, state::AppState,
 };
 
+#[utoipa::path(post, path = "/rooms/{id}/invite/{invitee_id}", responses((status = 201, body = InvitationResponse)), tag = "Invitations")]
 pub async fn invite(
     State(state): State<AppState>,
     Path((room_id, invitee_id)): Path<(Uuid, Uuid)>,
@@ -30,6 +31,7 @@ pub async fn invite(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
+#[utoipa::path(get, path = "/me/invitations", responses((status = 200, body = [InvitationResponse])), tag = "Invitations")]
 pub async fn list_pending(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -52,6 +54,7 @@ pub async fn list_pending(
     Ok(Json(responses))
 }
 
+#[utoipa::path(post, path = "/me/invitations/{id}/accept", responses((status = 204)), tag = "Invitations")]
 pub async fn accept(
     State(state): State<AppState>,
     Path(invitation_id): Path<Uuid>,
@@ -62,6 +65,7 @@ pub async fn accept(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/me/invitations/{id}/reject", responses((status = 204)), tag = "Invitations")]
 pub async fn reject(
     State(state): State<AppState>,
     Path(invitation_id): Path<Uuid>,
@@ -72,6 +76,7 @@ pub async fn reject(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/invitations/{id}/revoke", responses((status = 204)), tag = "Invitations")]
 pub async fn revoke(
     State(state): State<AppState>,
     Path(invitation_id): Path<Uuid>,

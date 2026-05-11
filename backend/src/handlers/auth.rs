@@ -10,6 +10,7 @@ use crate::{
 };
 use axum::{Extension, Json, extract::State, http::StatusCode};
 
+#[utoipa::path(post, path = "/auth/register", request_body = RegisterRequest, responses((status = 201, body = AuthResponse)), tag = "Auth")]
 pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
@@ -48,6 +49,7 @@ pub async fn register(
     ))
 }
 
+#[utoipa::path(post, path = "/auth/login", request_body = LoginRequest, responses((status = 200, body = AuthResponse)), tag = "Auth")]
 pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
@@ -70,6 +72,7 @@ pub async fn login(
     }))
 }
 
+#[utoipa::path(post, path = "/auth/logout", request_body = LogoutRequest, responses((status = 204)), tag = "Auth")]
 pub async fn logout(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -80,6 +83,7 @@ pub async fn logout(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/auth/refresh", request_body = RefreshRequest, responses((status = 200, body = AuthResponse)), tag = "Auth")]
 pub async fn refresh(
     State(state): State<AppState>,
     Json(payload): Json<RefreshRequest>,
@@ -93,6 +97,7 @@ pub async fn refresh(
     }))
 }
 
+#[utoipa::path(post, path = "/auth/forgot-password", request_body = ForgotPasswordRequest, responses((status = 204)), tag = "Auth")]
 pub async fn forgot_password(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
@@ -106,6 +111,7 @@ pub async fn forgot_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/auth/reset-password", request_body = ResetPasswordRequest, responses((status = 204)), tag = "Auth")]
 pub async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
@@ -121,6 +127,7 @@ pub async fn reset_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(post, path = "/auth/google-login", request_body = GoogleLoginRequest, responses((status = 200, body = AuthResponse)), tag = "Auth")]
 pub async fn google_login(
     State(state): State<AppState>,
     Json(payload): Json<GoogleLoginRequest>,

@@ -14,6 +14,7 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(get, path = "/friends", responses((status = 200, body = [FriendResponseDto])), tag = "Friends")]
 pub async fn list(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -22,6 +23,7 @@ pub async fn list(
     Ok(Json(friends))
 }
 
+#[utoipa::path(post, path = "/friends", request_body = FriendRequestDto, responses((status = 201, body = FriendResponseDto)), tag = "Friends")]
 pub async fn send_request(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -32,6 +34,7 @@ pub async fn send_request(
     Ok((StatusCode::CREATED, Json(friend)))
 }
 
+#[utoipa::path(post, path = "/friends/{friend_id}/accept", responses((status = 200, body = FriendResponseDto)), tag = "Friends")]
 pub async fn accept_request(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -41,6 +44,7 @@ pub async fn accept_request(
     Ok(Json(friend))
 }
 
+#[utoipa::path(delete, path = "/friends/{friend_id}/reject", responses((status = 204)), tag = "Friends")]
 pub async fn reject_request(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
@@ -50,6 +54,7 @@ pub async fn reject_request(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(delete, path = "/friends/{friend_id}", responses((status = 204)), tag = "Friends")]
 pub async fn remove(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,

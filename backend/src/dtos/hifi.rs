@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct SearchResponse {
     pub version: String,
     pub data: SearchData,
@@ -9,6 +10,7 @@ pub struct SearchResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct SearchData {
     pub limit: u32,
     pub offset: u32,
@@ -18,6 +20,7 @@ pub struct SearchData {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct TrackItem {
     pub id: i64,
     pub title: String,
@@ -29,6 +32,7 @@ pub struct TrackItem {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct AlbumData {
     pub title: Option<String>,
     pub cover: Option<String>,
@@ -36,18 +40,21 @@ pub struct AlbumData {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct ArtistData {
     pub name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[derive(utoipa::ToSchema)]
 pub struct TrackResponse {
     pub version: String,
     pub data: Value, // The API returns various manifest data
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema)]
 pub struct StreamUrlResponse {
     pub stream_url: String,
 }

@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(utoipa::ToSchema)]
 pub struct UserInfo {
     pub user_id: Uuid,
     pub username: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(utoipa::ToSchema)]
 pub struct QueuedTrack {
     pub id: Uuid,
     pub position: f64,
