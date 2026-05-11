@@ -105,6 +105,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> openRoom(Room room) async {
+    room.currentTrack = null;
     _currentRoom = room;
 
     await _connectWebSocket(room.id);
@@ -228,7 +229,21 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       final bool trackChanged = currentTrack?.id != track.id;
       _currentRoom!.currentTrack = track;
       if (trackChanged) {
-        playTrack(track);
+        final now = DateTime.now().toUtc();
+
+        final timestamp = DateTime.parse(
+          payload['timestamp'] as String,
+        ).toUtc();
+
+        final currentPositionMs = (payload['current_position'] as int?) ?? 0;
+
+        final elapsedMs = now.difference(timestamp).inMilliseconds;
+
+        final finalPosition = Duration(
+          milliseconds: currentPositionMs + elapsedMs,
+        );
+
+        playTrack(track, finalPosition);
       }
     } else {
       _currentRoom!.currentTrack = null;
@@ -420,7 +435,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> playTrack(Track track) async {
+  Future<void> playTrack(Track track, Duration position) async {
     final requestId = ++_playbackRequestId;
     try {
       final streamUrl = await _resolveStreamUrl(track.id);
@@ -462,7 +477,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         _currentRoom!.updatedAt = DateTime.now();
         notifyListeners();
       }
-
+      _audioPlayer.seek(position);
       _audioPlayer.play();
     } catch (e, stacktrace) {
       debugPrint('Error playing track: $e\n$stacktrace');
