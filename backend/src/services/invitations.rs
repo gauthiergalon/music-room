@@ -24,10 +24,6 @@ pub async fn invite(
     if room.owner_id != inviter_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));
     }
-    let exists = invitation_repo::exists_any(pool, room_id, invitee_id).await?;
-    if exists {
-        return Err(AppError::Conflict(ErrorMessage::AlreadyInvited));
-    }
 
     invitation_repo::create(pool, room_id, inviter_id, invitee_id).await
 }
@@ -50,6 +46,13 @@ pub async fn accept(
 
     if invitation.invitee_id != user_id {
         return Err(AppError::Forbidden(ErrorMessage::NotInvitedUser));
+    }
+
+    if invitation.is_pending
+        && invitation_repo::exists_accepted(pool, invitation.room_id, user_id).await?
+    {
+        invitation_repo::delete(pool, invitation_id).await?;
+        return Ok(invitation);
     }
 
     invitation_repo::update_status(pool, invitation_id, false).await

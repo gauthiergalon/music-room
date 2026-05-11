@@ -5,5 +5,5 @@ CREATE TABLE invitations (
     invitee_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     is_pending          BOOLEAN NOT NULL DEFAULT true,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(room_id, invitee_id)
+    UNIQUE(room_id, invitee_id, is_pending)
 );

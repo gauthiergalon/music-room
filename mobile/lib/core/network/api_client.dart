@@ -94,6 +94,7 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
     '/auth/login',
     '/auth/register',
     '/auth/refresh',
+    '/auth/logout',
   ];
 
   @override

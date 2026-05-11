@@ -5,4 +5,5 @@ pub mod queue;
 pub mod refresh_tokens;
 pub mod reset_tokens;
 pub mod rooms;
+pub mod tracks;
 pub mod users;

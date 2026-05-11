@@ -38,7 +38,7 @@ pub async fn add(
     let _ = crate::services::hifi::get_track_info(&state.pool, payload.track_id).await;
 
     queue_service::create(&state.pool, room_id, claims.user_id, payload.track_id).await?;
-    crate::handlers::rooms::broadcast_room_state(&state, room_id).await;
+    crate::ws::send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -49,7 +49,7 @@ pub async fn delete(
     Json(payload): Json<RemoveFromQueueRequest>,
 ) -> Result<StatusCode, AppError> {
     queue_service::remove(&state.pool, room_id, claims.user_id, payload.id).await?;
-    crate::handlers::rooms::broadcast_room_state(&state, room_id).await;
+    crate::ws::send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -67,6 +67,6 @@ pub async fn reorder(
         payload.new_position,
     )
     .await?;
-    crate::handlers::rooms::broadcast_room_state(&state, room_id).await;
+    crate::ws::send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }

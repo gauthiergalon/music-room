@@ -65,7 +65,15 @@ pub async fn update_username<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_username, user_id).fetch_one(executor).await.map_err(AppError::Database)?;
+    let user = sqlx::query!("UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_username, user_id).fetch_one(executor).await.map_err(|e| {
+		if let sqlx::Error::Database(ref db_err) = e
+				&& db_err.code().as_deref() == Some("23505")
+		{
+				return AppError::Conflict(ErrorMessage::UsernameTaken);
+		}
+		AppError::Database(e)
+	})?;
+
     Ok(User {
         id: user.id,
         username: user.username,
@@ -86,7 +94,15 @@ pub async fn update_email<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("UPDATE users SET email = $1, email_confirmed = FALSE WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_email, user_id).fetch_one(executor).await.map_err(AppError::Database)?;
+    let user = sqlx::query!("UPDATE users SET email = $1, email_confirmed = FALSE WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_email, user_id).fetch_one(executor).await.map_err(|e| {
+		if let sqlx::Error::Database(ref db_err) = e
+				&& db_err.code().as_deref() == Some("23505")
+		{
+				return AppError::Conflict(ErrorMessage::EmailTaken);
+		}
+		AppError::Database(e)
+	})?;
+
     Ok(User {
         id: user.id,
         username: user.username,

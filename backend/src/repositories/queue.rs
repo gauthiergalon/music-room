@@ -54,3 +54,41 @@ pub async fn reorder(
 
     Ok(())
 }
+
+pub async fn pop_next_track(pool: &sqlx::PgPool, room_id: uuid::Uuid) -> sqlx::Result<Option<i64>> {
+    let mut tx = pool.begin().await?;
+
+    let next_track = sqlx::query!(
+        "SELECT id, track_id FROM queue WHERE room_id = $1 ORDER BY position ASC LIMIT 1",
+        room_id
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if let Some(track) = next_track {
+        sqlx::query!("DELETE FROM queue WHERE id = $1", track.id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(Some(track.track_id))
+    } else {
+        tx.rollback().await?;
+        Ok(None)
+    }
+}
+
+pub struct QueueRecord {
+    pub id: uuid::Uuid,
+    pub track_id: i64,
+    pub position: f64,
+}
+
+pub async fn get_queue(pool: &sqlx::PgPool, room_id: uuid::Uuid) -> sqlx::Result<Vec<QueueRecord>> {
+    sqlx::query_as!(
+        QueueRecord,
+        "SELECT id, track_id, position FROM queue WHERE room_id = $1 ORDER BY position ASC",
+        room_id
+    )
+    .fetch_all(pool)
+    .await
+}

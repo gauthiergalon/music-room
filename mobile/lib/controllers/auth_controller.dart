@@ -240,21 +240,18 @@ class AuthController extends ChangeNotifier {
 
   Future<void> logout() async {
     final refreshToken = await SessionStorage.getRefreshToken();
-
-    if (_token != null && refreshToken != null) {
-      try {
-        await ApiClient.post(
-          '/auth/logout',
-          body: {'refresh_token': refreshToken},
-        );
-      } catch (_) {
-        // Ignore logout errors
-      }
-    }
+    final wasAuthenticated = _isAuthenticated;
 
     _isAuthenticated = false;
     _token = null;
     _user = null;
+
+    if (wasAuthenticated && refreshToken != null) {
+      ApiClient.post(
+        '/auth/logout',
+        body: {'refresh_token': refreshToken},
+      ).catchError((_) {});
+    }
 
     await SessionStorage.clear();
 

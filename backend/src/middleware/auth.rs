@@ -27,19 +27,16 @@ pub async fn auth_middleware(
         .map(|s| s.to_string())
         // If not in header, try to get from query params
         .or_else(|| {
-            req.uri()
-                .query()
-                .and_then(|q| {
-                    q.split('&')
-                        .find_map(|param| {
-                            let mut parts = param.split('=');
-                            if parts.next() == Some("token") {
-                                parts.next().map(|s| s.to_string())
-                            } else {
-                                None
-                            }
-                        })
+            req.uri().query().and_then(|q| {
+                q.split('&').find_map(|param| {
+                    let mut parts = param.split('=');
+                    if parts.next() == Some("token") {
+                        parts.next().map(|s| s.to_string())
+                    } else {
+                        None
+                    }
                 })
+            })
         })
         .ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 

@@ -1,4 +1,4 @@
-use crate::errors::AppError;
+use crate::{errors::AppError, errors::ErrorMessage, models::invitation::Invitation};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -23,8 +23,6 @@ pub async fn exists_accepted(
 
     Ok(result.exists)
 }
-
-use crate::models::invitation::Invitation;
 
 pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Invitation>, AppError> {
     sqlx::query_as!(
@@ -79,7 +77,14 @@ pub async fn create(
     )
     .fetch_one(pool)
     .await
-    .map_err(AppError::Database)
+    .map_err(|e| {
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.code().as_deref() == Some("23505") {
+                return AppError::Conflict(ErrorMessage::AlreadyInvited);
+            }
+        }
+        AppError::Database(e)
+    })
 }
 
 pub async fn update_status(
@@ -110,22 +115,4 @@ pub async fn delete(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
         .map_err(AppError::Database)?;
 
     Ok(())
-}
-
-pub async fn exists_any(pool: &PgPool, room_id: Uuid, invitee_id: Uuid) -> Result<bool, AppError> {
-    let result = sqlx::query!(
-        r#"
-        SELECT EXISTS (
-            SELECT 1 FROM invitations 
-            WHERE room_id = $1 AND invitee_id = $2
-        ) as "exists!"
-        "#,
-        room_id,
-        invitee_id
-    )
-    .fetch_one(pool)
-    .await
-    .map_err(AppError::Database)?;
-
-    Ok(result.exists)
 }

@@ -77,26 +77,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      if (_currentRoom != null && _wsChannel?.closeCode != null) {
-        _checkAndReconnect();
-      }
-    }
-  }
-
-  Future<void> _checkAndReconnect() async {
-    if (_currentRoom == null) return;
-    try {
-      await ApiClient.get('/rooms/${_currentRoom!.id}');
-
-      await _connectWebSocket(_currentRoom!.id);
-    } catch (e) {
-      leaveRoom();
-    }
-  }
-
   Future<void> refreshRooms() async {
     try {
       final response = await ApiClient.get('/rooms');
@@ -126,6 +106,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> openRoom(Room room) async {
     _currentRoom = room;
+
     await _connectWebSocket(room.id);
 
     notifyListeners();
@@ -276,9 +257,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       }
       final position = Duration(milliseconds: posMs);
 
-      if ((_audioPlayer.position - position).inMilliseconds.abs() > 2000) {
-        _audioPlayer.seek(position);
-      }
+      _audioPlayer.seek(position);
     }
   }
 
@@ -366,8 +345,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     final insertIndex = newIndex.clamp(0, reorderedQueue.length);
     reorderedQueue.insert(insertIndex, moved);
 
-    // Save previous queue so we can restore on error, and perform
-    // optimistic local reorder so UI updates immediately.
     List<QueueItem>? previousQueue;
     if (_currentRoom != null && _currentRoom!.id == room.id) {
       previousQueue = _currentRoom!.queue
@@ -389,7 +366,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     }
 
-    // Compute a new position value for the moved item based on its new neighbors.
     double newPos;
 
     if (reorderedQueue.length == 1) {

@@ -56,19 +56,10 @@ pub async fn accept(
     State(state): State<AppState>,
     Path(invitation_id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
-) -> Result<Json<InvitationResponse>, AppError> {
-    let invitation = invitation_service::accept(&state.pool, invitation_id, claims.user_id).await?;
+) -> Result<StatusCode, AppError> {
+    invitation_service::accept(&state.pool, invitation_id, claims.user_id).await?;
 
-    let response = InvitationResponse {
-        id: invitation.id,
-        room_id: invitation.room_id,
-        inviter_id: invitation.inviter_id,
-        invitee_id: invitation.invitee_id,
-        is_pending: invitation.is_pending,
-        created_at: invitation.created_at,
-    };
-
-    Ok(Json(response))
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn reject(

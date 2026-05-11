@@ -285,13 +285,6 @@ void showListenersDialog(BuildContext context) {
                                                 roomUser,
                                               ),
                                         ),
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.card_membership,
-                                            size: 20,
-                                          ),
-                                          onPressed: null,
-                                        ),
                                       ],
                                     )
                                   : null,

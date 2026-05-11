@@ -172,13 +172,7 @@ class _FriendsPageState extends State<FriendsPage> {
                   }),
                   const Divider(height: 32),
                 ],
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                    'My Friends',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
+                const Padding(padding: EdgeInsets.all(16.0)),
                 if (acceptedFriends.isEmpty)
                   const Padding(
                     padding: EdgeInsets.all(32.0),
