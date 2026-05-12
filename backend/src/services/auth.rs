@@ -89,7 +89,7 @@ pub async fn register(
             username,
             email: &email,
             password_hash: Some(password_hash),
-            email_confirmed: Some(false),
+            email_confirmed: false,
             google_id: None,
             favorite_genres: None,
             privacy_level: crate::models::user::PrivacyLevel::Friends,
@@ -270,7 +270,7 @@ pub async fn google_login(
                     username: &username,
                     email: &email,
                     password_hash: None, // No password for Google users
-                    email_confirmed: Some(token_info.email_verified == "true"),
+                    email_confirmed: token_info.email_verified == "true",
                     google_id: Some(google_id),
                     favorite_genres: None,
                     privacy_level: crate::models::user::PrivacyLevel::Public,
