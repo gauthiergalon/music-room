@@ -8,6 +8,7 @@ pub struct UserResponse {
     pub id: Uuid,
     pub username: String,
     pub email: String,
+    pub email_confirmed: bool,
     pub favorite_genres: Option<Vec<String>>,
     pub privacy_level: PrivacyLevel,
 }
