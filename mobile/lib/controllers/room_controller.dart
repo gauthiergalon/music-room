@@ -1,59 +1,58 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:just_audio_background/just_audio_background.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
-import '../core/network/api_client.dart';
-import '../core/network/ws_factory.dart';
 import '../models/queue_item.dart';
 import '../models/room.dart';
 import '../models/room_user.dart';
 import '../models/track.dart';
+import '../services/audio_service.dart';
+import '../services/room_repository.dart';
+import '../services/websocket_service.dart';
 
 class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   static const String _eventRoomState = 'RoomState';
   static const String _eventUserState = 'UserState';
   static const String _eventRoomClosed = 'RoomClosed';
-  static const String _eventError = 'Error';
-
   static const String _eventPlay = 'Play';
   static const String _eventPause = 'Pause';
   static const String _eventSeekTo = 'SeekTo';
   static const String _eventNextTrack = 'NextTrack';
 
+  final AudioService _audioService;
+  final WebSocketService _wsService;
+  final RoomRepository _roomRepository;
+
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
   Track? get currentTrack => _currentRoom?.currentTrack;
-  bool get isPlaying => _audioPlayer.playing;
-  Duration get playbackPosition => _audioPlayer.position;
-  Duration? get playbackDuration => _audioPlayer.duration;
+  bool get isPlaying => _audioService.isPlaying;
+  Duration get playbackPosition => _audioService.position;
+  Duration? get playbackDuration => _audioService.duration;
 
   List<Room> _availableRooms = [];
   List<Room> get availableRooms => _availableRooms;
 
-  WebSocketChannel? _wsChannel;
-  StreamSubscription? _wsSubscription;
   bool _isInitialRoomState = false;
-  late final StreamSubscription<PlayerState> _playerStateSubscription;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  int _playbackRequestId = 0;
+  StreamSubscription? _playerSubscription;
 
-  RoomController() {
+  RoomController({
+    AudioService? audioService,
+    WebSocketService? wsService,
+    RoomRepository? roomRepository,
+  })  : _audioService = audioService ?? AudioService(),
+        _wsService = wsService ?? WebSocketService(),
+        _roomRepository = roomRepository ?? RoomRepository() {
     WidgetsBinding.instance.addObserver(this);
-
-    _playerStateSubscription = _audioPlayer.playerStateStream.listen(
-      _handlePlayerState,
-    );
+    _playerSubscription = _audioService.playerStateStream.listen(_onPlayerState);
+    _wsService.setEventCallback(_handleWsEvent);
   }
 
-  void _handlePlayerState(PlayerState state) {
+  void _onPlayerState(PlayerState state) {
     if (state.processingState == ProcessingState.completed) {
       _playNextInQueue();
     }
-
     notifyListeners();
   }
 
@@ -64,27 +63,23 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
     } else {
-      unawaited(_audioPlayer.stop());
+      _audioService.stop();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _wsSubscription?.cancel();
-    _wsChannel?.sink.close();
-    _playerStateSubscription.cancel();
-    _audioPlayer.dispose();
+    _playerSubscription?.cancel();
+    _wsService.dispose();
+    _audioService.dispose();
     super.dispose();
   }
 
   Future<void> refreshRooms() async {
     try {
-      final response = await ApiClient.get('/rooms');
-      if (response is List) {
-        _availableRooms = response.map((data) => Room.fromJson(data)).toList();
-        notifyListeners();
-      }
+      _availableRooms = await _roomRepository.getRooms();
+      notifyListeners();
     } catch (e) {
       debugPrint('Failed to refresh rooms: $e');
       rethrow;
@@ -93,8 +88,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<Room> createRoom() async {
     try {
-      final response = await ApiClient.post('/rooms');
-      final newRoom = Room.fromJson(response);
+      final newRoom = await _roomRepository.createRoom();
       _availableRooms.add(newRoom);
       notifyListeners();
       await openRoom(newRoom);
@@ -107,80 +101,25 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> openRoom(Room room) async {
     _currentRoom = room;
-
-    await _connectWebSocket(room.id);
-
+    await _wsService.connect(room.id);
+    _isInitialRoomState = true;
     notifyListeners();
   }
 
   void leaveRoom() {
-    unawaited(_audioPlayer.stop());
-
+    _audioService.stop();
     _currentRoom = null;
-    _disposeWebSocket();
+    _wsService.disconnect();
     notifyListeners();
-
     unawaited(refreshRooms());
   }
 
-  void _disposeWebSocket() {
-    _wsSubscription?.cancel();
-    _wsSubscription = null;
-    _wsChannel?.sink.close();
-    _wsChannel = null;
-  }
-
-  Future<void> _connectWebSocket(String roomId) async {
-    final token = await ApiClient.getToken();
-    if (token == null) return;
-
-    _disposeWebSocket();
-    _isInitialRoomState = true;
-
-    final baseUrl =
-        '${ApiClient.baseUrl.replaceFirst('http', 'ws')}/rooms/$roomId/ws';
-    try {
-      _wsChannel = createWsChannel(baseUrl, token);
-      _wsSubscription = _wsChannel!.stream.listen(
-        (message) {
-          final data = jsonDecode(message as String);
-          if (data is Map<String, dynamic>) {
-            _handleWsEvent(data);
-          }
-        },
-        onError: (err) {
-          debugPrint('WebSocket error: $err');
-        },
-      );
-    } catch (e) {
-      debugPrint('Failed to connect to WebSocket: $e');
-      _disposeWebSocket();
-      if (_currentRoom?.id == roomId) {
-        leaveRoom();
-      }
-    }
-  }
-
   void _sendWsEvent(String eventType, Map<String, dynamic> payload) {
-    if (_wsChannel == null) {
-      debugPrint('WebSocket not connected, cannot send event: $eventType');
-      return;
-    }
-    try {
-      final event = {'type': eventType, 'payload': payload};
-      _wsChannel!.sink.add(jsonEncode(event));
-    } catch (e) {
-      debugPrint('Error sending WS event: $e');
-    }
+    _wsService.send(eventType, payload);
   }
 
-  void _handleWsEvent(Map<String, dynamic> data) {
+  void _handleWsEvent(String type, Map<String, dynamic> payload) {
     if (_currentRoom == null) return;
-
-    final type = data['type']?.toString();
-    final payload = Map<String, dynamic>.from(
-      data['payload'] as Map? ?? const {},
-    );
 
     switch (type) {
       case _eventRoomState:
@@ -192,9 +131,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       case _eventRoomClosed:
         leaveRoom();
         return;
-      case _eventError:
-        debugPrint('WebSocket Server Error: ${payload['message']}');
-        break;
     }
 
     notifyListeners();
@@ -205,21 +141,16 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       final queueList = payload['queue'] as List;
       _currentRoom!.queue = queueList.asMap().entries.map<QueueItem>((entry) {
         final queuedTrackJson = entry.value as Map<String, dynamic>;
-
-        final queueId = queuedTrackJson['id'] as String;
         final trackJson = queuedTrackJson['track'] as Map<String, dynamic>;
-        final trackId = trackJson['id'] as int;
-        final position =
-            (queuedTrackJson['position'] as num?)?.toDouble() ??
+        final position = (queuedTrackJson['position'] as num?)?.toDouble() ??
             entry.key.toDouble();
 
-        // Parse and cache full track metadata before creating QueueItem
         Track.fromJson(trackJson);
 
         return QueueItem(
-          id: queueId,
+          id: queuedTrackJson['id'] as String,
           roomId: _currentRoom!.id,
-          trackId: trackId,
+          trackId: trackJson['id'] as int,
           position: position,
         );
       }).toList();
@@ -227,56 +158,42 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (payload['current_track'] != null) {
       final track = Track.fromJson(payload['current_track']);
-      final bool trackChanged =
-          currentTrack?.id != track.id ||
+      final bool trackChanged = currentTrack?.id != track.id ||
           _isInitialRoomState ||
-          _audioPlayer.audioSource == null;
+          _audioService.player.audioSource == null;
+
       _currentRoom!.currentTrack = track;
+
       if (trackChanged) {
         final now = DateTime.now().toUtc();
-
-        final timestamp = DateTime.parse(
-          payload['timestamp'] as String,
-        ).toUtc();
-
+        final timestamp = DateTime.parse(payload['timestamp'] as String).toUtc();
         final currentPositionMs = (payload['current_position'] as int?) ?? 0;
-
         final elapsedMs = now.difference(timestamp).inMilliseconds;
 
-        final finalPosition = Duration(
-          milliseconds: currentPositionMs + elapsedMs,
-        );
-
-        playTrack(track, finalPosition);
+        _playTrack(track, Duration(milliseconds: currentPositionMs + elapsedMs));
       }
     } else {
       _currentRoom!.currentTrack = null;
-      _audioPlayer.stop();
+      _audioService.stop();
     }
 
     final isPlaying = payload['is_playing'] == true;
     _currentRoom!.status = isPlaying ? 1 : 0;
-    if (isPlaying && !_audioPlayer.playing) {
-      _audioPlayer.play();
-    } else if (!isPlaying && _audioPlayer.playing) {
-      _audioPlayer.pause();
+
+    if (isPlaying && !_audioService.isPlaying) {
+      _audioService.play();
+    } else if (!isPlaying && _audioService.isPlaying) {
+      _audioService.pause();
     }
 
     if (payload['current_position'] != null) {
       int posMs = payload['current_position'] as int;
       if (isPlaying && payload['timestamp'] != null) {
-        final playedAt = DateTime.parse(
-          payload['timestamp'].toString(),
-        ).toUtc();
-        final now = DateTime.now().toUtc();
-        final diff = now.difference(playedAt).inMilliseconds;
-        if (diff > 0) {
-          posMs += diff;
-        }
+        final playedAt = DateTime.parse(payload['timestamp'].toString()).toUtc();
+        final diff = DateTime.now().toUtc().difference(playedAt).inMilliseconds;
+        if (diff > 0) posMs += diff;
       }
-      final position = Duration(milliseconds: posMs);
-
-      _audioPlayer.seek(position);
+      _audioService.seek(Duration(milliseconds: posMs));
     }
 
     _isInitialRoomState = false;
@@ -288,57 +205,50 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     _currentRoom!.listeners
       ..clear()
-      ..addAll(
-        users.map((user) => _roomUserFromPayload(user)).whereType<RoomUser>(),
-      );
+      ..addAll(users.map((u) => _roomUserFromPayload(u)).whereType<RoomUser>());
 
     final ownerId = payload['owner']?.toString();
-    if (ownerId != null) {
-      _currentRoom!.owner = ownerId;
-    }
+    if (ownerId != null) _currentRoom!.owner = ownerId;
   }
 
   RoomUser? _roomUserFromPayload(dynamic payload) {
     if (payload is! Map) return null;
-
     final id = payload['user_id']?.toString();
     final username = payload['username']?.toString();
-
     if (id == null || username == null) return null;
     return RoomUser(id: id, username: username);
   }
 
-  Future<String> _resolveStreamUrl(int trackId) async {
-    final response = await ApiClient.get('/hifi/track/$trackId/stream-url');
-    final streamUrl = response['stream_url'] as String?;
+  Future<void> _playTrack(Track track, Duration position) async {
+    try {
+      final streamUrl = await _roomRepository.getStreamUrl(track.id);
+      final updatedTrack = Track(
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        imageUrl: track.imageUrl,
+        duration: track.duration,
+        streamUrl: streamUrl,
+      );
 
-    if (streamUrl == null || streamUrl.isEmpty) {
-      throw Exception('No stream URL found for track $trackId');
+      _currentRoom?.currentTrack = track;
+      _currentRoom?.status = 1;
+      _currentRoom?.positionAtLastSync = Duration.zero;
+      _currentRoom?.updatedAt = DateTime.now();
+
+      await _audioService.playTrack(updatedTrack, position);
+    } catch (e) {
+      debugPrint('Error playing track: $e');
+      rethrow;
     }
-
-    return streamUrl;
   }
 
   Future<void> addTrack(Room room, Track track) async {
-    await ApiClient.post(
-      '/rooms/${room.id}/queue',
-      body: {'track_id': track.id},
-    );
+    await _roomRepository.addTrack(room.id, track.id);
   }
 
   Future<void> removeQueueItem(Room room, QueueItem item) async {
-    await ApiClient.delete('/rooms/${room.id}/queue', body: {'id': item.id});
-  }
-
-  Future<void> moveQueueItem(
-    Room room,
-    QueueItem item,
-    double newPosition,
-  ) async {
-    await ApiClient.patch(
-      '/rooms/${room.id}/queue',
-      body: {'id': item.id, 'new_position': newPosition},
-    );
+    await _roomRepository.removeQueueItem(room.id, item.id);
   }
 
   Future<void> reorderQueueItem(
@@ -347,48 +257,23 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     int oldIndex,
     int newIndex,
   ) async {
-    debugPrint(
-      'reorderQueueItem(room=${room.id}, oldIndex=$oldIndex, newIndex=$newIndex, queueLength=${queue.length})',
-    );
-
     if (newIndex > oldIndex) newIndex -= 1;
-
-    if (oldIndex < 0 || oldIndex >= queue.length) {
-      debugPrint(
-        'reorderQueueItem aborted: oldIndex out of range (oldIndex=$oldIndex, queueLength=${queue.length})',
-      );
-      return;
-    }
+    if (oldIndex < 0 || oldIndex >= queue.length) return;
 
     final item = queue[oldIndex];
     final reorderedQueue = [...queue];
-    final moved = reorderedQueue.removeAt(oldIndex);
+    reorderedQueue.removeAt(oldIndex);
     final insertIndex = newIndex.clamp(0, reorderedQueue.length);
-    reorderedQueue.insert(insertIndex, moved);
+    reorderedQueue.insert(insertIndex, item);
 
     List<QueueItem>? previousQueue;
-    if (_currentRoom != null && _currentRoom!.id == room.id) {
-      previousQueue = _currentRoom!.queue
-          .map(
-            (q) => QueueItem(
-              id: q.id,
-              roomId: q.roomId,
-              trackId: q.trackId,
-              position: q.position,
-            ),
-          )
-          .toList();
-
-      debugPrint(
-        'reorderQueueItem optimistic update: previousQueueLength=${previousQueue.length}, reorderedQueueLength=${reorderedQueue.length}, insertIndex=$insertIndex, itemId=${item.id}, itemTrackId=${item.trackId}, itemPosition=${item.position}',
-      );
-
+    if (_currentRoom?.id == room.id) {
+      previousQueue = _currentRoom!.queue.toList();
       _currentRoom!.queue = reorderedQueue;
       notifyListeners();
     }
 
     double newPos;
-
     if (reorderedQueue.length == 1) {
       newPos = 0;
     } else if (insertIndex == 0) {
@@ -396,103 +281,36 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     } else if (insertIndex == reorderedQueue.length - 1) {
       newPos = reorderedQueue[reorderedQueue.length - 2].position + 100;
     } else {
-      final prev = reorderedQueue[insertIndex - 1].position;
-      final next = reorderedQueue[insertIndex + 1].position;
-      newPos = (prev + next) / 2;
+      newPos = (reorderedQueue[insertIndex - 1].position +
+              reorderedQueue[insertIndex + 1].position) /
+          2;
     }
 
     try {
-      debugPrint(
-        'reorderQueueItem sending PATCH: room=${room.id}, itemId=${item.id}, newPosition=$newPos',
-      );
-      await moveQueueItem(room, item, newPos);
-      debugPrint(
-        'reorderQueueItem PATCH succeeded: room=${room.id}, itemId=${item.id}, newPosition=$newPos',
-      );
+      await _roomRepository.reorderQueueItem(room.id, item.id, newPos);
     } catch (e) {
-      debugPrint('Failed to reorder queue on server: $e');
-      if (_currentRoom != null &&
-          _currentRoom!.id == room.id &&
-          previousQueue != null) {
+      debugPrint('Failed to reorder queue: $e');
+      if (_currentRoom?.id == room.id && previousQueue != null) {
         _currentRoom!.queue = previousQueue;
         notifyListeners();
-        debugPrint(
-          'reorderQueueItem rollback applied: room=${room.id}, restoredQueueLength=${previousQueue.length}',
-        );
-      } else {
-        debugPrint(
-          'reorderQueueItem rollback skipped: currentRoom=${_currentRoom?.id}, expectedRoom=${room.id}, hasPreviousQueue=${previousQueue != null}',
-        );
       }
       rethrow;
     }
   }
 
   void togglePlay(Room room) {
-    if (_audioPlayer.playing) {
-      _sendWsEvent(_eventPause, {
-        'position': _audioPlayer.position.inMilliseconds,
-      });
+    if (_audioService.isPlaying) {
+      _sendWsEvent(_eventPause, {'position': _audioService.position.inMilliseconds});
     } else {
       _sendWsEvent(_eventPlay, {
-        'position': _audioPlayer.position.inMilliseconds,
+        'position': _audioService.position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       });
     }
   }
 
-  Future<void> playTrack(Track track, Duration position) async {
-    final requestId = ++_playbackRequestId;
-    try {
-      final streamUrl = await _resolveStreamUrl(track.id);
-
-      if (requestId != _playbackRequestId) {
-        return;
-      }
-
-      await _audioPlayer.stop();
-
-      if (requestId != _playbackRequestId) {
-        return;
-      }
-
-      if (_currentRoom?.currentTrack?.id != track.id) {
-        return;
-      }
-
-      final audioSource = AudioSource.uri(
-        Uri.parse(streamUrl),
-        tag: MediaItem(
-          id: track.id.toString(),
-          title: track.title,
-          artist: track.artist,
-          artUri: track.imageUrl != null ? Uri.parse(track.imageUrl!) : null,
-        ),
-      );
-      await _audioPlayer.setLoopMode(LoopMode.off);
-      await _audioPlayer.setAudioSource(audioSource);
-
-      if (requestId != _playbackRequestId) {
-        return;
-      }
-
-      if (_currentRoom != null) {
-        _currentRoom!.currentTrack = track;
-        _currentRoom!.status = 1;
-        _currentRoom!.positionAtLastSync = Duration.zero;
-        _currentRoom!.updatedAt = DateTime.now();
-        notifyListeners();
-      }
-      _audioPlayer.seek(position);
-      _audioPlayer.play();
-    } catch (e, stacktrace) {
-      debugPrint('Error playing track: $e\n$stacktrace');
-      rethrow;
-    }
-  }
-
   void seekTo(Room room, Duration position) {
-    if (_currentRoom != null && _currentRoom!.id == room.id) {
+    if (_currentRoom?.id == room.id) {
       _sendWsEvent(_eventSeekTo, {
         'position': position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -515,14 +333,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> togglePrivacy(Room room) async {
     try {
-      if (!room.isPublic) {
-        await ApiClient.post('/rooms/${room.id}/publish');
-      } else {
-        await ApiClient.post('/rooms/${room.id}/privatize');
-      }
+      await _roomRepository.togglePrivacy(room.id, room.isPublic);
       room.isPublic = !room.isPublic;
       notifyListeners();
-
       unawaited(refreshRooms());
     } catch (e) {
       debugPrint('Failed to toggle privacy: $e');
@@ -533,11 +346,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> toggleLicense(Room room) async {
     try {
-      if (!room.isLicensed) {
-        await ApiClient.post('/rooms/${room.id}/enable-license');
-      } else {
-        await ApiClient.post('/rooms/${room.id}/disable-license');
-      }
+      await _roomRepository.toggleLicense(room.id, room.isLicensed);
       room.isLicensed = !room.isLicensed;
       notifyListeners();
     } catch (e) {
@@ -549,10 +358,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> promoteToOwner(Room room, RoomUser listener) async {
     try {
-      await ApiClient.post(
-        '/rooms/${room.id}/transfer-ownership',
-        body: {'new_owner_id': listener.id},
-      );
+      await _roomRepository.transferOwnership(room.id, listener.id);
     } catch (e) {
       debugPrint('Failed to transfer ownership: $e');
     }
