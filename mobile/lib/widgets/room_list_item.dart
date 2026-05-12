@@ -18,40 +18,33 @@ class RoomListItem extends StatelessWidget {
       child: FilledButton(
         onPressed: onTap,
         style: FilledButton.styleFrom(
-          minimumSize: const Size(double.infinity, 72),
+          minimumSize: const Size(double.infinity, 56),
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(
             horizontal: AppTheme.spacingMd,
-            vertical: 12.0,
           ),
         ),
         child: Row(
           children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                room.status == 1 ? Icons.play_arrow : Icons.pause,
+                color: Colors.white70,
+                size: 18,
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    room.name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Icons.music_note, size: 16),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          room.currentTrack != null
-                              ? "${room.currentTrack!.title} - ${room.currentTrack!.artist}"
-                              : 'No track playing',
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              child: Text(
+                room.name,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

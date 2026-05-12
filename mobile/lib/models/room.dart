@@ -1,7 +1,6 @@
 import 'package:mobile/models/queue_item.dart';
 import 'package:mobile/models/room_user.dart';
 import 'package:mobile/models/track.dart';
-import 'package:mobile/models/track_cache.dart';
 
 class Room {
   String id;
@@ -35,15 +34,10 @@ class Room {
        updatedAt = updatedAt ?? DateTime.now();
 
   factory Room.fromJson(Map<String, dynamic> json) {
-    final Track? cTrack = json['current_track'] != null
-        ? getCachedTrack(json['current_track'])
-        : null;
-
     return Room(
       id: json['id'],
       owner: json['owner_id'],
       name: json['name'] ?? 'Unnamed Room',
-      currentTrack: cTrack,
       isPublic: json['is_public'] ?? true,
       isLicensed: json['has_license'] ?? json['is_licensed'] ?? false,
       status: (json['is_playing'] == true) ? 1 : 0,
