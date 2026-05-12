@@ -88,6 +88,7 @@ pub enum ErrorMessage {
     TokenExpired,
     TokenInvalid,
     TooManyEmails,
+    EmailAlreadyVerified,
 
     // Validation
     UsernameInvalidLength,
@@ -128,6 +129,7 @@ impl ErrorMessage {
             Self::TooManyEmails => {
                 "An email was already sent recently, please check your inbox or try again later"
             }
+            Self::EmailAlreadyVerified => "Email is already verified",
 
             // Validation
             Self::UsernameInvalidLength => {
