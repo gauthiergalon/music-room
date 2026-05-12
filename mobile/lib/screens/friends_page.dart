@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
 import '../controllers/friends_controller.dart';
 import '../core/utils/ui_utils.dart';
+import '../widgets/user_profile_dialog.dart';
 
 class FriendsPage extends StatefulWidget {
   const FriendsPage({super.key});
@@ -142,6 +143,11 @@ class _FriendsPageState extends State<FriendsPage> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         subtitle: const Text('Wants to connect'),
+                        onTap: () => showUserProfileDialog(
+                          context,
+                          friendId,
+                          initialUsername: friend.username,
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -197,6 +203,11 @@ class _FriendsPageState extends State<FriendsPage> {
                       ),
                       child: ListTile(
                         title: Text(friend.username ?? 'Unknown User'),
+                        onTap: () => showUserProfileDialog(
+                          context,
+                          friendId,
+                          initialUsername: friend.username,
+                        ),
                         trailing: IconButton(
                           icon: const Icon(
                             Icons.person_remove,
