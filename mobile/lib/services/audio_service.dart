@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import '../core/logger/logger.dart';
 import '../models/track.dart';
 
 class AudioService extends ChangeNotifier {
@@ -33,6 +34,8 @@ class AudioService extends ChangeNotifier {
 
     if (requestId != _playbackRequestId) return;
 
+    logger.debug('Audio playing: ${track.title}');
+
     final audioSource = AudioSource.uri(
       Uri.parse(streamUrl),
       tag: MediaItem(
@@ -55,9 +58,21 @@ class AudioService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void play() => _audioPlayer.play();
-  void pause() => _audioPlayer.pause();
-  void stop() => _audioPlayer.stop();
+  void play() {
+    logger.debug('Audio play');
+    _audioPlayer.play();
+  }
+
+  void pause() {
+    logger.debug('Audio pause');
+    _audioPlayer.pause();
+  }
+
+  void stop() {
+    logger.debug('Audio stop');
+    _audioPlayer.stop();
+  }
+
   void seek(Duration position) => _audioPlayer.seek(position);
 
   @override

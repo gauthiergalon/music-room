@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import '../../core/logger/logger.dart';
 import '../exceptions/api_exception.dart';
 import '../storage/session_storage.dart';
+
+final _log = AppLogger();
 
 class ApiClient {
   static const String baseUrl = String.fromEnvironment(
@@ -33,8 +36,11 @@ class ApiClient {
       final response = await request();
       return response.data;
     } on DioException catch (e) {
+      _log.error('API Error: ${e.requestOptions.method} ${e.requestOptions.path}',
+          error: e, stackTrace: StackTrace.current);
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
-    } catch (_) {
+    } catch (e, st) {
+      _log.error('Unexpected error', error: e, stackTrace: st);
       throw ApiException('An unexpected error occurred');
     }
   }
@@ -102,6 +108,7 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
+    _log.debug('${options.method} ${options.path}');
     final token = await ApiClient.getToken();
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -130,16 +137,18 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
             refreshToken: newRefreshToken,
           );
 
-          final requestOptions = err.requestOptions;
-          requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
+          _log.debug('Token refreshed successfully');
+          err.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
 
-          final retryResponse = await ApiClient._dio.fetch(requestOptions);
+          final retryResponse = await ApiClient._dio.fetch(err.requestOptions);
           return handler.resolve(retryResponse);
-        } catch (_) {
+        } catch (e) {
+          _log.error('Token refresh failed', error: e);
           await ApiClient.onUnauthorized?.call();
           return handler.reject(err);
         }
       } else {
+        _log.warning('No refresh token available');
         await ApiClient.onUnauthorized?.call();
         return handler.reject(err);
       }

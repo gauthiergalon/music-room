@@ -58,7 +58,7 @@ Future<void> _showInviteFriendDialog(
             : ListView.separated(
                 shrinkWrap: true,
                 itemCount: availableFriends.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
+                separatorBuilder: (_, d) => const Divider(height: 1),
                 itemBuilder: (itemContext, index) {
                   final friend = availableFriends[index];
                   return ListTile(

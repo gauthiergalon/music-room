@@ -5,6 +5,7 @@ import 'package:app_links/app_links.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 
+import 'core/logger/logger.dart';
 import 'core/theme.dart';
 import 'core/utils/ui_utils.dart';
 import 'controllers/auth_controller.dart';
@@ -19,11 +20,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  logger.init();
+
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
     androidNotificationChannelName: 'Music Room Playback',
     androidNotificationOngoing: true,
   );
+
+  logger.info('App started');
 
   runApp(
     MultiProvider(
@@ -63,12 +68,12 @@ class _MyAppState extends State<MyApp> {
   void _initDeepLinks() {
     _linkSubscription = _appLinks.uriLinkStream.listen(
       _handleIncomingUri,
-      onError: (err) => debugPrint('Deep Link Error: $err'),
+      onError: (err) => logger.error('Deep Link Error', error: err),
     );
   }
 
   void _handleIncomingUri(Uri uri) {
-    debugPrint('Received Deep Link: $uri');
+    logger.debug('Received Deep Link: $uri');
 
     final token = uri.queryParameters['token'];
     if (token == null) return;

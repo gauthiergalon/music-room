@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../core/logger/logger.dart';
 import '../models/queue_item.dart';
 import '../models/room.dart';
 import '../models/room_user.dart';
@@ -81,7 +82,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _availableRooms = await _roomRepository.getRooms();
       notifyListeners();
     } catch (e) {
-      debugPrint('Failed to refresh rooms: $e');
+      logger.error('Failed to refresh rooms', error: e);
       rethrow;
     }
   }
@@ -94,7 +95,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       await openRoom(newRoom);
       return newRoom;
     } catch (e) {
-      debugPrint('Failed to create room: $e');
+      logger.error('Failed to create room', error: e);
       rethrow;
     }
   }
@@ -238,7 +239,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
       await _audioService.playTrack(updatedTrack, position);
     } catch (e) {
-      debugPrint('Error playing track: $e');
+      logger.error('Error playing track', error: e);
       rethrow;
     }
   }
@@ -289,7 +290,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     try {
       await _roomRepository.reorderQueueItem(room.id, item.id, newPos);
     } catch (e) {
-      debugPrint('Failed to reorder queue: $e');
+      logger.error('Failed to reorder queue', error: e);
       if (_currentRoom?.id == room.id && previousQueue != null) {
         _currentRoom!.queue = previousQueue;
         notifyListeners();
@@ -338,7 +339,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       unawaited(refreshRooms());
     } catch (e) {
-      debugPrint('Failed to toggle privacy: $e');
+      logger.error('Failed to toggle privacy', error: e);
       notifyListeners();
       rethrow;
     }
@@ -350,7 +351,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       room.isLicensed = !room.isLicensed;
       notifyListeners();
     } catch (e) {
-      debugPrint('Failed to toggle license: $e');
+      logger.error('Failed to toggle license', error: e);
       notifyListeners();
       rethrow;
     }
@@ -360,7 +361,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     try {
       await _roomRepository.transferOwnership(room.id, listener.id);
     } catch (e) {
-      debugPrint('Failed to transfer ownership: $e');
+      logger.error('Failed to transfer ownership', error: e);
     }
   }
 }

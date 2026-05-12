@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/exceptions/api_exception.dart';
+import '../core/logger/logger.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/session_storage.dart';
 import '../models/user.dart';
@@ -112,9 +113,9 @@ class AuthController extends ChangeNotifier {
       if (e.statusCode == 401) {
         await logout();
       }
-      debugPrint('Failed to fetch user info: $e');
+      logger.error('Failed to fetch user info', error: e);
     } catch (e) {
-      debugPrint('Unexpected error fetching user info: $e');
+      logger.error('Unexpected error fetching user info', error: e);
     } finally {
       _isLoadingUser = false;
       notifyListeners();
@@ -223,7 +224,7 @@ class AuthController extends ChangeNotifier {
       final data = await _authenticateWithGoogle();
       await _storeAuthenticatedSession(data);
     } catch (e) {
-      debugPrint('Erreur lors de la connexion Google: $e');
+      logger.error('Erreur lors de la connexion Google', error: e);
       throw ApiException('La connexion Google a échoué: $e');
     }
   }
@@ -233,7 +234,7 @@ class AuthController extends ChangeNotifier {
       final data = await _authenticateWithGoogle();
       await _storeAuthenticatedSession(data);
     } catch (e) {
-      debugPrint('Erreur lors de la liaison du compte Google: $e');
+      logger.error('Erreur lors de la liaison du compte Google', error: e);
       throw ApiException('Google link failed');
     }
   }

@@ -4,20 +4,19 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../core/logger/logger.dart';
 import '../core/network/api_client.dart';
 import '../core/network/ws_factory.dart';
-
-typedef WsEventCallback = void Function(String type, Map<String, dynamic> payload);
 
 class WebSocketService extends ChangeNotifier {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
   bool _isConnected = false;
-  WsEventCallback? _onEvent;
+  Function(String type, Map<String, dynamic> payload)? _onEvent;
 
   bool get isConnected => _isConnected;
 
-  void setEventCallback(WsEventCallback callback) {
+  void setEventCallback(Function(String type, Map<String, dynamic> payload) callback) {
     _onEvent = callback;
   }
 
@@ -31,16 +30,22 @@ class WebSocketService extends ChangeNotifier {
         '${ApiClient.baseUrl.replaceFirst('http', 'ws')}/rooms/$roomId/ws';
 
     try {
+      logger.debug('WS connecting to $baseUrl');
       _channel = createWsChannel(baseUrl, token);
       _subscription = _channel!.stream.listen(
         _handleMessage,
-        onError: (err) => debugPrint('WebSocket error: $err'),
-        onDone: () => _isConnected = false,
+        onError: (err) => logger.error('WS error', error: err),
+        onDone: () {
+          _isConnected = false;
+          logger.info('WS disconnected');
+          notifyListeners();
+        },
       );
       _isConnected = true;
+      logger.info('WS connected');
       notifyListeners();
     } catch (e) {
-      debugPrint('Failed to connect to WebSocket: $e');
+      logger.error('Failed to connect to WebSocket', error: e);
       _isConnected = false;
       notifyListeners();
     }
@@ -55,20 +60,22 @@ class WebSocketService extends ChangeNotifier {
       data['payload'] as Map? ?? const {},
     );
 
+    logger.debug('WS recv: $type');
     _onEvent?.call(type, payload);
   }
 
   void send(String eventType, Map<String, dynamic> payload) {
     if (_channel == null) {
-      debugPrint('WebSocket not connected, cannot send event: $eventType');
+      logger.warning('WS not connected, cannot send: $eventType');
       return;
     }
 
     try {
       final event = {'type': eventType, 'payload': payload};
       _channel!.sink.add(jsonEncode(event));
+      logger.debug('WS send: $eventType');
     } catch (e) {
-      debugPrint('Error sending WS event: $e');
+      logger.error('Error sending WS event', error: e);
     }
   }
 
