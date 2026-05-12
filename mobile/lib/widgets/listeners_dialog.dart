@@ -5,6 +5,7 @@ import '../controllers/room_controller.dart';
 import '../controllers/auth_controller.dart';
 import '../core/theme.dart';
 import '../models/room_user.dart';
+import 'user_profile_dialog.dart';
 
 Future<void> _showInviteFriendDialog(
   BuildContext context,
@@ -65,35 +66,43 @@ Future<void> _showInviteFriendDialog(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.person),
                     title: Text(friend.username ?? 'Unknown User'),
-                    onTap: () async {
-                      Navigator.of(dialogContext).pop();
-                      try {
-                        await friendsController.inviteToRoom(
-                          roomId,
-                          friend.friendId,
-                        );
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Invitation sent to ${friend.username ?? 'friend'}',
+                    onTap: () => showUserProfileDialog(
+                      context,
+                      friend.friendId,
+                      initialUsername: friend.username,
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.person_add),
+                      onPressed: () async {
+                        Navigator.of(dialogContext).pop();
+                        try {
+                          await friendsController.inviteToRoom(
+                            roomId,
+                            friend.friendId,
+                          );
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Invitation sent to ${friend.username ?? 'friend'}',
+                                ),
+                                behavior: SnackBarBehavior.floating,
                               ),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.toString()),
+                                backgroundColor: Colors.red,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
                         }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(e.toString()),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      }
-                    },
+                      },
+                    ),
                   );
                 },
               ),
@@ -270,6 +279,13 @@ void showListenersDialog(BuildContext context) {
                                       : FontWeight.normal,
                                 ),
                               ),
+                              onTap: isMe
+                                  ? null
+                                  : () => showUserProfileDialog(
+                                        context,
+                                        roomUser.id,
+                                        initialUsername: roomUser.username,
+                                      ),
                               trailing: (amOwner && !isMe)
                                   ? Row(
                                       mainAxisSize: MainAxisSize.min,
