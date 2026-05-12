@@ -219,7 +219,19 @@ class _ProfilePageState extends State<ProfilePage> {
                               }
                             } on ApiException catch (e) {
                               if (currentContext.mounted) {
-                                UiUtils.showError(currentContext, e.message);
+                                if (e.statusCode == 429) {
+                                  UiUtils.showError(
+                                    currentContext,
+                                    'An email was already sent recently, please check your inbox or try again later',
+                                  );
+                                } else if (e.statusCode == 409) {
+                                  UiUtils.showError(
+                                    currentContext,
+                                    'Email is already verified',
+                                  );
+                                } else {
+                                  UiUtils.showError(currentContext, e.message);
+                                }
                               }
                             } catch (e) {
                               if (currentContext.mounted) {
@@ -544,6 +556,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           .updatePrivacyLevel(selected);
 
                       if (currentContext.mounted) {
+                        await currentContext.read<AuthController>().fetchUserInfo();
+                      }
+
+                      if (currentContext.mounted) {
                         UiUtils.showSuccess(
                           currentContext,
                           'Privacy updated successfully',
@@ -574,7 +590,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _privacyLabel(String value) {
-    switch (value) {
+    switch (value.toLowerCase()) {
       case 'public':
         return 'Public';
       case 'private':
