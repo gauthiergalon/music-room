@@ -29,6 +29,7 @@ pub async fn get_me(
         id: user.id,
         username: user.username,
         email: user.email,
+        email_confirmed: user.email_confirmed,
         favorite_genres: user.favorite_genres,
         privacy_level: user.privacy_level,
     }))
@@ -54,7 +55,11 @@ pub async fn get_user(
     Ok(Json(PublicUserResponse {
         id: user.id,
         username: user.username,
-        favorite_genres: user.favorite_genres.filter(|_| show_genres),
+        favorite_genres: if show_genres {
+            user.favorite_genres
+        } else {
+            None
+        },
         privacy_level: user.privacy_level,
     }))
 }
@@ -78,6 +83,7 @@ pub async fn update_username(
         id: user.id,
         username: user.username,
         email: user.email,
+        email_confirmed: user.email_confirmed,
         favorite_genres: user.favorite_genres,
         privacy_level: user.privacy_level,
     }))
@@ -99,6 +105,7 @@ pub async fn update_email(
         id: user.id,
         username: user.username,
         email: user.email,
+        email_confirmed: user.email_confirmed,
         favorite_genres: user.favorite_genres,
         privacy_level: user.privacy_level,
     }))
@@ -161,6 +168,7 @@ pub async fn update_favorite_genres(
         id: user.id,
         username: user.username,
         email: user.email,
+        email_confirmed: user.email_confirmed,
         favorite_genres: user.favorite_genres.clone(),
         privacy_level: user.privacy_level.clone(),
     }))
@@ -180,6 +188,7 @@ pub async fn update_privacy_level(
         id: user.id,
         username: user.username,
         email: user.email,
+        email_confirmed: user.email_confirmed,
         favorite_genres: user.favorite_genres.clone(),
         privacy_level: user.privacy_level.clone(),
     }))
