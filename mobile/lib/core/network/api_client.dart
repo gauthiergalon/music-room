@@ -81,6 +81,8 @@ class ApiClient {
   static Future<dynamic> get(String endpoint) =>
       _sendRequest(() => _dio.get(endpoint));
 
+  static Future<dynamic> getUser(String userId) => get('/users/$userId');
+
   static Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) =>
       _sendRequest(() => _dio.post(endpoint, data: body));
 
