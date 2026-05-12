@@ -1,5 +1,7 @@
 use crate::{
-    dtos::friend::FriendResponseDto, errors::AppError, repositories::friends as friends_repo,
+    dtos::friend::FriendResponseDto,
+    errors::{AppError, ErrorMessage},
+    repositories::{friends as friends_repo, users as users_repo},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -13,17 +15,13 @@ pub async fn send_request(
     sender_id: Uuid,
     username: &str,
 ) -> Result<FriendResponseDto, AppError> {
-    let target = crate::repositories::users::find_by_username(pool, username)
+    let target = users_repo::find_by_username(pool, username)
         .await?
-        .ok_or(AppError::NotFound(
-            crate::errors::ErrorMessage::UserNotFound,
-        ))?;
+        .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
     let target_id = target.id;
 
     if sender_id == target_id {
-        return Err(AppError::Conflict(
-            crate::errors::ErrorMessage::SelfFriendRequest,
-        ));
+        return Err(AppError::Conflict(ErrorMessage::SelfFriendRequest));
     }
 
     let (user_id_1, user_id_2) = order_ids(sender_id, target_id);
@@ -41,20 +39,14 @@ pub async fn accept_request(
 
     let existing = friends_repo::find_by_users(pool, user_id_1, user_id_2)
         .await?
-        .ok_or(AppError::NotFound(
-            crate::errors::ErrorMessage::FriendNotFound,
-        ))?;
+        .ok_or(AppError::NotFound(ErrorMessage::FriendNotFound))?;
 
     if existing.sender_id == acceptor_id {
-        return Err(AppError::Conflict(
-            crate::errors::ErrorMessage::SenderCannotAcceptOwn,
-        ));
+        return Err(AppError::Conflict(ErrorMessage::SenderCannotAcceptOwn));
     }
 
     if !existing.is_pending {
-        return Err(AppError::Conflict(
-            crate::errors::ErrorMessage::FriendAlreadyExists,
-        ));
+        return Err(AppError::Conflict(ErrorMessage::FriendAlreadyExists));
     }
 
     let friend = friends_repo::update_accept(pool, user_id_1, user_id_2).await?;

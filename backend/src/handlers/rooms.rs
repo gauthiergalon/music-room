@@ -11,14 +11,17 @@ use uuid::Uuid;
 use crate::{
     dtos::{
         rooms::{RoomResponse, TransferOwnershipRequest},
-        ws::WsEventClient,
-        ws::WsEventServer,
+        user::UserResponse,
+        ws::{UserInfo, WsEventClient, WsEventServer},
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
+    models::user::PrivacyLevel,
+    services::cleanup::cleanup_user_rooms,
     services::invitations as invitation_service,
     services::rooms as room_service,
     state::AppState,
+    ws::{handle_socket, send_room_state},
 };
 
 #[utoipa::path(get, path = "/rooms", responses((status = 200, body = [RoomResponse])), tag = "Rooms")]
@@ -45,6 +48,8 @@ pub async fn create(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<(StatusCode, Json<RoomResponse>), AppError> {
+    let _ = cleanup_user_rooms(&state.pool, claims.user_id).await;
+
     let name = format!("{}'s room", claims.username);
     let room = room_service::create(&state.pool, claims.user_id, &name).await?;
     Ok((
@@ -117,10 +122,10 @@ pub async fn transfer_ownership(
         .await?;
 
     if let Some(tx) = state.active_rooms.read().await.get(&room_id) {
-        let users: Vec<crate::dtos::ws::UserInfo> = tx
+        let users: Vec<UserInfo> = tx
             .users
             .iter()
-            .map(|(id, name)| crate::dtos::ws::UserInfo {
+            .map(|(id, name)| UserInfo {
                 user_id: *id,
                 username: name.clone(),
             })
@@ -171,15 +176,15 @@ pub async fn ws(
         .map(|r| r.owner_id)
         .unwrap_or(claims.user_id);
 
-    let user_info = crate::dtos::user::UserResponse {
+    let user_info = UserResponse {
         id: claims.user_id,
         email: "".to_string(),
         username: claims.username.clone(),
         favorite_genres: None,
-        privacy_level: crate::models::user::PrivacyLevel::Public,
+        privacy_level: PrivacyLevel::Public,
     };
 
     Ok(ws.on_upgrade(move |socket| {
-        crate::ws::handle_socket(socket, state, room_id, user_info, owner_id)
+        handle_socket(socket, state, room_id, user_info, owner_id)
     }))
 }

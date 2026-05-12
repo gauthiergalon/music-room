@@ -10,8 +10,9 @@ use crate::{
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
     models::queue::Queue,
-    services::queue as queue_service,
+    services::{hifi, queue as queue_service},
     state::AppState,
+    ws::send_room_state,
 };
 
 #[utoipa::path(get, path = "/rooms/{id}/queue", responses((status = 200, body = [Queue])), tag = "Queue")]
@@ -37,10 +38,10 @@ pub async fn add(
     }
 
     // Best-effort cache warmup so RoomState can include full metadata.
-    let _ = crate::services::hifi::get_track_info(&state.pool, payload.track_id).await;
+    let _ = hifi::get_track_info(&state.pool, payload.track_id).await;
 
     queue_service::create(&state.pool, room_id, claims.user_id, payload.track_id).await?;
-    crate::ws::send_room_state(&state, room_id).await;
+    send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -52,7 +53,7 @@ pub async fn delete(
     Json(payload): Json<RemoveFromQueueRequest>,
 ) -> Result<StatusCode, AppError> {
     queue_service::remove(&state.pool, room_id, claims.user_id, payload.id).await?;
-    crate::ws::send_room_state(&state, room_id).await;
+    send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -71,6 +72,6 @@ pub async fn reorder(
         payload.new_position,
     )
     .await?;
-    crate::ws::send_room_state(&state, room_id).await;
+    send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }

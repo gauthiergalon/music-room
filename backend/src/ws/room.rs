@@ -1,5 +1,7 @@
 use crate::dtos::hifi::{AlbumData, ArtistData, TrackItem};
 use crate::dtos::ws::{QueuedTrack, WsEventServer};
+use crate::repositories::{queue as queue_repo, rooms as rooms_repo, tracks as tracks_repo};
+use crate::services::hifi;
 use crate::state::AppState;
 use chrono::Utc;
 use sqlx::PgPool;
@@ -8,7 +10,7 @@ use uuid::Uuid;
 pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsEventServer> {
     let pool = &state.pool;
 
-    let room = crate::repositories::rooms::get_room_playback_state(pool, room_id)
+    let room = rooms_repo::get_room_playback_state(pool, room_id)
         .await
         .unwrap_or(None)?;
 
@@ -41,14 +43,14 @@ pub async fn send_room_state(state: &AppState, room_id: Uuid) {
 
 async fn get_current_track_item(pool: &PgPool, track_id: Option<i64>) -> Option<TrackItem> {
     if let Some(id) = track_id {
-        crate::services::hifi::get_track_info(pool, id).await.ok()
+        hifi::get_track_info(pool, id).await.ok()
     } else {
         None
     }
 }
 
 async fn get_queue_items(pool: &PgPool, room_id: Uuid) -> Vec<QueuedTrack> {
-    let queue_records = crate::repositories::queue::get_queue(pool, room_id)
+    let queue_records = queue_repo::get_queue(pool, room_id)
         .await
         .unwrap_or_default();
 
@@ -57,7 +59,7 @@ async fn get_queue_items(pool: &PgPool, room_id: Uuid) -> Vec<QueuedTrack> {
         .map(|q| {
             let pool = pool.clone();
             async move {
-                let track = match crate::services::hifi::get_track_info(&pool, q.track_id).await {
+                let track = match hifi::get_track_info(&pool, q.track_id).await {
                     Ok(track) => track,
                     Err(_) => get_fallback_track_item(&pool, q.track_id).await,
                 };
@@ -75,7 +77,7 @@ async fn get_queue_items(pool: &PgPool, room_id: Uuid) -> Vec<QueuedTrack> {
 }
 
 async fn get_fallback_track_item(pool: &PgPool, track_id: i64) -> TrackItem {
-    let db_fallback = crate::repositories::tracks::get_track(pool, track_id)
+    let db_fallback = tracks_repo::get_track(pool, track_id)
         .await
         .ok()
         .flatten();

@@ -1,7 +1,8 @@
 use crate::dtos::user::UserResponse;
 use crate::dtos::ws::{WsEventClient, WsEventServer};
+use crate::repositories::rooms as rooms_repo;
 use crate::state::{ActiveRoom, AppState};
-use crate::ws::{send_room_state, send_user_state};
+use crate::ws::{messages, room, send_room_state, send_user_state};
 use axum::extract::ws::{Message, WebSocket};
 use chrono::Utc;
 use futures_util::{SinkExt, StreamExt, stream::SplitSink, stream::SplitStream};
@@ -23,7 +24,7 @@ pub async fn handle_socket(
     let (mut sender, receiver) = socket.split();
 
     // Send the current room state ONLY to the newly joined user
-    if let Some(room_state_event) = crate::ws::room::get_room_state_event(&state, room_id).await {
+    if let Some(room_state_event) = room::get_room_state_event(&state, room_id).await {
         if let Ok(text) = serde_json::to_string(&room_state_event) {
             tracing::debug!("[WS SEND] User: {}, {}", user.id, text);
             let _ = sender.send(Message::Text(text.into())).await;
@@ -83,7 +84,7 @@ fn spawn_receiver_task(
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             tracing::debug!("[WS RECV] User: {}, {}", user_id, text);
             if let Ok(event) = serde_json::from_str::<WsEventClient>(&text) {
-                let is_owner = crate::repositories::rooms::get_owner_id(&state.pool, room_id)
+                let is_owner = rooms_repo::get_owner_id(&state.pool, room_id)
                     .await
                     .ok()
                     .flatten()
@@ -100,7 +101,7 @@ fn spawn_receiver_task(
 }
 
 async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) {
-    let current_owner_id = crate::repositories::rooms::get_owner_id(&state.pool, room_id)
+    let current_owner_id = rooms_repo::get_owner_id(&state.pool, room_id)
         .await
         .ok()
         .flatten();
@@ -112,7 +113,7 @@ async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) 
         room.users.remove(&user_id);
         if should_close_room || room.users.is_empty() {
             rooms.remove(&room_id);
-            let _ = crate::repositories::rooms::delete(&state.pool, room_id).await;
+            let _ = rooms_repo::delete(&state.pool, room_id).await;
             tracing::debug!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
         } else {
             drop(rooms);
@@ -128,21 +129,21 @@ async fn handle_client_event(state: &AppState, room_id: Uuid, event: WsEventClie
             position,
             timestamp,
         } => {
-            crate::repositories::rooms::update_playback_play(pool, room_id, position, timestamp)
+            rooms_repo::update_playback_play(pool, room_id, position, timestamp)
                 .await
         }
         WsEventClient::Pause { position } => {
-            crate::repositories::rooms::update_playback_pause(pool, room_id, position).await
+            rooms_repo::update_playback_pause(pool, room_id, position).await
         }
         WsEventClient::SeekTo {
             position,
             timestamp,
         } => {
-            crate::repositories::rooms::update_playback_seek(pool, room_id, position, timestamp)
+            rooms_repo::update_playback_seek(pool, room_id, position, timestamp)
                 .await
         }
         WsEventClient::NextTrack { timestamp } => {
-            crate::ws::messages::handle_next_track(state, room_id, timestamp).await;
+            messages::handle_next_track(state, room_id, timestamp).await;
             Ok(())
         }
     };

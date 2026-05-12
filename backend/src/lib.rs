@@ -1,5 +1,4 @@
 #![allow(unused_variables, unused_imports, dead_code)]
-pub mod openapi;
 
 use crate::state::AppState;
 use axum::http::Method;
@@ -17,6 +16,7 @@ pub mod errors;
 pub mod handlers;
 mod middleware;
 pub mod models;
+pub mod openapi;
 pub mod repositories;
 pub mod routes;
 pub mod services;
@@ -30,6 +30,7 @@ pub async fn run() {
     let pool = db::create_pool(&get_env("DATABASE_URL")).await;
     tracing::info!("Connected to PostgreSQL");
 
+    let active_rooms = Arc::new(RwLock::new(HashMap::new()));
     let state = AppState {
         pool: pool.clone(),
         jwt_secret: get_env("JWT_SECRET"),
@@ -37,12 +38,13 @@ pub async fn run() {
         google_client_secret: get_env("GOOGLE_CLIENT_SECRET"),
         google_auth_url: env::var("GOOGLE_AUTH_URL")
             .unwrap_or_else(|_| "https://oauth2.googleapis.com".to_string()),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
+        active_rooms: active_rooms.clone(),
     };
 
     let app = build_router(state);
 
-    services::cleanup::spawn_token_cleanup_task(pool);
+    services::cleanup::spawn_token_cleanup_task(pool.clone());
+    services::cleanup::spawn_room_cleanup_task(pool.clone(), active_rooms);
 
     start_server(app, "0.0.0.0:3000").await;
 }

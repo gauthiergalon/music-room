@@ -151,7 +151,7 @@ pub async fn send_email_confirmation_email(
 pub async fn update_favorite_genres(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Json(payload): Json<crate::dtos::user::UpdateFavoriteGenresRequest>,
+    Json(payload): Json<UpdateFavoriteGenresRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     let user =
         user_service::update_favorite_genres(&state.pool, claims.user_id, payload.favorite_genres)
@@ -170,7 +170,7 @@ pub async fn update_favorite_genres(
 pub async fn update_privacy_level(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
-    Json(payload): Json<crate::dtos::user::UpdatePrivacyLevelRequest>,
+    Json(payload): Json<UpdatePrivacyLevelRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
     let user =
         user_service::update_privacy_level(&state.pool, claims.user_id, payload.privacy_level)
