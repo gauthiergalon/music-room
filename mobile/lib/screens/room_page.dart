@@ -28,7 +28,7 @@ class _RoomPageState extends State<RoomPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchPendingInvitations(showErrors: false);
+      _refreshRooms();
     });
   }
 
