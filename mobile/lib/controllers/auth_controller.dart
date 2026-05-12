@@ -57,7 +57,7 @@ class AuthController extends ChangeNotifier {
       id: data['id'],
       username: data['username'],
       email: data['email'],
-      emailConfirmed: data['email_confirmed'],
+      emailConfirmed: data['email_confirmed'] == true || data['email_confirmed'] == 't',
       googleId: data['google_id'],
       favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
       privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
