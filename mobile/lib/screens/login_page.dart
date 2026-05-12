@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
@@ -232,22 +233,29 @@ class _LoginPageState extends State<LoginPage> {
                   ],
                 ),
                 const SizedBox(height: 24),
-                SizedBox(
-                  height: 50,
-                  child: OutlinedButton.icon(
-                    onPressed: _isLoading ? null : _handleGoogleLogin,
-                    icon: const Icon(Icons.account_circle),
-                    label: const Text(
-                      'Continue with Google',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                if (kIsWeb)
+                  const Text(
+                    'Google Sign-In requires the mobile app',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey),
+                  )
+                else
+                  SizedBox(
+                    height: 50,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _handleGoogleLogin,
+                      icon: const Icon(Icons.account_circle),
+                      label: const Text(
+                        'Continue with Google',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../core/exceptions/api_exception.dart';
@@ -19,10 +19,12 @@ class AuthController extends ChangeNotifier {
   User? get user => _user;
 
   AuthController() {
-    GoogleSignIn.instance.initialize(
-      serverClientId:
-          '1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com',
-    );
+    if (!kIsWeb) {
+      GoogleSignIn.instance.initialize(
+        serverClientId:
+            '1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com',
+      );
+    }
     ApiClient.onUnauthorized = logout;
     _loadSession();
   }
@@ -81,6 +83,12 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _authenticateWithGoogle() async {
+    if (kIsWeb) {
+      throw ApiException(
+        'La connexion Google nest pas disponible sur le navigateur. Utilisez email et mot de passe.',
+      );
+    }
+
     final GoogleSignInAccount account = await GoogleSignIn.instance
         .authenticate(scopeHint: ['email', 'profile']);
 
