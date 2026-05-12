@@ -180,11 +180,10 @@ pub async fn ws(
         id: claims.user_id,
         email: "".to_string(),
         username: claims.username.clone(),
+        email_confirmed: false,
         favorite_genres: None,
         privacy_level: PrivacyLevel::Public,
     };
 
-    Ok(ws.on_upgrade(move |socket| {
-        handle_socket(socket, state, room_id, user_info, owner_id)
-    }))
+    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, room_id, user_info, owner_id)))
 }
