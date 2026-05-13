@@ -148,6 +148,25 @@ where
     Ok(())
 }
 
+pub async fn confirm_and_update_email<'c, E>(
+    executor: E,
+    user_id: Uuid,
+    new_email: &str,
+) -> Result<(), AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!(
+        "UPDATE users SET email = $1, email_confirmed = TRUE WHERE id = $2",
+        new_email,
+        user_id
+    )
+    .execute(executor)
+    .await
+    .map_err(AppError::Database)?;
+    Ok(())
+}
+
 pub async fn update_favorite_genres<'c, E>(
     executor: E,
     user_id: Uuid,

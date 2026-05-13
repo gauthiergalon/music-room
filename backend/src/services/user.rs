@@ -73,7 +73,21 @@ pub async fn confirm_email(pool: &PgPool, token: &str) -> Result<(), AppError> {
         return Err(AppError::Unauthorized(ErrorMessage::TokenExpired));
     }
 
-    users_repo::confirm_email(&mut *tx, stored_token.user_id).await?;
+    let user = users_repo::find_by_id(&mut *tx, stored_token.user_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
+
+    if stored_token.new_email != user.email {
+        users_repo::confirm_and_update_email(
+            &mut *tx,
+            stored_token.user_id,
+            &stored_token.new_email,
+        )
+        .await?;
+    } else {
+        users_repo::confirm_email(&mut *tx, stored_token.user_id).await?;
+    }
+
     tx.commit().await.map_err(AppError::Database)?;
 
     Ok(())

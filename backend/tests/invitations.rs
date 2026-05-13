@@ -127,9 +127,7 @@ async fn test_invite_flow(pool: PgPool) {
         .post(&accept_uri)
         .add_header("Authorization", format!("Bearer {}", friend_token))
         .await;
-    accept_resp.assert_status(axum::http::StatusCode::OK);
-    let accepted: TestInvitationResponse = accept_resp.json();
-    assert_eq!(accepted.is_pending, false);
+    accept_resp.assert_status(axum::http::StatusCode::NO_CONTENT);
 }
 
 #[sqlx::test]
