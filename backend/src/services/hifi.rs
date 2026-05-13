@@ -1,14 +1,26 @@
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde_json::Value;
+use std::sync::OnceLock;
 
 use crate::{
     dtos::hifi::{AlbumData, ArtistData, SearchResponse, TrackItem, TrackResponse},
     errors::AppError,
 };
 
+static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+
+fn get_http_client() -> &'static Client {
+    HTTP_CLIENT.get_or_init(|| {
+        Client::builder()
+            .pool_max_idle_per_host(5)
+            .build()
+            .expect("Failed to create HTTP client")
+    })
+}
+
 pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {
-    let client = Client::new();
+    let client = get_http_client();
 
     let url = format!("http://localhost:8000/search/?s={}", query);
 
@@ -23,7 +35,7 @@ pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {
 }
 
 pub async fn get_track_details(track_id: i64) -> Result<TrackResponse, AppError> {
-    let client = Client::new();
+    let client = get_http_client();
 
     let url = format!("http://localhost:8000/track/?id={}&quality=HIGH", track_id);
 
@@ -61,7 +73,7 @@ pub async fn get_track_info(pool: &sqlx::PgPool, track_id: i64) -> Result<TrackI
         });
     }
 
-    let client = Client::new();
+    let client = get_http_client();
     let url = format!("http://localhost:8000/info/?id={}", track_id);
     let info_payload = client.get(&url).send().await?.json::<Value>().await?;
     let track_data = info_payload.get("data").cloned().ok_or_else(|| {
