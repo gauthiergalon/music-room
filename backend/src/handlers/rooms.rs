@@ -181,7 +181,7 @@ pub async fn ws(
         email: "".to_string(),
         username: claims.username.clone(),
         email_confirmed: false,
-        favorite_genres: None,
+        favorite_genres: vec![],
         privacy_level: PrivacyLevel::Public,
     };
 

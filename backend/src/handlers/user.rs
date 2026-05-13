@@ -56,7 +56,7 @@ pub async fn get_user(
         id: user.id,
         username: user.username,
         favorite_genres: if show_genres {
-            user.favorite_genres
+            Some(user.favorite_genres)
         } else {
             None
         },

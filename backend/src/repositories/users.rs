@@ -151,7 +151,7 @@ where
 pub async fn update_favorite_genres<'c, E>(
     executor: E,
     user_id: Uuid,
-    favorite_genres: Option<Vec<String>>,
+    favorite_genres: Vec<String>,
 ) -> Result<User, AppError>
 where
     E: Executor<'c, Database = Postgres>,
@@ -164,7 +164,7 @@ where
         WHERE id = $2 
         RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel"
         "#,
-        favorite_genres.as_deref(),
+        favorite_genres.as_slice(),
         user_id
     )
     .fetch_one(executor)

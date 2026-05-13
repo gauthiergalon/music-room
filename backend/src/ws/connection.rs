@@ -112,7 +112,10 @@ async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) 
     if let Some(room) = rooms.get_mut(&room_id) {
         room.users.remove(&user_id);
         if should_close_room || room.users.is_empty() {
+            let tx = room.tx.clone();
             rooms.remove(&room_id);
+            drop(rooms);
+            let _ = tx.send(WsEventServer::RoomClosed);
             let _ = rooms_repo::delete(&state.pool, room_id).await;
             tracing::debug!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
         } else {

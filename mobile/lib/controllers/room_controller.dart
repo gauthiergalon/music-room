@@ -27,6 +27,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Room? _currentRoom;
   Room? get currentRoom => _currentRoom;
+
+  String? _roomClosedMessage;
+  String? get roomClosedMessage => _roomClosedMessage;
   Track? get currentTrack => _currentRoom?.currentTrack;
   bool get isPlaying => _audioService.isPlaying;
   Duration get playbackPosition => _audioService.position;
@@ -115,6 +118,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     unawaited(refreshRooms());
   }
 
+  void clearRoomClosedMessage() {
+    _roomClosedMessage = null;
+    notifyListeners();
+  }
+
   void _sendWsEvent(String eventType, Map<String, dynamic> payload) {
     _wsService.send(eventType, payload);
   }
@@ -130,6 +138,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         _handleUserState(payload);
         break;
       case _eventRoomClosed:
+        _roomClosedMessage = 'Room closed by owner';
         leaveRoom();
         return;
     }

@@ -233,6 +233,16 @@ class _RoomPageState extends State<RoomPage> {
     }
 
     final controller = context.watch<RoomController>();
+    final closedMessage = controller.roomClosedMessage;
+    if (closedMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          UiUtils.showSnackBar(context, closedMessage);
+          controller.clearRoomClosedMessage();
+        }
+      });
+    }
+
     final current = controller.currentRoom;
 
     return PopScope(

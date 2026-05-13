@@ -113,7 +113,7 @@ pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Resu
 pub async fn update_favorite_genres(
     pool: &PgPool,
     user_id: Uuid,
-    favorite_genres: Option<Vec<String>>,
+    favorite_genres: Vec<String>,
 ) -> Result<User, AppError> {
     users_repo::update_favorite_genres(pool, user_id, favorite_genres).await
 }
