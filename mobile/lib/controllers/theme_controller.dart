@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 import '../services/audio_service.dart';
 
@@ -40,20 +37,11 @@ class ThemeController extends ChangeNotifier {
 
   Future<void> _extractColorFromImage(String imageUrl) async {
     try {
-      final imageProvider = NetworkImage(imageUrl);
-      final paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        maximumColorCount: 8,
-        timeout: const Duration(seconds: 5),
+      final colorScheme = await ColorScheme.fromImageProvider(
+        provider: NetworkImage(imageUrl),
+        brightness: Brightness.dark,
       );
-
-      final dominantColor =
-          paletteGenerator.dominantColor?.color ??
-          paletteGenerator.vibrantColor?.color ??
-          paletteGenerator.mutedColor?.color ??
-          _defaultSeedColor;
-
-      _updateSeedColor(dominantColor);
+      _updateSeedColor(colorScheme.primary);
     } catch (e) {
       _updateSeedColor(_defaultSeedColor);
     }
