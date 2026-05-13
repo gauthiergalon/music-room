@@ -175,12 +175,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _currentRoom!.currentTrack = track;
 
       if (trackChanged) {
-        final now = DateTime.now().toUtc();
-        final timestamp = DateTime.parse(payload['timestamp'] as String).toUtc();
+        final serverTimestamp = DateTime.parse(payload['timestamp'] as String).toUtc();
         final currentPositionMs = (payload['current_position'] as int?) ?? 0;
-        final elapsedMs = now.difference(timestamp).inMilliseconds;
 
-        _playTrack(track, Duration(milliseconds: currentPositionMs + elapsedMs));
+        _playTrack(track, currentPositionMs, serverTimestamp);
       }
     } else {
       _currentRoom!.currentTrack = null;
@@ -203,7 +201,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         final diff = DateTime.now().toUtc().difference(playedAt).inMilliseconds;
         if (diff > 0) posMs += diff;
       }
-      _audioService.seek(Duration(milliseconds: posMs));
+
+      final currentPosMs = _audioService.position.inMilliseconds;
+      final seekDiff = (posMs - currentPosMs).abs();
+      if (seekDiff > 1000) {
+        _audioService.seek(Duration(milliseconds: posMs));
+      }
     }
 
     _isInitialRoomState = false;
@@ -229,8 +232,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     return RoomUser(id: id, username: username);
   }
 
-  Future<void> _playTrack(Track track, Duration position) async {
+  Future<void> _playTrack(Track track, int serverPositionMs, DateTime serverTimestamp) async {
     try {
+      final loadStartTime = DateTime.now().toUtc();
       final streamUrl = await _roomRepository.getStreamUrl(track.id);
       final updatedTrack = Track(
         id: track.id,
@@ -245,6 +249,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _currentRoom?.status = 1;
       _currentRoom?.positionAtLastSync = Duration.zero;
       _currentRoom?.updatedAt = DateTime.now();
+
+      final timeSinceServerTimestamp = loadStartTime.difference(serverTimestamp);
+      final position = Duration(
+        milliseconds: serverPositionMs + timeSinceServerTimestamp.inMilliseconds,
+      );
 
       await _audioService.playTrack(updatedTrack, position);
     } catch (e) {

@@ -14,9 +14,11 @@ class AppTheme {
     horizontal: spacingMd,
   );
 
-  static ThemeData get darkTheme {
+  static ThemeData get darkTheme => darkThemeWithSeed(Colors.deepPurple);
+
+  static ThemeData darkThemeWithSeed(Color seedColor) {
     final cs = ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
+      seedColor: seedColor,
       brightness: Brightness.dark,
     );
 

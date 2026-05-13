@@ -23,6 +23,7 @@ class UiUtils {
             ? colorScheme.errorContainer
             : colorScheme.secondaryContainer,
         behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
@@ -6,7 +8,6 @@ import '../models/track.dart';
 
 class AudioService extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  int _playbackRequestId = 0;
   Track? _currentTrack;
 
   bool get isPlaying => _audioPlayer.playing;
@@ -24,15 +25,9 @@ class AudioService extends ChangeNotifier {
   }
 
   Future<void> playTrack(Track track, Duration position) async {
-    final requestId = ++_playbackRequestId;
-
     final streamUrl = track.streamUrl;
 
-    if (requestId != _playbackRequestId) return;
-
     await _audioPlayer.stop();
-
-    if (requestId != _playbackRequestId) return;
 
     logger.debug('Audio playing: ${track.title}');
 
@@ -46,10 +41,7 @@ class AudioService extends ChangeNotifier {
       ),
     );
 
-    await _audioPlayer.setLoopMode(LoopMode.off);
     await _audioPlayer.setAudioSource(audioSource);
-
-    if (requestId != _playbackRequestId) return;
 
     _currentTrack = track;
     await _audioPlayer.seek(position);

@@ -11,6 +11,8 @@ import 'core/utils/ui_utils.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/friends_controller.dart';
 import 'controllers/room_controller.dart';
+import 'controllers/theme_controller.dart';
+import 'services/audio_service.dart';
 import 'screens/login_page.dart';
 import 'screens/main_screen.dart';
 import 'screens/reset_password_page.dart';
@@ -34,8 +36,16 @@ Future<void> main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthController()),
-        ChangeNotifierProvider(create: (_) => RoomController()),
+        ChangeNotifierProvider(create: (_) => AudioService()),
+        ChangeNotifierProxyProvider<AudioService, RoomController>(
+          create: (context) => RoomController(audioService: context.read<AudioService>()),
+          update: (_, audio, previous) => previous ?? RoomController(audioService: audio),
+        ),
         ChangeNotifierProvider(create: (_) => FriendsController()),
+        ChangeNotifierProxyProvider<AudioService, ThemeController>(
+          create: (context) => ThemeController(context.read<AudioService>()),
+          update: (_, audio, previous) => previous ?? ThemeController(audio),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -118,19 +128,23 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Music Room',
-      theme: AppTheme.darkTheme,
-      navigatorKey: navigatorKey,
-      home: Consumer<AuthController>(
-        builder: (context, auth, _) {
-          if (auth.isAuthenticated) {
-            return const MainScreen();
-          } else {
-            return const LoginPage();
-          }
-        },
-      ),
+    return Consumer<ThemeController>(
+      builder: (context, themeController, _) {
+        return MaterialApp(
+          title: 'Music Room',
+          theme: AppTheme.darkThemeWithSeed(themeController.seedColor),
+          navigatorKey: navigatorKey,
+          home: Consumer<AuthController>(
+            builder: (context, auth, _) {
+              if (auth.isAuthenticated) {
+                return const MainScreen();
+              } else {
+                return const LoginPage();
+              }
+            },
+          ),
+        );
+      },
     );
   }
 }
