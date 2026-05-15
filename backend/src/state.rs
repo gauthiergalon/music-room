@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub struct ActiveRoom {
     pub tx: broadcast::Sender<WsEventServer>,
     pub users: HashMap<Uuid, String>,
+    pub owner_id: Option<Uuid>,
 }
 
 #[derive(Clone)]

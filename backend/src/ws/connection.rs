@@ -16,7 +16,7 @@ pub async fn handle_socket(
     user: UserResponse,
     owner_id: Uuid,
 ) {
-    let rx = add_user_to_room(&state, room_id, &user).await;
+    let rx = add_user_to_room(&state, room_id, &user, owner_id).await;
 
     // Broadcast new user list to everyone
     send_user_state(&state, room_id, owner_id).await;
@@ -32,7 +32,7 @@ pub async fn handle_socket(
     }
 
     let mut send_task = spawn_sender_task(sender, rx, user.id);
-    let mut recv_task = spawn_receiver_task(receiver, state.clone(), room_id, user.id);
+    let mut recv_task = spawn_receiver_task(receiver, state.clone(), room_id, user.id, owner_id);
 
     tokio::select! {
         _ = (&mut send_task) => recv_task.abort(),
@@ -46,11 +46,13 @@ async fn add_user_to_room(
     state: &AppState,
     room_id: Uuid,
     user: &UserResponse,
+    owner_id: Uuid,
 ) -> Receiver<WsEventServer> {
     let mut rooms = state.active_rooms.write().await;
     let room = rooms.entry(room_id).or_insert_with(|| ActiveRoom {
         tx: tokio::sync::broadcast::channel(100).0,
         users: std::collections::HashMap::new(),
+        owner_id: Some(owner_id),
     });
 
     room.users.insert(user.id, user.username.clone());
@@ -79,19 +81,13 @@ fn spawn_receiver_task(
     state: AppState,
     room_id: Uuid,
     user_id: Uuid,
+    owner_id: Uuid,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             tracing::debug!("[WS RECV] User: {}, {}", user_id, text);
             if let Ok(event) = serde_json::from_str::<WsEventClient>(&text) {
-                let is_owner = rooms_repo::get_owner_id(&state.pool, room_id)
-                    .await
-                    .ok()
-                    .flatten()
-                    .map(|owner_id| owner_id == user_id)
-                    .unwrap_or(false);
-
-                if is_owner {
+                if user_id == owner_id {
                     handle_client_event(&state, room_id, event).await;
                     send_room_state(&state, room_id).await;
                 }
@@ -101,27 +97,28 @@ fn spawn_receiver_task(
 }
 
 async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) {
-    let current_owner_id = rooms_repo::get_owner_id(&state.pool, room_id)
-        .await
-        .ok()
-        .flatten();
-
-    let should_close_room = current_owner_id == Some(user_id);
-    let mut rooms = state.active_rooms.write().await;
-
-    if let Some(room) = rooms.get_mut(&room_id) {
-        room.users.remove(&user_id);
-        if should_close_room || room.users.is_empty() {
-            if let Some(room) = rooms.remove(&room_id) {
-                drop(rooms);
-                let _ = room.tx.send(WsEventServer::RoomClosed);
-                let _ = rooms_repo::delete(&state.pool, room_id).await;
-                tracing::debug!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
-            }
+    let (should_close_room, current_owner_id) = {
+        let mut rooms = state.active_rooms.write().await;
+        if let Some(room) = rooms.get_mut(&room_id) {
+            let owner_id = room.owner_id;
+            let should_close = owner_id == Some(user_id);
+            room.users.remove(&user_id);
+            (should_close, owner_id)
         } else {
-            drop(rooms);
-            send_user_state(state, room_id, current_owner_id.unwrap_or(user_id)).await;
+            (false, None)
         }
+    };
+
+    if should_close_room {
+        let mut rooms = state.active_rooms.write().await;
+        if let Some(room) = rooms.remove(&room_id) {
+            drop(rooms);
+            let _ = room.tx.send(WsEventServer::RoomClosed);
+            let _ = rooms_repo::delete(&state.pool, room_id).await;
+            tracing::debug!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
+        }
+    } else {
+        send_user_state(state, room_id, current_owner_id.unwrap_or(user_id)).await;
     }
 }
 

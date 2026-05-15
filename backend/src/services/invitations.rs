@@ -14,6 +14,13 @@ pub async fn check_accepted_invitation(
     invitation_repo::exists_accepted(pool, room_id, user_id).await
 }
 
+fn verify_invitee(invitation: &Invitation, user_id: Uuid) -> Result<(), AppError> {
+    if invitation.invitee_id != user_id {
+        return Err(AppError::Forbidden(ErrorMessage::NotInvitedUser));
+    }
+    Ok(())
+}
+
 pub async fn invite(
     pool: &PgPool,
     room_id: Uuid,
@@ -44,9 +51,7 @@ pub async fn accept(
         .await?
         .ok_or(AppError::NotFound(ErrorMessage::InvitationNotFound))?;
 
-    if invitation.invitee_id != user_id {
-        return Err(AppError::Forbidden(ErrorMessage::NotInvitedUser));
-    }
+    verify_invitee(&invitation, user_id)?;
 
     if invitation.is_pending
         && invitation_repo::exists_accepted(pool, invitation.room_id, user_id).await?
@@ -63,10 +68,7 @@ pub async fn reject(pool: &PgPool, invitation_id: Uuid, user_id: Uuid) -> Result
         .await?
         .ok_or(AppError::NotFound(ErrorMessage::InvitationNotFound))?;
 
-    if invitation.invitee_id != user_id {
-        return Err(AppError::Forbidden(ErrorMessage::NotInvitedUser));
-    }
-
+    verify_invitee(&invitation, user_id)?;
     invitation_repo::delete(pool, invitation_id).await
 }
 

@@ -27,19 +27,7 @@ use crate::{
 #[utoipa::path(get, path = "/rooms", responses((status = 200, body = [RoomResponse])), tag = "Rooms")]
 pub async fn list(State(state): State<AppState>) -> Result<Json<Vec<RoomResponse>>, AppError> {
     let rooms = room_service::list(&state.pool).await?;
-    let responses = rooms
-        .into_iter()
-        .map(|room| RoomResponse {
-            id: room.id,
-            owner_id: room.owner_id,
-            name: room.name,
-            is_public: room.is_public,
-            is_licensed: room.is_licensed,
-            current_track: room.current_track,
-            current_position: room.current_position,
-            is_playing: room.is_playing,
-        })
-        .collect();
+    let responses = rooms.into_iter().map(|r| r.into()).collect();
     Ok(Json(responses))
 }
 
@@ -52,19 +40,7 @@ pub async fn create(
 
     let name = format!("{}'s room", claims.username);
     let room = room_service::create(&state.pool, claims.user_id, &name).await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(RoomResponse {
-            id: room.id,
-            owner_id: room.owner_id,
-            name: room.name,
-            is_public: room.is_public,
-            is_licensed: room.is_licensed,
-            current_track: room.current_track,
-            current_position: room.current_position,
-            is_playing: room.is_playing,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(room.into())))
 }
 
 pub async fn delete(
@@ -100,16 +76,7 @@ pub async fn get(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<RoomResponse>, AppError> {
     let room = room_service::get(&state.pool, room_id, claims.user_id).await?;
-    Ok(Json(RoomResponse {
-        id: room.id,
-        owner_id: room.owner_id,
-        name: room.name,
-        is_public: room.is_public,
-        is_licensed: room.is_licensed,
-        current_track: room.current_track,
-        current_position: room.current_position,
-        is_playing: room.is_playing,
-    }))
+    Ok(Json(room.into()))
 }
 
 pub async fn transfer_ownership(

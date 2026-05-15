@@ -1,5 +1,21 @@
+use crate::models::room::Room;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+impl From<Room> for RoomResponse {
+    fn from(room: Room) -> Self {
+        Self {
+            id: room.id,
+            owner_id: room.owner_id,
+            name: room.name,
+            is_public: room.is_public,
+            is_licensed: room.is_licensed,
+            current_track: room.current_track,
+            current_position: room.current_position,
+            is_playing: room.is_playing,
+        }
+    }
+}
 
 #[derive(Serialize)]
 #[derive(utoipa::ToSchema)]
