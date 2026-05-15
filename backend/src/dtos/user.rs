@@ -1,6 +1,20 @@
 use crate::models::user::PrivacyLevel;
+use crate::models::user::User;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+impl From<User> for UserResponse {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            email_confirmed: user.email_confirmed,
+            favorite_genres: user.favorite_genres,
+            privacy_level: user.privacy_level,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct UserResponse {

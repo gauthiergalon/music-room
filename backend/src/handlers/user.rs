@@ -24,15 +24,7 @@ pub async fn get_me(
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<UserResponse>, AppError> {
     let user = user_service::get_me(&state.pool, claims.user_id).await?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        email_confirmed: user.email_confirmed,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    }))
+    Ok(Json(user.into()))
 }
 
 #[utoipa::path(get, path = "/users/{id}", responses((status = 200, body = PublicUserResponse)), tag = "Users")]
@@ -78,15 +70,7 @@ pub async fn update_username(
 
     let user =
         user_service::update_username(&state.pool, claims.user_id, &payload.username).await?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        email_confirmed: user.email_confirmed,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    }))
+    Ok(Json(user.into()))
 }
 
 #[utoipa::path(patch, path = "/users/me/email", request_body = UpdateEmailRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
@@ -100,15 +84,7 @@ pub async fn update_email(
     }
 
     let user = user_service::update_email(&state.pool, claims.user_id, &payload.new_email).await?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        email_confirmed: user.email_confirmed,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    }))
+    Ok(Json(user.into()))
 }
 
 #[utoipa::path(patch, path = "/users/me/password", request_body = UpdatePasswordRequest, responses((status = 204)), tag = "Users")]
@@ -163,15 +139,7 @@ pub async fn update_favorite_genres(
     let user =
         user_service::update_favorite_genres(&state.pool, claims.user_id, payload.favorite_genres)
             .await?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        email_confirmed: user.email_confirmed,
-        favorite_genres: user.favorite_genres.clone(),
-        privacy_level: user.privacy_level.clone(),
-    }))
+    Ok(Json(user.into()))
 }
 
 #[utoipa::path(patch, path = "/users/me/privacy", request_body = UpdatePrivacyLevelRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
@@ -183,13 +151,5 @@ pub async fn update_privacy_level(
     let user =
         user_service::update_privacy_level(&state.pool, claims.user_id, payload.privacy_level)
             .await?;
-
-    Ok(Json(UserResponse {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        email_confirmed: user.email_confirmed,
-        favorite_genres: user.favorite_genres.clone(),
-        privacy_level: user.privacy_level.clone(),
-    }))
+    Ok(Json(user.into()))
 }
