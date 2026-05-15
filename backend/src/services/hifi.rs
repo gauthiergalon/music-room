@@ -9,6 +9,7 @@ use crate::{
 };
 
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
+static HIFI_HOST: OnceLock<String> = OnceLock::new();
 
 fn get_http_client() -> &'static Client {
     HTTP_CLIENT.get_or_init(|| {
@@ -19,10 +20,17 @@ fn get_http_client() -> &'static Client {
     })
 }
 
+fn get_hifi_host() -> &'static str {
+    HIFI_HOST.get_or_init(|| {
+        std::env::var("HIFI_API_HOST").unwrap_or_else(|_| "localhost".to_string())
+    })
+}
+
 pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {
     let client = get_http_client();
+    let host = get_hifi_host();
 
-    let url = format!("http://localhost:8000/search/?s={}", query);
+    let url = format!("http://{}:8000/search/?s={}", host, query);
 
     let response = client
         .get(&url)
@@ -36,8 +44,9 @@ pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {
 
 pub async fn get_track_details(track_id: i64) -> Result<TrackResponse, AppError> {
     let client = get_http_client();
+    let host = get_hifi_host();
 
-    let url = format!("http://localhost:8000/track/?id={}&quality=HIGH", track_id);
+    let url = format!("http://{}:8000/track/?id={}&quality=HIGH", host, track_id);
 
     let response = client
         .get(&url)
@@ -74,7 +83,8 @@ pub async fn get_track_info(pool: &sqlx::PgPool, track_id: i64) -> Result<TrackI
     }
 
     let client = get_http_client();
-    let url = format!("http://localhost:8000/info/?id={}", track_id);
+    let host = get_hifi_host();
+    let url = format!("http://{}:8000/info/?id={}", host, track_id);
     let info_payload = client.get(&url).send().await?.json::<Value>().await?;
     let track_data = info_payload.get("data").cloned().ok_or_else(|| {
         AppError::InternalError("Missing track data in info response".to_string())

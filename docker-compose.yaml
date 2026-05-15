@@ -6,24 +6,36 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U musicroom"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:8
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   backend:
     image: rust:latest
     working_dir: /app
     volumes:
-      - ./backend:/app
+      - ./backend:/app:Z
     command: cargo run
     ports:
       - "3000:3000"
     env_file: .env
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   mailhog:
     image: mailhog/mailhog:latest
