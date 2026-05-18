@@ -16,6 +16,7 @@ import 'services/audio_service.dart';
 import 'screens/login_page.dart';
 import 'screens/main_screen.dart';
 import 'screens/reset_password_page.dart';
+import 'core/network/api_client.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -23,6 +24,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   logger.init();
+
+  await ApiClient.init();
 
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
@@ -38,8 +41,10 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => AuthController()),
         ChangeNotifierProvider(create: (_) => AudioService()),
         ChangeNotifierProxyProvider<AudioService, RoomController>(
-          create: (context) => RoomController(audioService: context.read<AudioService>()),
-          update: (_, audio, previous) => previous ?? RoomController(audioService: audio),
+          create: (context) =>
+              RoomController(audioService: context.read<AudioService>()),
+          update: (_, audio, previous) =>
+              previous ?? RoomController(audioService: audio),
         ),
         ChangeNotifierProvider(create: (_) => FriendsController()),
         ChangeNotifierProxyProvider<AudioService, ThemeController>(

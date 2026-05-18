@@ -1,5 +1,6 @@
 #![allow(unused_variables, unused_imports, dead_code)]
 
+use crate::middleware::logging::request_logger;
 use crate::state::AppState;
 use axum::http::Method;
 use dotenv::dotenv;
@@ -57,7 +58,7 @@ fn setup_tracing() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "backend=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "backend=info,tower_http=info".into()),
         )
         .init();
 }
@@ -78,6 +79,7 @@ fn build_router(state: AppState) -> axum::Router {
     routes::app_router(state.clone())
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(request_logger))
         .with_state(state)
 }
 

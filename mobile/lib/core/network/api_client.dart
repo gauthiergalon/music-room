@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/logger/logger.dart';
 import '../exceptions/api_exception.dart';
@@ -36,8 +39,11 @@ class ApiClient {
       final response = await request();
       return response.data;
     } on DioException catch (e) {
-      _log.error('API Error: ${e.requestOptions.method} ${e.requestOptions.path}',
-          error: e, stackTrace: StackTrace.current);
+      _log.error(
+        'API Error: ${e.requestOptions.method} ${e.requestOptions.path}',
+        error: e,
+        stackTrace: StackTrace.current,
+      );
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e, st) {
       _log.error('Unexpected error', error: e, stackTrace: st);
@@ -93,6 +99,11 @@ class ApiClient {
 
   static Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) =>
       _sendRequest(() => _dio.patch(endpoint, data: body));
+
+  static Future<void> init() async {
+    final interceptor = await _DeviceInfoInterceptor.create();
+    _dio.interceptors.add(interceptor);
+  }
 }
 
 class _AuthInterceptor extends QueuedInterceptorsWrapper {
@@ -140,7 +151,8 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
           );
 
           _log.debug('Token refreshed successfully');
-          err.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
+          err.requestOptions.headers['Authorization'] =
+              'Bearer $newAccessToken';
 
           final retryResponse = await ApiClient._dio.fetch(err.requestOptions);
           return handler.resolve(retryResponse);
@@ -161,5 +173,39 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
 
   bool _shouldSkipRefresh(String path) {
     return _excludedPaths.any(path.contains);
+  }
+}
+
+class _DeviceInfoInterceptor extends Interceptor {
+  final Map<String, String> _headers;
+
+  _DeviceInfoInterceptor._(this._headers);
+
+  static Future<_DeviceInfoInterceptor> create() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final devicePlugin = DeviceInfoPlugin();
+
+    final Map<String, String> deviceHeaders;
+
+    if (Platform.isAndroid) {
+      final info = await devicePlugin.androidInfo;
+      deviceHeaders = {'X-Platform': 'android', 'X-Device': info.model};
+    } else if (Platform.isIOS) {
+      final info = await devicePlugin.iosInfo;
+      deviceHeaders = {'X-Platform': 'ios', 'X-Device': info.utsname.machine};
+    } else {
+      deviceHeaders = {'X-Platform': Platform.operatingSystem};
+    }
+
+    return _DeviceInfoInterceptor._({
+      ...deviceHeaders,
+      'X-App-Version': packageInfo.version,
+    });
+  }
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers.addAll(_headers);
+    handler.next(options);
   }
 }
