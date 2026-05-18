@@ -42,3 +42,15 @@ where
 
     Ok(token)
 }
+
+pub async fn delete_by_user_id<'c, E>(executor: E, user_id: Uuid) -> Result<(), AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!("DELETE FROM email_tokens WHERE user_id = $1", user_id)
+        .execute(executor)
+        .await
+        .map_err(AppError::Database)?;
+    Ok(())
+}
+

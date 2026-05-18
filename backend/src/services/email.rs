@@ -47,7 +47,8 @@ impl Email {
             .body(self.body.clone())
             .map_err(|_| AppError::Internal)?;
 
-        let mailer = SmtpTransport::builder_dangerous("localhost")
+        let smtp_host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string());
+        let mailer = SmtpTransport::builder_dangerous(smtp_host)
             .port(1025)
             .build();
 

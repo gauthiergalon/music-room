@@ -20,7 +20,7 @@ pub async fn find_all_by_room_id(pool: &PgPool, room_id: Uuid) -> Result<Vec<Que
 }
 
 pub async fn create(pool: &PgPool, room_id: Uuid, track_id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query!("INSERT INTO queue (room_id, track_id, position) VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM queue WHERE room_id = $1 FOR UPDATE), 0))", room_id, track_id).execute(pool).await?;
+    sqlx::query!("INSERT INTO queue (room_id, track_id, position) VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM queue WHERE room_id = $1), 0))", room_id, track_id).execute(pool).await?;
 
     Ok(())
 }

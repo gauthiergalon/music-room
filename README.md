@@ -40,33 +40,38 @@ cp .env.example .env
 Key variables:
 
 #### Database
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection URL | `postgresql://user:pass@localhost:5432/musicroom` |
-| `POSTGRES_USER` | PostgreSQL username | `musicroom` |
-| `POSTGRES_PASSWORD` | PostgreSQL password | `secret` |
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | PostgreSQL connection URL |
+| `POSTGRES_USER` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
 
 #### Authentication
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `JWT_SECRET` | Secret key for signing JWT tokens | `supersecretkey` |
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Secret key for signing JWT tokens |
 
 #### Google OAuth
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `GOOGLE_AUTH_URL` | Google OAuth 2.0 endpoint | `https://oauth2.googleapis.com` |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | `106866...apps.googleusercontent.com` |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | `GOCSPX-...` |
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_AUTH_URL` | Google OAuth 2.0 endpoint |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
 
 #### HiFi API (Audio Streaming)
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `HIFI_API_HOST` | HiFi API host | `hifi-api` or `localhost` |
-| `HIFI_API_CLIENT_ID` | HiFi API client ID | `fX2JxdmntZWK0ixT` |
-| `HIFI_API_CLIENT_SECRET` | HiFi API client secret | `1Nm5AfDAjxrgJFJ...` |
-| `HIFI_API_USER_ID` | HiFi user ID | `208227952` |
-| `HIFI_API_ACCESS_TOKEN` | HiFi access token (JWT) | `eyJraWQi...` |
-| `HIFI_API_REFRESH_TOKEN` | HiFi refresh token (JWT) | `eyJraWQi...` |
+| Variable | Description |
+|----------|-------------|
+| `HIFI_API_HOST` | HiFi API host |
+| `HIFI_API_CLIENT_ID` | HiFi API client ID |
+| `HIFI_API_CLIENT_SECRET` | HiFi API client secret |
+| `HIFI_API_USER_ID` | HiFi user ID |
+| `HIFI_API_ACCESS_TOKEN` | HiFi access token (JWT) |
+| `HIFI_API_REFRESH_TOKEN` | HiFi refresh token (JWT) |
+
+#### Email / SMTP
+| Variable | Description |
+|----------|-------------|
+| `SMTP_HOST` | SMTP server host |
 
 ## Running
 
