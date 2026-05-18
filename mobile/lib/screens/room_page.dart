@@ -60,10 +60,10 @@ class _RoomPageState extends State<RoomPage> {
       await Future.wait([
         context.read<RoomController>().refreshRooms(),
         _fetchPendingInvitations(showErrors: false),
-      ]);
+      ]).timeout(const Duration(seconds: 10));
     } catch (e) {
       if (mounted) {
-        UiUtils.showError(context, e.toString());
+        UiUtils.showError(context, 'Failed to refresh rooms. Try again later.');
       }
     }
   }

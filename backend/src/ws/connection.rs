@@ -150,7 +150,7 @@ async fn handle_client_event(state: &AppState, room_id: Uuid, event: WsEventClie
         room.last_activity = chrono::Utc::now();
     }
     let pool = &state.pool;
-    let _ = match event {
+    if let Err(e) = match event {
         WsEventClient::Play {
             position,
             timestamp,
@@ -166,5 +166,7 @@ async fn handle_client_event(state: &AppState, room_id: Uuid, event: WsEventClie
             messages::handle_next_track(state, room_id, timestamp).await;
             Ok(())
         }
-    };
+    } {
+        tracing::error!("Failed to handle client event in room {}: {}", room_id, e);
+    }
 }

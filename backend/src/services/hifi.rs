@@ -17,7 +17,10 @@ fn get_http_client() -> &'static Client {
         Client::builder()
             .pool_max_idle_per_host(5)
             .build()
-            .expect("Failed to create HTTP client")
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create optimized HTTP client, using default: {}", e);
+                Client::new()
+            })
     })
 }
 

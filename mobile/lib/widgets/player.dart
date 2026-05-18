@@ -13,30 +13,7 @@ class PlayerWidget extends StatefulWidget {
 }
 
 class _PlayerWidgetState extends State<PlayerWidget> {
-  Timer? _timer;
   double? _dragValue;
-
-  @override
-  void initState() {
-    super.initState();
-    _startTicker();
-  }
-
-  void _startTicker() {
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      final controller = context.read<RoomController>();
-      final room = controller.currentRoom;
-      if (room != null) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,15 +23,6 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     final track = room?.currentTrack;
 
     final isPlaying = controller.isPlaying;
-    final position = controller.playbackPosition;
-    final duration =
-        controller.playbackDuration ?? track?.duration ?? Duration.zero;
-    final sliderMax = duration.inMilliseconds > 0
-        ? duration.inMilliseconds.toDouble()
-        : 1.0;
-    final sliderValue = position.inMilliseconds
-        .clamp(0, duration.inMilliseconds > 0 ? duration.inMilliseconds : 1)
-        .toDouble();
 
     return Padding(
       padding: AppTheme.paddingLg,
@@ -108,45 +76,68 @@ class _PlayerWidgetState extends State<PlayerWidget> {
 
           const SizedBox(height: 18),
 
-          Column(
-            children: [
-              Slider(
-                min: 0,
-                max: sliderMax,
-                value: _dragValue ?? sliderValue,
-                onChangeStart: (v) {
-                  setState(() {
-                    _dragValue = v;
-                  });
-                },
-                onChanged: (v) {
-                  setState(() {
-                    _dragValue = v;
-                  });
-                },
-                onChangeEnd: (v) {
-                  setState(() {
-                    _dragValue = null;
-                  });
-                  if (room != null) {
-                    controller.seekTo(room, Duration(milliseconds: v.toInt()));
-                  }
-                },
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          StreamBuilder<Duration>(
+            stream: controller.positionStream,
+            builder: (context, snapshot) {
+              final position = snapshot.data ?? controller.playbackPosition;
+              final duration =
+                  controller.playbackDuration ??
+                  track?.duration ??
+                  Duration.zero;
+              final sliderMax = duration.inMilliseconds > 0
+                  ? duration.inMilliseconds.toDouble()
+                  : 1.0;
+              final sliderValue = position.inMilliseconds
+                  .clamp(
+                    0,
+                    duration.inMilliseconds > 0 ? duration.inMilliseconds : 1,
+                  )
+                  .toDouble();
+
+              return Column(
                 children: [
-                  Text(
-                    _formatDuration(position),
-                    style: theme.textTheme.bodySmall,
+                  Slider(
+                    min: 0,
+                    max: sliderMax,
+                    value: _dragValue ?? sliderValue,
+                    onChangeStart: (v) {
+                      setState(() {
+                        _dragValue = v;
+                      });
+                    },
+                    onChanged: (v) {
+                      setState(() {
+                        _dragValue = v;
+                      });
+                    },
+                    onChangeEnd: (v) {
+                      setState(() {
+                        _dragValue = null;
+                      });
+                      if (room != null) {
+                        controller.seekTo(
+                          room,
+                          Duration(milliseconds: v.toInt()),
+                        );
+                      }
+                    },
                   ),
-                  Text(
-                    _formatDuration(duration),
-                    style: theme.textTheme.bodySmall,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(position),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      Text(
+                        _formatDuration(duration),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              );
+            },
           ),
 
           const SizedBox(height: 12),

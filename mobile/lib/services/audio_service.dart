@@ -17,6 +17,8 @@ class AudioService extends ChangeNotifier {
   AudioPlayer get player => _audioPlayer;
 
   Stream<PlayerState> get playerStateStream => _audioPlayer.playerStateStream;
+  Stream<Duration> get positionStream => _audioPlayer.positionStream;
+  Stream<Duration?> get durationStream => _audioPlayer.durationStream;
 
   AudioService() {
     _audioPlayer.playerStateStream.listen((state) {

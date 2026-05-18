@@ -9,7 +9,6 @@ import '../core/storage/session_storage.dart';
 import '../main.dart';
 import '../models/user.dart';
 
-
 class AuthController extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoadingUser = false;
@@ -29,9 +28,7 @@ class AuthController extends ChangeNotifier {
           'GOOGLE_CLIENT_ID must be provided via --dart-define=GOOGLE_CLIENT_ID',
         );
       }
-      GoogleSignIn.instance.initialize(
-        serverClientId: googleClientId,
-      );
+      GoogleSignIn.instance.initialize(serverClientId: googleClientId);
     }
     _loadSession();
   }
@@ -312,10 +309,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> confirmEmail(String token) async {
     try {
-      await ApiClient.patch(
-        '/users/me/confirm-email',
-        body: {'token': token},
-      );
+      await ApiClient.patch('/users/me/confirm-email', body: {'token': token});
 
       _user = _user?.copyWith(emailConfirmed: true);
       notifyListeners();

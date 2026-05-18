@@ -31,8 +31,8 @@ class FriendsController extends ChangeNotifier {
         try {
           final userRes = await ApiClient.get('/users/${friend.friendId}');
           friend.username = userRes['username'];
-        } catch (_) {
-          // Keep null or set to unknown
+        } catch (e) {
+          debugPrint('Failed to fetch friend username: $e');
         }
         fetchedFriends.add(friend);
       }
@@ -40,7 +40,7 @@ class FriendsController extends ChangeNotifier {
       _friends = fetchedFriends;
     } catch (e) {
       _friends = [];
-      throw 'Failed to fetch friends';
+      throw Exception('Failed to fetch friends: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -52,9 +52,9 @@ class FriendsController extends ChangeNotifier {
       await ApiClient.post('/friends', body: {'username': username});
       await fetchFriends(myUserId);
     } on ApiException catch (e) {
-      throw e.message;
+      throw Exception(e.message);
     } catch (e) {
-      throw 'An error occurred';
+      throw Exception('An error occurred: $e');
     }
   }
 
@@ -62,9 +62,9 @@ class FriendsController extends ChangeNotifier {
     try {
       await ApiClient.post('/rooms/$roomId/invite/$inviteeId');
     } on ApiException catch (e) {
-      throw e.message;
+      throw Exception(e.message);
     } catch (e) {
-      throw 'An error occurred';
+      throw Exception('An error occurred: $e');
     }
   }
 
@@ -77,7 +77,7 @@ class FriendsController extends ChangeNotifier {
       }
       await fetchFriends(myUserId);
     } catch (e) {
-      throw 'An error occurred';
+      throw Exception('An error occurred: $e');
     }
   }
 }

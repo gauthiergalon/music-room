@@ -1,5 +1,3 @@
-#![allow(unused_variables, unused_imports, dead_code)]
-
 use crate::middleware::logging::request_logger;
 use crate::state::AppState;
 use axum::http::{HeaderName, HeaderValue, Method};

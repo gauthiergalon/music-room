@@ -92,7 +92,8 @@ class WebSocketService extends ChangeNotifier {
 
   @override
   void dispose() {
-    disconnect();
+    _subscription?.cancel();
+    _channel?.sink.close();
     super.dispose();
   }
 }

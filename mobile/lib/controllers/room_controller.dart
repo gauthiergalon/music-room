@@ -35,6 +35,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Duration get playbackPosition => _audioService.position;
   Duration? get playbackDuration => _audioService.duration;
 
+  Stream<Duration> get positionStream => _audioService.positionStream;
+  Stream<Duration?> get durationStream => _audioService.durationStream;
+
   List<Room> _availableRooms = [];
   List<Room> get availableRooms => _availableRooms;
 
@@ -70,6 +73,16 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       });
     } else {
       _audioService.stop();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refreshRooms();
+      if (_currentRoom != null && !_wsService.isConnected) {
+        _wsService.connect(_currentRoom!.id);
+      }
     }
   }
 
