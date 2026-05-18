@@ -37,11 +37,7 @@ pub async fn update_username(
 }
 
 pub async fn update_email(pool: &PgPool, user_id: Uuid, new_email: &str) -> Result<User, AppError> {
-    let mut tx = pool.begin().await.map_err(AppError::Database)?;
-    email_tokens_repo::delete_by_user_id(&mut *tx, user_id).await?;
-    let user = users_repo::update_email(&mut *tx, user_id, new_email).await?;
-    tx.commit().await.map_err(AppError::Database)?;
-    Ok(user)
+    users_repo::update_email(pool, user_id, new_email).await
 }
 
 pub async fn update_password(
@@ -119,7 +115,7 @@ pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Resu
         token_hash: token_pair.hash,
         user_id: user.id,
         new_email: user.email.clone(),
-        expires_at: Utc::now() + Duration::hours(24),
+        expires_at: Utc::now() + Duration::minutes(15),
     };
 
     email.send(&user.email)?;

@@ -238,7 +238,7 @@ async fn test_confirm_email_success(pool: PgPool) {
         token_hash: token_pair.hash.clone(),
         user_id,
         new_email: "new_confirmed@example.com".to_string(),
-        expires_at: chrono::Utc::now() + chrono::Duration::hours(24),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
     };
 
     backend::repositories::email_tokens::create(&pool, new_token)
