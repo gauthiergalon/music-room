@@ -20,7 +20,15 @@ pub async fn find_all_by_room_id(pool: &PgPool, room_id: Uuid) -> Result<Vec<Que
 }
 
 pub async fn create(pool: &PgPool, room_id: Uuid, track_id: i64) -> Result<(), sqlx::Error> {
-    sqlx::query!("INSERT INTO queue (room_id, track_id, position) VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM queue WHERE room_id = $1), 0))", room_id, track_id).execute(pool).await?;
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!("SELECT id FROM rooms WHERE id = $1 FOR UPDATE", room_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
+    sqlx::query!("INSERT INTO queue (room_id, track_id, position) VALUES ($1, $2, COALESCE((SELECT MAX(position) + 1 FROM queue WHERE room_id = $1), 0))", room_id, track_id).execute(&mut *tx).await?;
+
+    tx.commit().await?;
 
     Ok(())
 }
@@ -43,14 +51,22 @@ pub async fn reorder(
     queue_id: Uuid,
     new_position: f64,
 ) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    sqlx::query!("SELECT id FROM rooms WHERE id = $1 FOR UPDATE", room_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
     sqlx::query!(
         "UPDATE queue SET position = $1 WHERE room_id = $2 AND id = $3",
         new_position,
         room_id,
         queue_id
     )
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     Ok(())
 }
