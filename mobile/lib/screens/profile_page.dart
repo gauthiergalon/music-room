@@ -556,7 +556,9 @@ class _ProfilePageState extends State<ProfilePage> {
                           .updatePrivacyLevel(selected);
 
                       if (currentContext.mounted) {
-                        await currentContext.read<AuthController>().fetchUserInfo();
+                        await currentContext
+                            .read<AuthController>()
+                            .fetchUserInfo();
                       }
 
                       if (currentContext.mounted) {

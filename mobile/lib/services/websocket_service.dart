@@ -16,7 +16,9 @@ class WebSocketService extends ChangeNotifier {
 
   bool get isConnected => _isConnected;
 
-  void setEventCallback(Function(String type, Map<String, dynamic> payload) callback) {
+  void setEventCallback(
+    Function(String type, Map<String, dynamic> payload) callback,
+  ) {
     _onEvent = callback;
   }
 

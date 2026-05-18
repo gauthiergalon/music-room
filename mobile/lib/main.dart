@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'core/logger/logger.dart';
 import 'core/theme.dart';
 import 'core/utils/ui_utils.dart';
+import 'core/network/api_client.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/friends_controller.dart';
 import 'controllers/room_controller.dart';
@@ -16,7 +17,6 @@ import 'services/audio_service.dart';
 import 'screens/login_page.dart';
 import 'screens/main_screen.dart';
 import 'screens/reset_password_page.dart';
-import 'core/network/api_client.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 

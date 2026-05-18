@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../core/network/api_client.dart';
 import '../models/user.dart';
 
-Future<void> showUserProfileDialog(BuildContext context, String userId, {String? initialUsername}) async {
+Future<void> showUserProfileDialog(
+  BuildContext context,
+  String userId, {
+  String? initialUsername,
+}) async {
   final scaffoldMessenger = ScaffoldMessenger.of(context);
 
   try {
@@ -53,10 +57,7 @@ void _buildDialog(BuildContext context, User user) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  user.username,
-                  style: const TextStyle(fontSize: 18),
-                ),
+                Text(user.username, style: const TextStyle(fontSize: 18)),
                 if (user.email != null)
                   Text(
                     user.email!,
@@ -115,16 +116,10 @@ Widget _buildMusicTastesSection(BuildContext ctx, User user) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Music Tastes',
-        style: TextStyle(fontWeight: FontWeight.bold),
-      ),
+      const Text('Music Tastes', style: TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
       if (!hasGenres)
-        const Text(
-          'None',
-          style: TextStyle(fontSize: 14),
-        )
+        const Text('None', style: TextStyle(fontSize: 14))
       else
         Wrap(
           spacing: 8,
@@ -165,10 +160,7 @@ Widget _buildInfoRow(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           if (subtitle != null)
             Text(
               subtitle,

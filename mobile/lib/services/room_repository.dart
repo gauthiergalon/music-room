@@ -16,10 +16,7 @@ class RoomRepository {
   }
 
   Future<void> addTrack(String roomId, int trackId) async {
-    await ApiClient.post(
-      '/rooms/$roomId/queue',
-      body: {'track_id': trackId},
-    );
+    await ApiClient.post('/rooms/$roomId/queue', body: {'track_id': trackId});
   }
 
   Future<void> removeQueueItem(String roomId, String queueItemId) async {

@@ -1,7 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AppSettingsService {
-  static const String _batteryOptimizationDismissedKey = 'battery_optimization_dismissed';
+  static const String _batteryOptimizationDismissedKey =
+      'battery_optimization_dismissed';
 
   static AppSettingsService? _instance;
   static SharedPreferences? _prefs;

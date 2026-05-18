@@ -1,12 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
 
-enum LogLevel {
-  debug,
-  info,
-  warning,
-  error,
-}
+enum LogLevel { debug, info, warning, error }
 
 class AppLogger {
   static final AppLogger _instance = AppLogger._internal();

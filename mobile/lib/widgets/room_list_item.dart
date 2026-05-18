@@ -20,9 +20,7 @@ class RoomListItem extends StatelessWidget {
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 56),
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppTheme.spacingMd,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
         ),
         child: Row(
           children: [

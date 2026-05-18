@@ -45,11 +45,13 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     AudioService? audioService,
     WebSocketService? wsService,
     RoomRepository? roomRepository,
-  })  : _audioService = audioService ?? AudioService(),
-        _wsService = wsService ?? WebSocketService(),
-        _roomRepository = roomRepository ?? RoomRepository() {
+  }) : _audioService = audioService ?? AudioService(),
+       _wsService = wsService ?? WebSocketService(),
+       _roomRepository = roomRepository ?? RoomRepository() {
     WidgetsBinding.instance.addObserver(this);
-    _playerSubscription = _audioService.playerStateStream.listen(_onPlayerState);
+    _playerSubscription = _audioService.playerStateStream.listen(
+      _onPlayerState,
+    );
     _wsService.setEventCallback(_handleWsEvent);
   }
 
@@ -152,7 +154,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _currentRoom!.queue = queueList.asMap().entries.map<QueueItem>((entry) {
         final queuedTrackJson = entry.value as Map<String, dynamic>;
         final trackJson = queuedTrackJson['track'] as Map<String, dynamic>;
-        final position = (queuedTrackJson['position'] as num?)?.toDouble() ??
+        final position =
+            (queuedTrackJson['position'] as num?)?.toDouble() ??
             entry.key.toDouble();
 
         Track.fromJson(trackJson);
@@ -168,14 +171,17 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     if (payload['current_track'] != null) {
       final track = Track.fromJson(payload['current_track']);
-      final bool trackChanged = currentTrack?.id != track.id ||
+      final bool trackChanged =
+          currentTrack?.id != track.id ||
           _isInitialRoomState ||
           _audioService.player.audioSource == null;
 
       _currentRoom!.currentTrack = track;
 
       if (trackChanged) {
-        final serverTimestamp = DateTime.parse(payload['timestamp'] as String).toUtc();
+        final serverTimestamp = DateTime.parse(
+          payload['timestamp'] as String,
+        ).toUtc();
         final currentPositionMs = (payload['current_position'] as int?) ?? 0;
 
         _playTrack(track, currentPositionMs, serverTimestamp);
@@ -197,7 +203,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     if (payload['current_position'] != null) {
       int posMs = payload['current_position'] as int;
       if (isPlaying && payload['timestamp'] != null) {
-        final playedAt = DateTime.parse(payload['timestamp'].toString()).toUtc();
+        final playedAt = DateTime.parse(
+          payload['timestamp'].toString(),
+        ).toUtc();
         final diff = DateTime.now().toUtc().difference(playedAt).inMilliseconds;
         if (diff > 0) posMs += diff;
       }
@@ -232,7 +240,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     return RoomUser(id: id, username: username);
   }
 
-  Future<void> _playTrack(Track track, int serverPositionMs, DateTime serverTimestamp) async {
+  Future<void> _playTrack(
+    Track track,
+    int serverPositionMs,
+    DateTime serverTimestamp,
+  ) async {
     try {
       final loadStartTime = DateTime.now().toUtc();
       final streamUrl = await _roomRepository.getStreamUrl(track.id);
@@ -250,9 +262,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       _currentRoom?.positionAtLastSync = Duration.zero;
       _currentRoom?.updatedAt = DateTime.now();
 
-      final timeSinceServerTimestamp = loadStartTime.difference(serverTimestamp);
+      final timeSinceServerTimestamp = loadStartTime.difference(
+        serverTimestamp,
+      );
       final position = Duration(
-        milliseconds: serverPositionMs + timeSinceServerTimestamp.inMilliseconds,
+        milliseconds:
+            serverPositionMs + timeSinceServerTimestamp.inMilliseconds,
       );
 
       await _audioService.playTrack(updatedTrack, position);
@@ -300,7 +315,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     } else if (insertIndex == reorderedQueue.length - 1) {
       newPos = reorderedQueue[reorderedQueue.length - 2].position + 100;
     } else {
-      newPos = (reorderedQueue[insertIndex - 1].position +
+      newPos =
+          (reorderedQueue[insertIndex - 1].position +
               reorderedQueue[insertIndex + 1].position) /
           2;
     }
@@ -319,7 +335,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void togglePlay(Room room) {
     if (_audioService.isPlaying) {
-      _sendWsEvent(_eventPause, {'position': _audioService.position.inMilliseconds});
+      _sendWsEvent(_eventPause, {
+        'position': _audioService.position.inMilliseconds,
+      });
     } else {
       _sendWsEvent(_eventPlay, {
         'position': _audioService.position.inMilliseconds,

@@ -282,10 +282,10 @@ void showListenersDialog(BuildContext context) {
                               onTap: isMe
                                   ? null
                                   : () => showUserProfileDialog(
-                                        context,
-                                        roomUser.id,
-                                        initialUsername: roomUser.username,
-                                      ),
+                                      context,
+                                      roomUser.id,
+                                      initialUsername: roomUser.username,
+                                    ),
                               trailing: (amOwner && !isMe)
                                   ? Row(
                                       mainAxisSize: MainAxisSize.min,
