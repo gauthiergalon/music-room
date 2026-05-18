@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:provider/provider.dart';
 
 import '../core/exceptions/api_exception.dart';
 import '../core/logger/logger.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/session_storage.dart';
+import '../main.dart';
 import '../models/user.dart';
+
 
 class AuthController extends ChangeNotifier {
   bool _isAuthenticated = false;
@@ -20,16 +23,67 @@ class AuthController extends ChangeNotifier {
 
   AuthController() {
     if (!kIsWeb) {
+      const googleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
+      if (googleClientId.isEmpty) {
+        throw StateError(
+          'GOOGLE_CLIENT_ID must be provided via --dart-define=GOOGLE_CLIENT_ID',
+        );
+      }
       GoogleSignIn.instance.initialize(
-        serverClientId:
-            '1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com',
+        serverClientId: googleClientId,
       );
     }
-    ApiClient.onUnauthorized = logout;
     _loadSession();
   }
 
+  /// Unregisters the unauthorized callback to prevent double-logout,
+  /// then performs a full logout of all controllers and storage.
+  static void _handleUnauthorized() {
+    final auth = navigatorKey.currentContext?.read<AuthController>();
+    auth?._performLogout();
+  }
+
+  /// Register or re-register the unauthorized handler.
+  void attachUnauthorizedHandler() {
+    ApiClient.onUnauthorized = _handleUnauthorized;
+  }
+
+  /// Unregister to prevent referencing disposed controller.
+  void detachUnauthorizedHandler() {
+    if (ApiClient.onUnauthorized == _handleUnauthorized) {
+      ApiClient.onUnauthorized = null;
+    }
+  }
+
+  /// Internal logout that clears all controller state across the app.
+  /// Handles the case where the user may have been deleted from the DB.
+  Future<void> _performLogout({bool sendServerLogout = true}) async {
+    final refreshToken = await SessionStorage.getRefreshToken();
+    final wasAuthenticated = _isAuthenticated;
+
+    _isAuthenticated = false;
+    _token = null;
+    _user = null;
+
+    if (wasAuthenticated && sendServerLogout && refreshToken != null) {
+      try {
+        await ApiClient.post(
+          '/auth/logout',
+          body: {'refresh_token': refreshToken},
+        );
+      } catch (e) {
+        // Ignore errors: server may already have revoked token or user was deleted
+        logger.debug('Server logout failed (expected if DB was wiped)');
+      }
+    }
+
+    await SessionStorage.clear();
+
+    notifyListeners();
+  }
+
   Future<void> _loadSession() async {
+    attachUnauthorizedHandler();
     _token = await SessionStorage.getAccessToken();
 
     if (_token != null) {
@@ -121,6 +175,10 @@ class AuthController extends ChangeNotifier {
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         await logout();
+      } else if (e.statusCode == 404) {
+        // User was deleted from the DB (db wipe/delete)
+        logger.warning('User no longer exists in DB, forcing logout');
+        await _performLogout(sendServerLogout: false);
       }
       logger.error('Failed to fetch user info', error: e);
     } catch (e) {
@@ -249,28 +307,15 @@ class AuthController extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    final refreshToken = await SessionStorage.getRefreshToken();
-    final wasAuthenticated = _isAuthenticated;
-
-    _isAuthenticated = false;
-    _token = null;
-    _user = null;
-
-    if (wasAuthenticated && refreshToken != null) {
-      ApiClient.post(
-        '/auth/logout',
-        body: {'refresh_token': refreshToken},
-      ).catchError((_) {});
-    }
-
-    await SessionStorage.clear();
-
-    notifyListeners();
+    await _performLogout(sendServerLogout: true);
   }
 
   Future<void> confirmEmail(String token) async {
     try {
-      await ApiClient.patch('/users/me/confirm-email?token=$token');
+      await ApiClient.patch(
+        '/users/me/confirm-email',
+        body: {'token': token},
+      );
 
       _user = _user?.copyWith(emailConfirmed: true);
       notifyListeners();

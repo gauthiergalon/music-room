@@ -42,24 +42,21 @@ pub async fn auth_middleware(
 
     let jwt_secret = &state.jwt_secret;
 
-    let claims = decode::<Claims>(
+    let mut validation = Validation::default();
+    validation.validate_exp = true;
+
+    let token_data = decode::<Claims>(
         &token,
         &DecodingKey::from_secret(jwt_secret.as_bytes()),
-        &Validation::default(),
+        &validation,
     )
-    .map_err(|_| AppError::Unauthorized(ErrorMessage::TokenInvalid))?
-    .claims;
+    .map_err(|_| AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
 
-    let user_exists = sqlx::query!("SELECT id FROM users WHERE id = $1", claims.user_id)
-        .fetch_optional(&state.pool)
-        .await
-        .map_err(AppError::Database)?;
-
-    if user_exists.is_none() {
+    if token_data.claims.username.is_empty() || token_data.claims.user_id.is_nil() {
         return Err(AppError::Unauthorized(ErrorMessage::TokenInvalid));
     }
 
-    req.extensions_mut().insert(claims);
+    req.extensions_mut().insert(token_data.claims);
 
     Ok(next.run(req).await)
 }

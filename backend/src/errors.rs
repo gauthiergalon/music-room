@@ -58,7 +58,7 @@ impl IntoResponse for AppError {
             }
             AppError::InternalError(msg) => {
                 tracing::error!("Internal error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, Some(json!([msg])))
+                (StatusCode::INTERNAL_SERVER_ERROR, None)
             }
             AppError::Database(e) => {
                 tracing::error!("DB error: {e}");
@@ -137,7 +137,7 @@ impl ErrorMessage {
             }
             Self::EmailInvalidFormat => "Invalid email address",
             Self::PasswordInvalidPolicy => {
-                "Password does not meet the required policy (must be at least 8 characters)"
+                "Password does not meet the required policy (must be at least 8 and at most 128 characters)"
             }
             Self::PasswordSameAsCurrent => "New password must be different from current password",
             Self::TrackIdInvalid => "Track ID must be a positive integer",

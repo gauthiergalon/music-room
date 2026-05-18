@@ -2,13 +2,13 @@
 
 use crate::middleware::logging::request_logger;
 use crate::state::AppState;
-use axum::http::Method;
+use axum::http::{HeaderName, HeaderValue, Method};
 use dotenv::dotenv;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 mod db;
@@ -64,6 +64,12 @@ fn setup_tracing() {
 }
 
 fn build_router(state: AppState) -> axum::Router {
+    let allowed_origins: Vec<HeaderValue> = env::var("CORS_ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost".to_string())
+        .split(',')
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -73,8 +79,11 @@ fn build_router(state: AppState) -> axum::Router {
             Method::PATCH,
             Method::OPTIONS,
         ])
-        .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_headers([
+            HeaderName::from_static("authorization"),
+            HeaderName::from_static("content-type"),
+        ])
+        .allow_origin(allowed_origins);
 
     routes::app_router(state.clone())
         .layer(cors)

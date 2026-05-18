@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 use tokio::time;
 use uuid::Uuid;
 
+use crate::dtos::ws::WsEventServer;
 use crate::state::ActiveRoom;
 
 pub fn spawn_token_cleanup_task(pool: PgPool) {
@@ -50,6 +51,31 @@ pub fn spawn_room_cleanup_task(
 
         loop {
             interval.tick().await;
+
+            // Inactivity timeout: 2 hours
+            let timeout_duration = chrono::Duration::hours(2);
+            let now = chrono::Utc::now();
+
+            let mut rooms_to_remove = Vec::new();
+
+            {
+                let rooms_guard = active_rooms.read().await;
+                for (id, room) in rooms_guard.iter() {
+                    // Evict if room is empty or hasn't had activity for `timeout_duration`
+                    if room.users.is_empty() || (now - room.last_activity > timeout_duration) {
+                        rooms_to_remove.push(*id);
+                    }
+                }
+            }
+
+            if !rooms_to_remove.is_empty() {
+                let mut rooms_guard = active_rooms.write().await;
+                for id in rooms_to_remove.iter() {
+                    if let Some(room) = rooms_guard.remove(id) {
+                        let _ = room.tx.send(WsEventServer::RoomClosed);
+                    }
+                }
+            }
 
             let rooms = sqlx::query!("SELECT id, owner_id FROM rooms")
                 .fetch_all(&pool)

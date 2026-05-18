@@ -23,7 +23,7 @@ pub async fn register(
     if !validator::ValidateEmail::validate_email(&payload.email) {
         errors.push(ErrorMessage::EmailInvalidFormat);
     }
-    if payload.password.len() < 8 {
+    if payload.password.len() < 8 || payload.password.len() > 128 {
         errors.push(ErrorMessage::PasswordInvalidPolicy);
     }
 

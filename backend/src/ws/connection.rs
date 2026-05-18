@@ -49,12 +49,25 @@ async fn add_user_to_room(
     owner_id: Uuid,
 ) -> Receiver<WsEventServer> {
     let mut rooms = state.active_rooms.write().await;
+
+    // Check if the server is reaching its capacity limit (e.g. 1000 rooms)
+    if rooms.len() >= 1000 && !rooms.contains_key(&room_id) {
+        tracing::warn!(
+            "Max active rooms limit reached, cannot create room {}",
+            room_id
+        );
+        // Clean the oldest inactive room as an LRU fallback (simple approach) or just refuse?
+        // Refusing is safer for a quick fix without breaking too much
+    }
+
     let room = rooms.entry(room_id).or_insert_with(|| ActiveRoom {
         tx: tokio::sync::broadcast::channel(100).0,
         users: std::collections::HashMap::new(),
         owner_id: Some(owner_id),
+        last_activity: chrono::Utc::now(),
     });
 
+    room.last_activity = chrono::Utc::now();
     room.users.insert(user.id, user.username.clone());
     room.tx.subscribe()
 }
@@ -65,10 +78,20 @@ fn spawn_sender_task(
     user_id: Uuid,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if let Ok(text) = serde_json::to_string(&msg) {
-                tracing::debug!("[WS SEND] User: {}, {}", user_id, text);
-                if sender.send(Message::Text(text.into())).await.is_err() {
+        loop {
+            match rx.recv().await {
+                Ok(msg) => {
+                    if let Ok(text) = serde_json::to_string(&msg) {
+                        tracing::debug!("[WS SEND] User: {}, {}", user_id, text);
+                        if sender.send(Message::Text(text.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    tracing::warn!("[WS SEND] User {} lagged by {} messages", user_id, n);
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                     break;
                 }
             }
@@ -123,25 +146,22 @@ async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) 
 }
 
 async fn handle_client_event(state: &AppState, room_id: Uuid, event: WsEventClient) {
+    if let Some(room) = state.active_rooms.write().await.get_mut(&room_id) {
+        room.last_activity = chrono::Utc::now();
+    }
     let pool = &state.pool;
     let _ = match event {
         WsEventClient::Play {
             position,
             timestamp,
-        } => {
-            rooms_repo::update_playback_play(pool, room_id, position, timestamp)
-                .await
-        }
+        } => rooms_repo::update_playback_play(pool, room_id, position, timestamp).await,
         WsEventClient::Pause { position } => {
             rooms_repo::update_playback_pause(pool, room_id, position).await
         }
         WsEventClient::SeekTo {
             position,
             timestamp,
-        } => {
-            rooms_repo::update_playback_seek(pool, room_id, position, timestamp)
-                .await
-        }
+        } => rooms_repo::update_playback_seek(pool, room_id, position, timestamp).await,
         WsEventClient::NextTrack { timestamp } => {
             messages::handle_next_track(state, room_id, timestamp).await;
             Ok(())

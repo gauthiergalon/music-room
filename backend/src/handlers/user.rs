@@ -1,14 +1,13 @@
 use axum::{
     Extension, Json,
-    extract::{Path, Query, State},
+    extract::{State, Path},
     http::StatusCode,
 };
 use uuid::Uuid;
 
 use crate::{
     dtos::user::{
-        ConfirmEmailQuery, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest,
-        UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
+        ConfirmEmailRequest, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest, UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
@@ -94,28 +93,20 @@ pub async fn update_password(
     Json(payload): Json<UpdatePasswordRequest>,
 ) -> Result<StatusCode, AppError> {
     if payload.new_password.len() < 8 {
-        return Err(AppError::Validation(vec![
-            ErrorMessage::PasswordInvalidPolicy,
-        ]));
+        return Err(AppError::Validation(vec![ ErrorMessage::PasswordInvalidPolicy ]));
     }
 
-    user_service::update_password(
-        &state.pool,
-        claims.user_id,
-        &payload.current_password,
-        &payload.new_password,
-    )
-    .await?;
+    user_service::update_password(&state.pool, claims.user_id, &payload.current_password, &payload.new_password).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(patch, path = "/users/me/confirm-email", responses((status = 204)), tag = "Users")]
+#[utoipa::path(patch, path = "/users/me/confirm-email", request_body = ConfirmEmailRequest, responses((status = 204)), tag = "Users")]
 pub async fn confirm_email(
     State(state): State<AppState>,
-    Query(query): Query<ConfirmEmailQuery>,
+    Json(payload): Json<ConfirmEmailRequest>,
 ) -> Result<StatusCode, AppError> {
-    user_service::confirm_email(&state.pool, &query.token).await?;
+    user_service::confirm_email(&state.pool, &payload.token).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -76,7 +76,7 @@ use utoipa::OpenApi;
             crate::dtos::user::UpdateUsernameRequest,
             crate::dtos::user::UpdateEmailRequest,
             crate::dtos::user::UpdatePasswordRequest,
-            crate::dtos::user::ConfirmEmailQuery,
+            crate::dtos::user::ConfirmEmailRequest,
             crate::dtos::user::ResetPasswordRequest,
             
             // Friend DTOs

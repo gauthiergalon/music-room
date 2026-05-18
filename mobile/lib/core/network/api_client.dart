@@ -17,7 +17,10 @@ class ApiClient {
     defaultValue: 'http://192.168.1.29:3000',
   );
 
-  static FutureOr<void> Function()? onUnauthorized;
+  /// Synchronous callback triggered on 401 after refresh failure.
+  /// Implementations must clear state synchronously (start any async
+  /// cleanup in the background).
+  static void Function()? onUnauthorized;
 
   static final Dio _dio = Dio(
     BaseOptions(
@@ -158,12 +161,12 @@ class _AuthInterceptor extends QueuedInterceptorsWrapper {
           return handler.resolve(retryResponse);
         } catch (e) {
           _log.error('Token refresh failed', error: e);
-          await ApiClient.onUnauthorized?.call();
+          ApiClient.onUnauthorized?.call();
           return handler.reject(err);
         }
       } else {
         _log.warning('No refresh token available');
-        await ApiClient.onUnauthorized?.call();
+        ApiClient.onUnauthorized?.call();
         return handler.reject(err);
       }
     }

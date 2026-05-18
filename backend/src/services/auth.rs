@@ -217,31 +217,61 @@ pub struct GoogleTokenInfo {
     pub aud: String,
     pub sub: String,
     pub email: String,
-    pub email_verified: String,
+    pub email_verified: bool,
     pub name: Option<String>,
     pub given_name: Option<String>,
     pub family_name: Option<String>,
+    pub exp: usize,
+}
+
+#[derive(serde::Deserialize)]
+struct JwkKey {
+    kid: String,
+    n: String,
+    e: String,
+}
+
+#[derive(serde::Deserialize)]
+struct JwksResponse {
+    keys: Vec<JwkKey>,
 }
 
 pub async fn google_login(
     pool: &PgPool,
     jwt_secret: &str,
     google_client_id: &str,
-    google_auth_url: &str,
+    _google_auth_url: &str, // Not strictly needed for verification if we fetch JWKS, but keeping signature
     id_token: &str,
 ) -> Result<(String, String), AppError> {
-    let url = format!("{}/tokeninfo?id_token={}", google_auth_url, id_token);
-    let resp = reqwest::get(&url).await.map_err(|_| AppError::Internal)?;
+    let header = jsonwebtoken::decode_header(id_token)
+        .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+    let kid = header
+        .kid
+        .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 
-    if !resp.status().is_success() {
-        return Err(AppError::Unauthorized(ErrorMessage::InvalidCredentials));
-    }
+    let jwks_url = "https://www.googleapis.com/oauth2/v3/certs";
+    let resp = reqwest::get(jwks_url)
+        .await
+        .map_err(|_| AppError::Internal)?;
+    let jwks: JwksResponse = resp.json().await.map_err(|_| AppError::Internal)?;
 
-    let token_info: GoogleTokenInfo = resp.json().await.map_err(|_| AppError::Internal)?;
+    let key = jwks
+        .keys
+        .into_iter()
+        .find(|k| k.kid == kid)
+        .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 
-    if token_info.aud != google_client_id {
-        return Err(AppError::Unauthorized(ErrorMessage::InvalidCredentials));
-    }
+    let decoding_key = jsonwebtoken::DecodingKey::from_rsa_components(&key.n, &key.e)
+        .map_err(|_| AppError::Internal)?;
+
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
+    validation.set_audience(&[google_client_id]);
+    validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
+
+    let token_data = jsonwebtoken::decode::<GoogleTokenInfo>(id_token, &decoding_key, &validation)
+        .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+
+    let token_info = token_data.claims;
 
     let email = token_info.email.to_lowercase();
     let google_id = token_info.sub;
@@ -270,7 +300,7 @@ pub async fn google_login(
                     username: &username,
                     email: &email,
                     password_hash: None, // No password for Google users
-                    email_confirmed: token_info.email_verified == "true",
+                    email_confirmed: token_info.email_verified,
                     google_id: Some(google_id),
                     favorite_genres: None,
                     privacy_level: crate::models::user::PrivacyLevel::Public,

@@ -17,6 +17,7 @@ use crate::{
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
     models::user::PrivacyLevel,
+    repositories::rooms as rooms_repo,
     services::cleanup::cleanup_user_rooms,
     services::invitations as invitation_service,
     services::rooms as room_service,
@@ -135,13 +136,11 @@ pub async fn ws(
     Path(room_id): Path<Uuid>,
     Extension(claims): Extension<Claims>,
 ) -> Result<axum::response::Response, AppError> {
-    let owner_id = sqlx::query!("SELECT owner_id FROM rooms WHERE id = $1", room_id)
-        .fetch_optional(&state.pool)
-        .await
-        .ok()
-        .flatten()
-        .map(|r| r.owner_id)
-        .unwrap_or(claims.user_id);
+    let room = rooms_repo::find_by_id(&state.pool, room_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::RoomNotFound))?;
+
+    let owner_id = room.owner_id;
 
     let user_info = UserResponse {
         id: claims.user_id,

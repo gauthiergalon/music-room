@@ -2,6 +2,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde_json::Value;
 use std::sync::OnceLock;
+use urlencoding;
 
 use crate::{
     dtos::hifi::{AlbumData, ArtistData, SearchResponse, TrackItem, TrackResponse},
@@ -30,7 +31,11 @@ pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {
     let client = get_http_client();
     let host = get_hifi_host();
 
-    let url = format!("http://{}:8000/search/?s={}", host, query);
+    let url = format!(
+        "http://{}:8000/search/?s={}",
+        host,
+        urlencoding::encode(query)
+    );
 
     let response = client
         .get(&url)

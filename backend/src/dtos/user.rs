@@ -61,7 +61,7 @@ pub struct UpdatePasswordRequest {
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct ConfirmEmailQuery {
+pub struct ConfirmEmailRequest {
     pub token: String,
 }
 

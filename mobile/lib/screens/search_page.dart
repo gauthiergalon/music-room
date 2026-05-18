@@ -35,7 +35,8 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      final response = await ApiClient.get('/hifi/search/$query');
+      final encodedQuery = Uri.encodeComponent(query);
+      final response = await ApiClient.get('/hifi/search/$encodedQuery');
 
       if (!mounted) return;
 

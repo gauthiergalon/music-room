@@ -206,11 +206,14 @@ async fn test_confirm_email_invalid_token(pool: PgPool) {
     let token = register_and_login(&server, "test_conf_invalid", "conf_invalid@example.com").await;
 
     let res = server
-        .patch("/users/me/confirm-email?token=invalid_token123")
+        .patch("/users/me/confirm-email")
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),
         )
+        .json(&json!({
+            "token": "invalid_token123"
+        }))
         .await;
 
     res.assert_status(StatusCode::UNAUTHORIZED);
@@ -246,14 +249,14 @@ async fn test_confirm_email_success(pool: PgPool) {
         .unwrap();
 
     let res = server
-        .patch(&format!(
-            "/users/me/confirm-email?token={}",
-            token_pair.plain
-        ))
+        .patch("/users/me/confirm-email")
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),
         )
+        .json(&json!({
+            "token": token_pair.plain
+        }))
         .await;
 
     println!("Expected 204, got {:?}", res.status_code());
