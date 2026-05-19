@@ -6,6 +6,7 @@ use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
 
 use crate::dtos::ws::WsEventServer;
+use crate::services::music_provider::MusicProvider;
 
 pub struct ActiveRoom {
     pub tx: broadcast::Sender<WsEventServer>,
@@ -22,4 +23,5 @@ pub struct AppState {
     pub google_client_secret: String,
     pub google_auth_url: String,
     pub active_rooms: Arc<RwLock<HashMap<Uuid, ActiveRoom>>>,
+    pub music_provider: Arc<dyn MusicProvider>,
 }

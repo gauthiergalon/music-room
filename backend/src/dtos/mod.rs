@@ -1,6 +1,6 @@
 pub mod auth;
 pub mod friend;
-pub mod hifi;
+pub mod music;
 pub mod invitation;
 pub mod queue;
 pub mod rooms;

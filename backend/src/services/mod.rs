@@ -2,7 +2,7 @@ pub mod auth;
 pub mod cleanup;
 pub mod email;
 pub mod friends;
-pub mod hifi;
+pub mod music_provider;
 pub mod invitations;
 pub mod queue;
 pub mod rooms;

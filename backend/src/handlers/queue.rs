@@ -10,7 +10,7 @@ use crate::{
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
     models::queue::Queue,
-    services::{hifi, queue as queue_service},
+    services::queue as queue_service,
     state::AppState,
     ws::send_room_state,
 };
@@ -38,7 +38,7 @@ pub async fn add(
     }
 
     // Best-effort cache warmup so RoomState can include full metadata.
-    let _ = hifi::get_track_info(&state.pool, payload.track_id).await;
+    let _ = state.music_provider.get_track_info(&state.pool, payload.track_id).await;
 
     queue_service::create(&state.pool, room_id, claims.user_id, payload.track_id).await?;
     send_room_state(&state, room_id).await;

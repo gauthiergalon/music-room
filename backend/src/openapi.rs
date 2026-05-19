@@ -35,9 +35,9 @@ use utoipa::OpenApi;
         crate::handlers::friends::remove,
 
         // Hifi endpoints
-        crate::handlers::hifi::search,
-        crate::handlers::hifi::get_track,
-        crate::handlers::hifi::get_stream_url,
+        crate::handlers::music::search,
+        crate::handlers::music::get_track,
+        crate::handlers::music::get_stream_url,
 
         // Invitations endpoints
         crate::handlers::invitations::invite,
@@ -84,13 +84,13 @@ use utoipa::OpenApi;
             crate::dtos::friend::FriendResponseDto,
 
             // Hifi DTOs
-            crate::dtos::hifi::SearchResponse,
-            crate::dtos::hifi::SearchData,
-            crate::dtos::hifi::TrackItem,
-            crate::dtos::hifi::AlbumData,
-            crate::dtos::hifi::ArtistData,
-            crate::dtos::hifi::TrackResponse,
-            crate::dtos::hifi::StreamUrlResponse,
+            crate::dtos::music::SearchResponse,
+            crate::dtos::music::SearchData,
+            crate::dtos::music::TrackItem,
+            crate::dtos::music::AlbumData,
+            crate::dtos::music::ArtistData,
+            crate::dtos::music::TrackResponse,
+            crate::dtos::music::StreamUrlResponse,
 
             // Invitation DTOs
             crate::dtos::invitation::InvitationResponse,

@@ -5,7 +5,10 @@ use dotenv::dotenv;
 use tokio::sync::RwLock;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
-use crate::{middleware::logging::request_logger, state::AppState};
+use crate::{
+    middleware::logging::request_logger, services::music_provider::hifi::HifiProvider,
+    state::AppState,
+};
 
 mod db;
 pub mod dtos;
@@ -36,6 +39,7 @@ pub async fn run() {
         google_auth_url: env::var("GOOGLE_AUTH_URL")
             .unwrap_or_else(|_| "https://oauth2.googleapis.com".to_string()),
         active_rooms: active_rooms.clone(),
+        music_provider: std::sync::Arc::new(HifiProvider::new()),
     };
 
     let app = build_router(state);

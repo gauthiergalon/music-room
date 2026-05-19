@@ -4,11 +4,10 @@ use uuid::Uuid;
 
 use crate::{
     dtos::{
-        hifi::{AlbumData, ArtistData, TrackItem},
+        music::{AlbumData, ArtistData, TrackItem},
         ws::{QueuedTrack, WsEventServer},
     },
     repositories::{queue as queue_repo, rooms as rooms_repo, tracks as tracks_repo},
-    services::hifi,
     state::AppState,
 };
 
@@ -28,8 +27,8 @@ pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsE
         }
     };
 
-    let current_track_item = get_current_track_item(pool, room.current_track).await;
-    let queue_items = get_queue_items(pool, room_id).await;
+    let current_track_item = get_current_track_item(state, room.current_track).await;
+    let queue_items = get_queue_items(state, room_id).await;
 
     Some(WsEventServer::RoomState {
         current_track: current_track_item,
@@ -55,9 +54,9 @@ pub async fn send_room_state(state: &AppState, room_id: Uuid) {
     }
 }
 
-async fn get_current_track_item(pool: &PgPool, track_id: Option<i64>) -> Option<TrackItem> {
+async fn get_current_track_item(state: &AppState, track_id: Option<i64>) -> Option<TrackItem> {
     if let Some(id) = track_id {
-        match hifi::get_track_info(pool, id).await {
+        match state.music_provider.get_track_info(&state.pool, id).await {
             Ok(item) => Some(item),
             Err(e) => {
                 tracing::error!("Failed to get track info for track {}: {}", id, e);
@@ -69,7 +68,8 @@ async fn get_current_track_item(pool: &PgPool, track_id: Option<i64>) -> Option<
     }
 }
 
-async fn get_queue_items(pool: &PgPool, room_id: Uuid) -> Vec<QueuedTrack> {
+async fn get_queue_items(state: &AppState, room_id: Uuid) -> Vec<QueuedTrack> {
+    let pool = &state.pool;
     let queue_records = match queue_repo::get_queue(pool, room_id).await {
         Ok(records) => records,
         Err(e) => {
@@ -78,12 +78,15 @@ async fn get_queue_items(pool: &PgPool, room_id: Uuid) -> Vec<QueuedTrack> {
         }
     };
 
+    let provider = state.music_provider.clone();
+
     let futures: Vec<_> = queue_records
         .into_iter()
         .map(|q| {
             let pool = pool.clone();
+            let provider = provider.clone();
             async move {
-                let track = match hifi::get_track_info(&pool, q.track_id).await {
+                let track = match provider.get_track_info(&pool, q.track_id).await {
                     Ok(track) => track,
                     Err(e) => {
                         tracing::error!(
