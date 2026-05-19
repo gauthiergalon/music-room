@@ -98,7 +98,7 @@ pub async fn send_email_confirmation_email(pool: &PgPool, user_id: Uuid) -> Resu
         .await?
         .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
 
-    if user.email_confirmed == true {
+    if user.email_confirmed {
         return Err(AppError::Conflict(ErrorMessage::EmailAlreadyVerified));
     }
 

@@ -1,15 +1,3 @@
-use crate::{
-    errors::{AppError, ErrorMessage},
-    middleware::auth::Claims,
-    models::refresh_token::NewRefreshToken,
-    models::reset_token::NewResetToken,
-    models::user::NewUser,
-    repositories::{
-        refresh_tokens as refresh_tokens_repo, reset_tokens as reset_tokens_repo,
-        users as users_repo,
-    },
-    services::tokens::TokenPair,
-};
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
@@ -17,8 +5,18 @@ use argon2::{
 use chrono::{TimeDelta, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use sqlx::PgPool;
-
 use uuid::Uuid;
+
+use crate::{
+    errors::{AppError, ErrorMessage},
+    middleware::auth::Claims,
+    models::{refresh_token::NewRefreshToken, reset_token::NewResetToken, user::NewUser},
+    repositories::{
+        refresh_tokens as refresh_tokens_repo, reset_tokens as reset_tokens_repo,
+        users as users_repo,
+    },
+    services::tokens::TokenPair,
+};
 
 pub fn hash_password(password: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);

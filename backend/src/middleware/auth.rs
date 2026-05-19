@@ -1,10 +1,16 @@
-use crate::errors::{AppError, ErrorMessage};
-use crate::state::AppState;
-use axum::extract::State;
-use axum::{extract::Request, middleware::Next, response::Response};
+use axum::{
+    extract::{Request, State},
+    middleware::Next,
+    response::Response,
+};
 use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::{
+    errors::{AppError, ErrorMessage},
+    state::AppState,
+};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Claims {

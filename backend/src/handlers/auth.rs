@@ -1,3 +1,5 @@
+use axum::{Extension, Json, extract::State, http::StatusCode};
+
 use crate::{
     dtos::auth::{
         AuthResponse, ForgotPasswordRequest, GoogleLoginRequest, LoginRequest, LogoutRequest,
@@ -8,7 +10,6 @@ use crate::{
     services::auth as auth_service,
     state::AppState,
 };
-use axum::{Extension, Json, extract::State, http::StatusCode};
 
 #[utoipa::path(post, path = "/auth/register", request_body = RegisterRequest, responses((status = 201, body = AuthResponse)), tag = "Auth")]
 pub async fn register(

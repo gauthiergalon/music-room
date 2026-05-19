@@ -1,6 +1,6 @@
+use axum::Router;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use axum::Router;
 
 use crate::state::AppState;
 
@@ -12,7 +12,8 @@ mod rooms;
 mod user;
 
 pub fn app_router(state: AppState) -> Router<AppState> {
-    let swagger = SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", crate::openapi::ApiDoc::openapi());
+    let swagger = SwaggerUi::new("/swagger-ui")
+        .url("/api-docs/openapi.json", crate::openapi::ApiDoc::openapi());
 
     Router::new()
         .merge(swagger)

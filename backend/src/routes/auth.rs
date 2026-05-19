@@ -1,3 +1,5 @@
+use axum::{Router, middleware, routing::post};
+
 use crate::{
     handlers::auth::{
         forgot_password, google_login, login, logout, refresh, register, reset_password,
@@ -5,8 +7,6 @@ use crate::{
     middleware::auth::auth_middleware,
     state::AppState,
 };
-use axum::{Router, middleware, routing::post};
-use sqlx::PgPool;
 
 pub fn router(state: AppState) -> Router<AppState> {
     let public = Router::new()

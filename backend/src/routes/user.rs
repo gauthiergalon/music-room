@@ -2,7 +2,6 @@ use axum::{
     Router, middleware,
     routing::{get, patch, post},
 };
-use sqlx::PgPool;
 
 use crate::{
     handlers::user::{
@@ -14,7 +13,7 @@ use crate::{
 };
 
 pub fn router(state: AppState) -> Router<AppState> {
-    let protected = Router::new()
+    Router::new()
         .route("/{id}", get(get_user))
         .route("/me", get(get_me))
         .route("/me/favorite-genres", patch(update_favorite_genres))
@@ -30,7 +29,5 @@ pub fn router(state: AppState) -> Router<AppState> {
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
-        ));
-
-    protected
+        ))
 }

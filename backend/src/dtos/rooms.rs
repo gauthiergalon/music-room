@@ -1,6 +1,7 @@
-use crate::models::room::Room;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::models::room::Room;
 
 impl From<Room> for RoomResponse {
     fn from(room: Room) -> Self {
@@ -17,8 +18,7 @@ impl From<Room> for RoomResponse {
     }
 }
 
-#[derive(Serialize)]
-#[derive(utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct RoomResponse {
     pub id: Uuid,
     pub owner_id: Uuid,
@@ -30,8 +30,7 @@ pub struct RoomResponse {
     pub is_playing: bool,
 }
 
-#[derive(Deserialize)]
-#[derive(utoipa::ToSchema)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct TransferOwnershipRequest {
     pub new_owner_id: Uuid,
 }

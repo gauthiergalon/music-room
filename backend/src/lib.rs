@@ -1,13 +1,11 @@
-use crate::middleware::logging::request_logger;
-use crate::state::AppState;
+use std::{collections::HashMap, env, sync::Arc};
+
 use axum::http::{HeaderName, HeaderValue, Method};
 use dotenv::dotenv;
-use std::collections::HashMap;
-use std::env;
-use std::sync::Arc;
 use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
+
+use crate::{middleware::logging::request_logger, state::AppState};
 
 mod db;
 pub mod dtos;

@@ -1,6 +1,6 @@
 use axum::{
     Router, middleware,
-    routing::{get, patch, post},
+    routing::{get, post},
 };
 
 use crate::{
@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub fn router(state: AppState) -> Router<AppState> {
-    let protected = Router::new()
+    Router::new()
         .route("/", get(rooms::list).post(rooms::create))
         .route("/{id}", get(rooms::get).delete(rooms::delete))
         .route("/{id}/ws", get(rooms::ws))
@@ -29,7 +29,5 @@ pub fn router(state: AppState) -> Router<AppState> {
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,
-        ));
-
-    protected
+        ))
 }

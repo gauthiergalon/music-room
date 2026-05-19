@@ -1,6 +1,10 @@
-use crate::{errors::AppError, errors::ErrorMessage, models::invitation::Invitation};
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::{
+    errors::{AppError, ErrorMessage},
+    models::invitation::Invitation,
+};
 
 pub async fn exists_accepted(
     pool: &PgPool,
@@ -78,10 +82,10 @@ pub async fn create(
     .fetch_one(pool)
     .await
     .map_err(|e| {
-        if let sqlx::Error::Database(ref db_err) = e {
-            if db_err.code().as_deref() == Some("23505") {
-                return AppError::Conflict(ErrorMessage::AlreadyInvited);
-            }
+        if let sqlx::Error::Database(ref db_err) = e
+            && db_err.code().as_deref() == Some("23505")
+        {
+            return AppError::Conflict(ErrorMessage::AlreadyInvited);
         }
         AppError::Database(e)
     })

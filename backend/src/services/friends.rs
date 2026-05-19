@@ -1,10 +1,11 @@
+use sqlx::PgPool;
+use uuid::Uuid;
+
 use crate::{
     dtos::friend::FriendResponseDto,
     errors::{AppError, ErrorMessage},
     repositories::{friends as friends_repo, users as users_repo},
 };
-use sqlx::PgPool;
-use uuid::Uuid;
 
 fn order_ids(id1: Uuid, id2: Uuid) -> (Uuid, Uuid) {
     if id1 < id2 { (id1, id2) } else { (id2, id1) }

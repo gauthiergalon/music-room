@@ -1,10 +1,10 @@
+use std::{collections::HashMap, sync::Arc};
+
 use axum_test::TestServer;
 use backend::{routes::app_router, state::AppState};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Serialize, Deserialize, Debug)]

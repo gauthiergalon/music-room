@@ -1,11 +1,16 @@
-use crate::dtos::hifi::{AlbumData, ArtistData, TrackItem};
-use crate::dtos::ws::{QueuedTrack, WsEventServer};
-use crate::repositories::{queue as queue_repo, rooms as rooms_repo, tracks as tracks_repo};
-use crate::services::hifi;
-use crate::state::AppState;
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::{
+    dtos::{
+        hifi::{AlbumData, ArtistData, TrackItem},
+        ws::{QueuedTrack, WsEventServer},
+    },
+    repositories::{queue as queue_repo, rooms as rooms_repo, tracks as tracks_repo},
+    services::hifi,
+    state::AppState,
+};
 
 pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsEventServer> {
     let pool = &state.pool;

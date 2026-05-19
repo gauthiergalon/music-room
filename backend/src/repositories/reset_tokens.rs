@@ -1,6 +1,9 @@
-use crate::errors::AppError;
-use crate::models::reset_token::{NewResetToken, ResetToken};
 use sqlx::{Executor, Postgres};
+
+use crate::{
+    errors::AppError,
+    models::reset_token::{NewResetToken, ResetToken},
+};
 
 pub async fn create<'c, E>(executor: E, token: NewResetToken) -> Result<(), AppError>
 where

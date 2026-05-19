@@ -1,10 +1,11 @@
-use crate::dtos::ws::WsEventServer;
+use std::{collections::HashMap, sync::Arc};
+
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
+
+use crate::dtos::ws::WsEventServer;
 
 pub struct ActiveRoom {
     pub tx: broadcast::Sender<WsEventServer>,

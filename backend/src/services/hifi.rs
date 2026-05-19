@@ -1,7 +1,8 @@
+use std::sync::OnceLock;
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde_json::Value;
-use std::sync::OnceLock;
 use urlencoding;
 
 use crate::{
@@ -18,16 +19,18 @@ fn get_http_client() -> &'static Client {
             .pool_max_idle_per_host(5)
             .build()
             .unwrap_or_else(|e| {
-                tracing::error!("Failed to create optimized HTTP client, using default: {}", e);
+                tracing::error!(
+                    "Failed to create optimized HTTP client, using default: {}",
+                    e
+                );
                 Client::new()
             })
     })
 }
 
 fn get_hifi_host() -> &'static str {
-    HIFI_HOST.get_or_init(|| {
-        std::env::var("HIFI_API_HOST").unwrap_or_else(|_| "localhost".to_string())
-    })
+    HIFI_HOST
+        .get_or_init(|| std::env::var("HIFI_API_HOST").unwrap_or_else(|_| "localhost".to_string()))
 }
 
 pub async fn search_tracks(query: &str) -> Result<SearchResponse, AppError> {

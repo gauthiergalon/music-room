@@ -1,19 +1,19 @@
 use axum::{
     Extension, Json,
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
 };
 use uuid::Uuid;
 
 use crate::{
     dtos::user::{
-        ConfirmEmailRequest, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest, UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
+        ConfirmEmailRequest, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest,
+        UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
     models::user::PrivacyLevel,
-    services::friends as friends_service,
-    services::user as user_service,
+    services::{friends as friends_service, user as user_service},
     state::AppState,
 };
 
@@ -93,10 +93,18 @@ pub async fn update_password(
     Json(payload): Json<UpdatePasswordRequest>,
 ) -> Result<StatusCode, AppError> {
     if payload.new_password.len() < 8 {
-        return Err(AppError::Validation(vec![ ErrorMessage::PasswordInvalidPolicy ]));
+        return Err(AppError::Validation(vec![
+            ErrorMessage::PasswordInvalidPolicy,
+        ]));
     }
 
-    user_service::update_password(&state.pool, claims.user_id, &payload.current_password, &payload.new_password).await?;
+    user_service::update_password(
+        &state.pool,
+        claims.user_id,
+        &payload.current_password,
+        &payload.new_password,
+    )
+    .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

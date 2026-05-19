@@ -1,13 +1,20 @@
-use crate::dtos::user::UserResponse;
-use crate::dtos::ws::{WsEventClient, WsEventServer};
-use crate::repositories::rooms as rooms_repo;
-use crate::state::{ActiveRoom, AppState};
-use crate::ws::{messages, room, send_room_state, send_user_state};
 use axum::extract::ws::{Message, WebSocket};
-use chrono::Utc;
-use futures_util::{SinkExt, StreamExt, stream::SplitSink, stream::SplitStream};
+use futures_util::{
+    SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
+};
 use tokio::sync::broadcast::Receiver;
 use uuid::Uuid;
+
+use crate::{
+    dtos::{
+        user::UserResponse,
+        ws::{WsEventClient, WsEventServer},
+    },
+    repositories::rooms as rooms_repo,
+    state::{ActiveRoom, AppState},
+    ws::{messages, room, send_room_state, send_user_state},
+};
 
 pub async fn handle_socket(
     socket: WebSocket,
@@ -24,11 +31,11 @@ pub async fn handle_socket(
     let (mut sender, receiver) = socket.split();
 
     // Send the current room state ONLY to the newly joined user
-    if let Some(room_state_event) = room::get_room_state_event(&state, room_id).await {
-        if let Ok(text) = serde_json::to_string(&room_state_event) {
-            tracing::debug!("[WS SEND] User: {}, {}", user.id, text);
-            let _ = sender.send(Message::Text(text.into())).await;
-        }
+    if let Some(room_state_event) = room::get_room_state_event(&state, room_id).await
+        && let Ok(text) = serde_json::to_string(&room_state_event)
+    {
+        tracing::debug!("[WS SEND] User: {}, {}", user.id, text);
+        let _ = sender.send(Message::Text(text.into())).await;
     }
 
     let mut send_task = spawn_sender_task(sender, rx, user.id);
@@ -109,11 +116,11 @@ fn spawn_receiver_task(
     tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             tracing::debug!("[WS RECV] User: {}, {}", user_id, text);
-            if let Ok(event) = serde_json::from_str::<WsEventClient>(&text) {
-                if user_id == owner_id {
-                    handle_client_event(&state, room_id, event).await;
-                    send_room_state(&state, room_id).await;
-                }
+            if let Ok(event) = serde_json::from_str::<WsEventClient>(&text)
+                && user_id == owner_id
+            {
+                handle_client_event(&state, room_id, event).await;
+                send_room_state(&state, room_id).await;
             }
         }
     })

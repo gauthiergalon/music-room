@@ -11,11 +11,11 @@ use utoipa::OpenApi;
         crate::handlers::auth::forgot_password,
         crate::handlers::auth::reset_password,
         crate::handlers::auth::google_login,
-        
+
         // Rooms endpoints
         crate::handlers::rooms::list,
         crate::handlers::rooms::create,
-        
+
         // Users endpoints
         crate::handlers::user::get_me,
         crate::handlers::user::get_user,
@@ -26,26 +26,26 @@ use utoipa::OpenApi;
         crate::handlers::user::send_email_confirmation_email,
         crate::handlers::user::update_favorite_genres,
         crate::handlers::user::update_privacy_level,
-        
+
         // Friends endpoints
         crate::handlers::friends::list,
         crate::handlers::friends::send_request,
         crate::handlers::friends::accept_request,
         crate::handlers::friends::reject_request,
         crate::handlers::friends::remove,
-        
+
         // Hifi endpoints
         crate::handlers::hifi::search,
         crate::handlers::hifi::get_track,
         crate::handlers::hifi::get_stream_url,
-        
+
         // Invitations endpoints
         crate::handlers::invitations::invite,
         crate::handlers::invitations::list_pending,
         crate::handlers::invitations::accept,
         crate::handlers::invitations::reject,
         crate::handlers::invitations::revoke,
-        
+
         // Queue endpoints
         crate::handlers::queue::list,
         crate::handlers::queue::add,
@@ -63,11 +63,11 @@ use utoipa::OpenApi;
             crate::dtos::auth::ForgotPasswordRequest,
             crate::dtos::auth::ResetPasswordRequest,
             crate::dtos::auth::GoogleLoginRequest,
-            
+
             // Room DTOs
             crate::dtos::rooms::RoomResponse,
             crate::dtos::rooms::TransferOwnershipRequest,
-            
+
             // User DTOs
             crate::dtos::user::UserResponse,
             crate::dtos::user::PublicUserResponse,
@@ -78,11 +78,11 @@ use utoipa::OpenApi;
             crate::dtos::user::UpdatePasswordRequest,
             crate::dtos::user::ConfirmEmailRequest,
             crate::dtos::user::ResetPasswordRequest,
-            
+
             // Friend DTOs
             crate::dtos::friend::FriendRequestDto,
             crate::dtos::friend::FriendResponseDto,
-            
+
             // Hifi DTOs
             crate::dtos::hifi::SearchResponse,
             crate::dtos::hifi::SearchData,
@@ -91,19 +91,19 @@ use utoipa::OpenApi;
             crate::dtos::hifi::ArtistData,
             crate::dtos::hifi::TrackResponse,
             crate::dtos::hifi::StreamUrlResponse,
-            
+
             // Invitation DTOs
             crate::dtos::invitation::InvitationResponse,
-            
+
             // Queue DTOs
             crate::dtos::queue::AddToQueueRequest,
             crate::dtos::queue::RemoveFromQueueRequest,
             crate::dtos::queue::ReorderQueueRequest,
-            
+
             // WebSocket DTOs
             crate::dtos::ws::UserInfo,
             crate::dtos::ws::QueuedTrack,
-            
+
             // Models
             crate::models::user::PrivacyLevel,
             crate::models::queue::Queue,

@@ -1,9 +1,10 @@
+use sqlx::PgPool;
+use uuid::Uuid;
+
 use crate::{
     errors::{AppError, ErrorMessage},
     models::friend::Friend,
 };
-use sqlx::PgPool;
-use uuid::Uuid;
 
 pub async fn create(
     pool: &PgPool,

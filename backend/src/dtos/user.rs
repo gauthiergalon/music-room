@@ -1,7 +1,7 @@
-use crate::models::user::PrivacyLevel;
-use crate::models::user::User;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::models::user::{PrivacyLevel, User};
 
 impl From<User> for UserResponse {
     fn from(user: User) -> Self {

@@ -1,6 +1,9 @@
-use crate::dtos::ws::{UserInfo, WsEventServer};
-use crate::state::AppState;
 use uuid::Uuid;
+
+use crate::{
+    dtos::ws::{UserInfo, WsEventServer},
+    state::AppState,
+};
 
 pub async fn send_user_state(state: &AppState, room_id: Uuid, owner_id: Uuid) {
     let rooms = state.active_rooms.read().await;

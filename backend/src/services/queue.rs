@@ -2,12 +2,9 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    dtos::rooms,
     errors::AppError,
-    errors::ErrorMessage,
-    models::queue::Queue,
-    models::room::Room,
-    repositories::{queue as queue_repo, rooms as rooms_repo},
+    models::{queue::Queue, room::Room},
+    repositories::queue as queue_repo,
     services::rooms as room_service,
 };
 

@@ -1,9 +1,6 @@
 use axum::{
     Extension, Json,
-    extract::{
-        Path, State,
-        ws::{Message, WebSocket, WebSocketUpgrade},
-    },
+    extract::{Path, State, ws::WebSocketUpgrade},
     http::StatusCode,
 };
 use uuid::Uuid;
@@ -12,17 +9,15 @@ use crate::{
     dtos::{
         rooms::{RoomResponse, TransferOwnershipRequest},
         user::UserResponse,
-        ws::{UserInfo, WsEventClient, WsEventServer},
+        ws::{UserInfo, WsEventServer},
     },
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
     models::user::PrivacyLevel,
     repositories::rooms as rooms_repo,
-    services::cleanup::cleanup_user_rooms,
-    services::invitations as invitation_service,
-    services::rooms as room_service,
+    services::{cleanup::cleanup_user_rooms, rooms as room_service},
     state::AppState,
-    ws::{handle_socket, send_room_state},
+    ws::handle_socket,
 };
 
 #[utoipa::path(get, path = "/rooms", responses((status = 200, body = [RoomResponse])), tag = "Rooms")]

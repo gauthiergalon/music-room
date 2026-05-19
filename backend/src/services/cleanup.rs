@@ -1,13 +1,11 @@
+use std::{sync::Arc, time::Duration};
+
 use chrono::Utc;
 use sqlx::PgPool;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::RwLock;
-use tokio::time;
+use tokio::{sync::RwLock, time};
 use uuid::Uuid;
 
-use crate::dtos::ws::WsEventServer;
-use crate::state::ActiveRoom;
+use crate::{dtos::ws::WsEventServer, state::ActiveRoom};
 
 pub fn spawn_token_cleanup_task(pool: PgPool) {
     tokio::spawn(async move {

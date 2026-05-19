@@ -1,7 +1,6 @@
-use lettre::message::header::ContentType;
-use lettre::{Message, SmtpTransport, Transport};
+use lettre::{Message, SmtpTransport, Transport, message::header::ContentType};
 
-use crate::errors::{AppError, ErrorMessage};
+use crate::errors::AppError;
 
 pub struct Email {
     pub subject: String,
@@ -54,7 +53,7 @@ impl Email {
 
         match mailer.send(&email) {
             Ok(_) => Ok(()),
-            Err(e) => Err(AppError::Internal),
+            Err(_e) => Err(AppError::Internal),
         }
     }
 }

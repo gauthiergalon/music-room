@@ -1,10 +1,9 @@
-use crate::handlers::friends;
-use crate::middleware::auth::auth_middleware;
-use crate::state::AppState;
 use axum::{
     Router, middleware,
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
 };
+
+use crate::{handlers::friends, middleware::auth::auth_middleware, state::AppState};
 
 pub fn router(state: AppState) -> Router<AppState> {
     Router::new()

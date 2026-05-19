@@ -1,7 +1,10 @@
-use crate::errors::{AppError, ErrorMessage};
-use crate::models::user::{NewUser, PrivacyLevel, User};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
+
+use crate::{
+    errors::{AppError, ErrorMessage},
+    models::user::{NewUser, PrivacyLevel, User},
+};
 
 pub async fn create<'c, E>(executor: E, new_user: NewUser<'_>) -> Result<Uuid, AppError>
 where

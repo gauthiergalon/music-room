@@ -1,12 +1,11 @@
+use std::{collections::HashMap, sync::Arc};
+
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use backend::routes::app_router;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-
-use std::collections::HashMap;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 
 fn create_app(pool: PgPool) -> axum::Router {
@@ -445,8 +444,10 @@ async fn test_logout_invalid_auth_token(pool: PgPool) {
 }
 
 use backend::dtos::auth::GoogleLoginRequest;
-use wiremock::matchers::{method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use wiremock::{
+    Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
+};
 
 fn create_app_with_google_url(pool: PgPool, google_auth_url: String) -> axum::Router {
     let state = backend::state::AppState {

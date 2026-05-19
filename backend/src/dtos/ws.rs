@@ -1,17 +1,16 @@
-use crate::dtos::hifi::TrackItem;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[derive(utoipa::ToSchema)]
+use crate::dtos::hifi::TrackItem;
+
+#[derive(Debug, Serialize, Deserialize, Clone, utoipa::ToSchema)]
 pub struct UserInfo {
     pub user_id: Uuid,
     pub username: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-#[derive(utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, Clone, utoipa::ToSchema)]
 pub struct QueuedTrack {
     pub id: Uuid,
     pub position: f64,

@@ -1,10 +1,12 @@
-use crate::errors::AppError;
-use crate::errors::ErrorMessage;
-use crate::models::invitation::Invitation;
-use crate::repositories::invitations as invitation_repo;
-use crate::services::rooms as room_service;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::{
+    errors::{AppError, ErrorMessage},
+    models::invitation::Invitation,
+    repositories::invitations as invitation_repo,
+    services::rooms as room_service,
+};
 
 pub async fn check_accepted_invitation(
     pool: &PgPool,

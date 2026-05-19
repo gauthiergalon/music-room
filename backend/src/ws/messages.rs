@@ -1,6 +1,7 @@
-use crate::state::AppState;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
+
+use crate::state::AppState;
 
 pub async fn handle_next_track(state: &AppState, room_id: Uuid, timestamp: DateTime<Utc>) {
     let pool = &state.pool;

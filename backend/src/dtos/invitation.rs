@@ -1,7 +1,8 @@
-use crate::models::invitation::Invitation;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use crate::models::invitation::Invitation;
 
 impl From<Invitation> for InvitationResponse {
     fn from(inv: Invitation) -> Self {
@@ -16,8 +17,7 @@ impl From<Invitation> for InvitationResponse {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct InvitationResponse {
     pub id: Uuid,
     pub room_id: Uuid,

@@ -1,5 +1,6 @@
-use crate::{handlers::hifi, middleware::auth::auth_middleware, state::AppState};
 use axum::{Router, middleware, routing::get};
+
+use crate::{handlers::hifi, middleware::auth::auth_middleware, state::AppState};
 
 pub fn router(state: AppState) -> Router<AppState> {
     Router::new()

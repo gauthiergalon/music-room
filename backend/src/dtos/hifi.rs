@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SearchResponse {
     pub version: String,
     pub data: SearchData,
@@ -53,8 +52,7 @@ pub struct TrackResponse {
     pub data: Value, // The API returns various manifest data
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[derive(utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct StreamUrlResponse {
     pub stream_url: String,
 }

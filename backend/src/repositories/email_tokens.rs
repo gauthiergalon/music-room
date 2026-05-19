@@ -1,8 +1,10 @@
-use crate::{
-    errors::AppError, models::email_token::EmailToken, models::email_token::NewEmailToken,
-};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
+
+use crate::{
+    errors::AppError,
+    models::email_token::{EmailToken, NewEmailToken},
+};
 
 pub async fn create<'c, E>(executor: E, token: NewEmailToken) -> Result<(), AppError>
 where
@@ -53,4 +55,3 @@ where
         .map_err(AppError::Database)?;
     Ok(())
 }
-

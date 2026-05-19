@@ -1,7 +1,10 @@
-use crate::errors::AppError;
-use crate::models::refresh_token::{NewRefreshToken, RefreshToken};
 use sqlx::{Executor, Postgres};
 use uuid::Uuid;
+
+use crate::{
+    errors::AppError,
+    models::refresh_token::{NewRefreshToken, RefreshToken},
+};
 
 pub async fn create<'c, E>(executor: E, token: NewRefreshToken) -> Result<(), AppError>
 where
