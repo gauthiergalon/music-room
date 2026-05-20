@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -186,15 +187,16 @@ class _DeviceInfoInterceptor extends Interceptor {
 
   static Future<_DeviceInfoInterceptor> create() async {
     final packageInfo = await PackageInfo.fromPlatform();
-    final devicePlugin = DeviceInfoPlugin();
 
     final Map<String, String> deviceHeaders;
 
-    if (Platform.isAndroid) {
-      final info = await devicePlugin.androidInfo;
+    if (kIsWeb) {
+      deviceHeaders = {'X-Platform': 'web', 'X-Device': 'browser'};
+    } else if (Platform.isAndroid) {
+      final info = await DeviceInfoPlugin().androidInfo;
       deviceHeaders = {'X-Platform': 'android', 'X-Device': info.model};
     } else if (Platform.isIOS) {
-      final info = await devicePlugin.iosInfo;
+      final info = await DeviceInfoPlugin().iosInfo;
       deviceHeaders = {'X-Platform': 'ios', 'X-Device': info.utsname.machine};
     } else {
       deviceHeaders = {'X-Platform': Platform.operatingSystem};

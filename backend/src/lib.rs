@@ -3,7 +3,10 @@ use std::{collections::HashMap, env, sync::Arc};
 use axum::http::{HeaderName, HeaderValue, Method};
 use dotenv::dotenv;
 use tokio::sync::RwLock;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    trace::TraceLayer,
+};
 
 use crate::{
     middleware::logging::request_logger, services::music_provider::hifi::HifiProvider,
@@ -64,26 +67,47 @@ fn setup_tracing() {
 }
 
 fn build_router(state: AppState) -> axum::Router {
-    let allowed_origins: Vec<HeaderValue> = env::var("CORS_ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost".to_string())
-        .split(',')
-        .filter_map(|s| s.trim().parse().ok())
-        .collect();
-
-    let cors = CorsLayer::new()
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::PATCH,
-            Method::OPTIONS,
-        ])
-        .allow_headers([
-            HeaderName::from_static("authorization"),
-            HeaderName::from_static("content-type"),
-        ])
-        .allow_origin(allowed_origins);
+    let cors = match env::var("CORS_ALLOWED_ORIGINS") {
+        Ok(origins) if origins.trim() != "*" => CorsLayer::new()
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::PATCH,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                HeaderName::from_static("authorization"),
+                HeaderName::from_static("content-type"),
+                HeaderName::from_static("x-platform"),
+                HeaderName::from_static("x-device"),
+                HeaderName::from_static("x-app-version"),
+            ])
+            .allow_origin(
+                origins
+                    .split(',')
+                    .filter_map(|s| s.trim().parse::<HeaderValue>().ok())
+                    .collect::<Vec<_>>(),
+            ),
+        _ => CorsLayer::new()
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::PATCH,
+                Method::OPTIONS,
+            ])
+            .allow_headers([
+                HeaderName::from_static("authorization"),
+                HeaderName::from_static("content-type"),
+                HeaderName::from_static("x-platform"),
+                HeaderName::from_static("x-device"),
+                HeaderName::from_static("x-app-version"),
+            ])
+            .allow_origin(Any),
+    };
 
     routes::app_router(state.clone())
         .layer(cors)

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../core/exceptions/api_exception.dart';
 import '../core/logger/logger.dart';
 import '../models/queue_item.dart';
 import '../models/room.dart';
@@ -30,6 +31,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   String? _roomClosedMessage;
   String? get roomClosedMessage => _roomClosedMessage;
+  String? _playerErrorMessage;
+  String? get playerErrorMessage => _playerErrorMessage;
   Track? get currentTrack => _currentRoom?.currentTrack;
   bool get isPlaying => _audioService.isPlaying;
   Duration get playbackPosition => _audioService.position;
@@ -135,6 +138,11 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void clearRoomClosedMessage() {
     _roomClosedMessage = null;
+    notifyListeners();
+  }
+
+  void clearPlayerErrorMessage() {
+    _playerErrorMessage = null;
     notifyListeners();
   }
 
@@ -286,7 +294,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       await _audioService.playTrack(updatedTrack, position);
     } catch (e) {
       logger.error('Error playing track', error: e);
-      rethrow;
+      _playerErrorMessage = e is ApiException && e.statusCode == 500
+          ? 'Error of the player: impossible to load the track.'
+          : 'Error playing track.';
+      notifyListeners();
     }
   }
 

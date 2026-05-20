@@ -243,6 +243,16 @@ class _RoomPageState extends State<RoomPage> {
       });
     }
 
+    final playerErrorMessage = controller.playerErrorMessage;
+    if (playerErrorMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          UiUtils.showError(context, playerErrorMessage);
+          controller.clearPlayerErrorMessage();
+        }
+      });
+    }
+
     final current = controller.currentRoom;
 
     return PopScope(
