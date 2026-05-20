@@ -15,6 +15,11 @@ use super::MusicProvider;
 static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
 static HIFI_HOST: OnceLock<String> = OnceLock::new();
 
+const TRACK_MANIFEST_MIME_TYPE_DASH: &str = "application/dash+xml";
+const TRACK_MANIFEST_MIME_TYPE_JSON: &str = "application/vnd.tidal.bts";
+const TRACK_MANIFEST_TYPE_HLS: &str = "HLS";
+const TRACK_MANIFEST_FORMAT: &str = "AACLC";
+
 fn get_http_client() -> &'static Client {
     HTTP_CLIENT.get_or_init(|| {
         Client::builder()
@@ -141,14 +146,64 @@ impl MusicProvider for HifiProvider {
         Ok(track_resp)
     }
 
-    async fn get_stream_url(&self, track_id: i64) -> Result<String, AppError> {
+    async fn get_stream_url(
+        &self,
+        track_id: i64,
+        platform: Option<&str>,
+    ) -> Result<String, AppError> {
         let track_response = self.get_track_details(track_id).await?;
 
-        let manifest_b64 = track_response
+        let prefer_direct = matches!(platform, Some(value) if value.eq_ignore_ascii_case("web"));
+        let direct_url = Self::extract_direct_stream_url(&track_response.data)?;
+
+        if prefer_direct {
+            if let Some(url) = direct_url.clone() {
+                return Ok(url);
+            }
+        }
+
+        if track_response
             .data
+            .get("manifestMimeType")
+            .and_then(Value::as_str)
+            == Some(TRACK_MANIFEST_MIME_TYPE_DASH)
+        {
+            if let Some(url) = self.get_track_manifest_url(track_id).await? {
+                return Ok(url);
+            }
+        }
+
+        if let Some(url) = direct_url {
+            return Ok(url);
+        }
+
+        if let Some(url) = self.get_track_manifest_url(track_id).await? {
+            return Ok(url);
+        }
+
+        Err(AppError::InternalError(
+            "No playable stream URL could be resolved".to_string(),
+        ))
+    }
+}
+
+impl HifiProvider {
+    fn extract_direct_stream_url(track_data: &Value) -> Result<Option<String>, AppError> {
+        let manifest_mime_type = track_data
+            .get("manifestMimeType")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+
+        if manifest_mime_type != TRACK_MANIFEST_MIME_TYPE_JSON {
+            return Ok(None);
+        }
+
+        let manifest_b64 = track_data
             .get("manifest")
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError::InternalError("Missing or invalid manifest field".to_string()))?;
+            .ok_or_else(|| {
+                AppError::InternalError("Missing or invalid manifest field".to_string())
+            })?;
 
         let manifest_bytes = STANDARD
             .decode(manifest_b64)
@@ -165,9 +220,74 @@ impl MusicProvider for HifiProvider {
         let stream_url = urls
             .first()
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError::InternalError("No playable URL found in manifest".to_string()))?
+            .ok_or_else(|| {
+                AppError::InternalError("No playable URL found in manifest".to_string())
+            })?
             .to_string();
 
-        Ok(stream_url)
+        Ok(Some(stream_url))
+    }
+
+    async fn get_track_manifest_url(&self, track_id: i64) -> Result<Option<String>, AppError> {
+        let client = get_http_client();
+        let host = get_hifi_host();
+
+        let url = format!(
+            "http://{}:8000/trackManifests/?id={}&adaptive=true&manifestType={}&uriScheme=HTTPS&usage=PLAYBACK&formats={}",
+            host,
+            track_id,
+            TRACK_MANIFEST_TYPE_HLS,
+            TRACK_MANIFEST_FORMAT,
+        );
+        let response = client
+            .get(&url)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+
+        let manifest_url = response
+            .get("data")
+            .and_then(|value| value.get("data"))
+            .and_then(|value| value.get("attributes"))
+            .and_then(|value| value.get("uri").or_else(|| value.get("url")))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+
+        Ok(manifest_url)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::HifiProvider;
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use serde_json::json;
+
+    #[test]
+    fn extracts_direct_stream_url_from_bts_manifest() {
+        let track_data = json!({
+            "manifestMimeType": "application/vnd.tidal.bts",
+            "manifest": STANDARD.encode(r#"{"mimeType":"audio/flac","codecs":"flac","encryptionType":"NONE","urls":["https://example.com/audio.flac"]}"#)
+        });
+
+        let stream_url = HifiProvider::extract_direct_stream_url(&track_data)
+            .expect("manifest should parse")
+            .expect("url should exist");
+
+        assert_eq!(stream_url, "https://example.com/audio.flac");
+    }
+
+    #[test]
+    fn ignores_dash_manifests_for_direct_url_extraction() {
+        let track_data = json!({
+            "manifestMimeType": "application/dash+xml",
+            "manifest": "PG1wZD48L21wZD4="
+        });
+
+        let stream_url = HifiProvider::extract_direct_stream_url(&track_data)
+            .expect("manifest detection should not fail");
+
+        assert!(stream_url.is_none());
     }
 }

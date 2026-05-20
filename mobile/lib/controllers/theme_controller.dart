@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/audio_service.dart';
@@ -15,6 +16,8 @@ class ThemeController extends ChangeNotifier {
   }
 
   void _onTrackChanged() {
+    if (kIsWeb) return;
+
     final track = _audioService.currentTrack;
     final imageUrl = track?.imageUrl;
 
@@ -27,6 +30,8 @@ class ThemeController extends ChangeNotifier {
   }
 
   void setTrackColor(String? imageUrl) {
+    if (kIsWeb) return;
+
     if (imageUrl == null || imageUrl.isEmpty) {
       _updateSeedColor(_defaultSeedColor);
       return;

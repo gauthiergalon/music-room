@@ -1,6 +1,7 @@
 use axum::{
     Extension, Json,
     extract::{Path, State},
+    http::HeaderMap,
 };
 
 use crate::{
@@ -36,9 +37,17 @@ pub async fn get_track(
 pub async fn get_stream_url(
     State(state): State<AppState>,
     Path(track_id): Path<i64>,
+    headers: HeaderMap,
     Extension(_claims): Extension<Claims>,
 ) -> Result<Json<StreamUrlResponse>, AppError> {
-    let stream_url = state.music_provider.get_stream_url(track_id).await?;
+    let platform = headers
+        .get("x-platform")
+        .and_then(|value| value.to_str().ok());
+
+    let stream_url = state
+        .music_provider
+        .get_stream_url(track_id, platform)
+        .await?;
 
     Ok(Json(StreamUrlResponse { stream_url }))
 }
