@@ -1,5 +1,4 @@
 services:
-  # On remplace Bombardier par K6 pour gérer des scénarios complets
   test-scenario:
     image: grafana/k6
     depends_on:
