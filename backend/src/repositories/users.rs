@@ -30,34 +30,16 @@ pub async fn find_by_id<'c, E>(executor: E, user_id: Uuid) -> Result<Option<User
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\" FROM users WHERE id = $1", user_id).fetch_optional(executor).await.map_err(AppError::Database)?;
-    Ok(user.map(|u| User {
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        password_hash: u.password_hash,
-        email_confirmed: u.email_confirmed,
-        google_id: u.google_id,
-        favorite_genres: u.favorite_genres,
-        privacy_level: u.privacy_level,
-    }))
+    let user = sqlx::query_as!(User, "SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date FROM users WHERE id = $1", user_id).fetch_optional(executor).await.map_err(AppError::Database)?;
+    Ok(user)
 }
 
 pub async fn find_by_email<'c, E>(executor: E, email: &str) -> Result<Option<User>, AppError>
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\" FROM users WHERE email = $1", email).fetch_optional(executor).await.map_err(AppError::Database)?;
-    Ok(user.map(|u| User {
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        password_hash: u.password_hash,
-        email_confirmed: u.email_confirmed,
-        google_id: u.google_id,
-        favorite_genres: u.favorite_genres,
-        privacy_level: u.privacy_level,
-    }))
+    let user = sqlx::query_as!(User, "SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date FROM users WHERE email = $1", email).fetch_optional(executor).await.map_err(AppError::Database)?;
+    Ok(user)
 }
 
 pub async fn update_username<'c, E>(
@@ -68,7 +50,7 @@ pub async fn update_username<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_username, user_id).fetch_one(executor).await.map_err(|e| {
+    let user = sqlx::query_as!(User, "UPDATE users SET username = $1 WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date", new_username, user_id).fetch_one(executor).await.map_err(|e| {
 		if let sqlx::Error::Database(ref db_err) = e
 				&& db_err.code().as_deref() == Some("23505")
 		{
@@ -77,16 +59,7 @@ where
 		AppError::Database(e)
 	})?;
 
-    Ok(User {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        password_hash: user.password_hash,
-        email_confirmed: user.email_confirmed,
-        google_id: user.google_id,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    })
+    Ok(user)
 }
 
 pub async fn update_email<'c, E>(
@@ -97,7 +70,7 @@ pub async fn update_email<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!("UPDATE users SET email = $1, email_confirmed = FALSE WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\"", new_email, user_id).fetch_one(executor).await.map_err(|e| {
+    let user = sqlx::query_as!(User, "UPDATE users SET email = $1, email_confirmed = FALSE WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date", new_email, user_id).fetch_one(executor).await.map_err(|e| {
 		if let sqlx::Error::Database(ref db_err) = e
 				&& db_err.code().as_deref() == Some("23505")
 		{
@@ -106,16 +79,7 @@ where
 		AppError::Database(e)
 	})?;
 
-    Ok(User {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        password_hash: user.password_hash,
-        email_confirmed: user.email_confirmed,
-        google_id: user.google_id,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    })
+    Ok(user)
 }
 
 pub async fn update_password<'c, E>(
@@ -178,13 +142,14 @@ pub async fn update_favorite_genres<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!(
+    let user = sqlx::query_as!(
+        User,
         r#"
         UPDATE users 
         SET 
             favorite_genres = $1
         WHERE id = $2 
-        RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel"
+        RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel", is_subscribed, end_subscription_date
         "#,
         favorite_genres.as_slice(),
         user_id
@@ -193,18 +158,8 @@ where
     .await
     .map_err(AppError::Database)?;
 
-    Ok(User {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        password_hash: user.password_hash,
-        email_confirmed: user.email_confirmed,
-        google_id: user.google_id,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    })
+    Ok(user)
 }
-
 pub async fn update_privacy_level<'c, E>(
     executor: E,
     user_id: Uuid,
@@ -213,13 +168,14 @@ pub async fn update_privacy_level<'c, E>(
 where
     E: Executor<'c, Database = Postgres>,
 {
-    let user = sqlx::query!(
+    let user = sqlx::query_as!(
+        User,
         r#"
         UPDATE users 
         SET 
             privacy_level = $1::privacy_level
         WHERE id = $2 
-        RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel"
+        RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel", is_subscribed, end_subscription_date
         "#,
         privacy_level as PrivacyLevel,
         user_id
@@ -228,18 +184,8 @@ where
     .await
     .map_err(AppError::Database)?;
 
-    Ok(User {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        password_hash: user.password_hash,
-        email_confirmed: user.email_confirmed,
-        google_id: user.google_id,
-        favorite_genres: user.favorite_genres,
-        privacy_level: user.privacy_level,
-    })
+    Ok(user)
 }
-
 pub async fn link_google_id<'c, E>(
     executor: E,
     user_id: Uuid,
@@ -263,22 +209,49 @@ pub async fn find_by_username<'c, E>(executor: E, username: &str) -> Result<Opti
 where
     E: sqlx::Executor<'c, Database = sqlx::Postgres>,
 {
-    let user = sqlx::query!(
-        r#"SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel" FROM users WHERE username = $1"#,
+    let user = sqlx::query_as!(User,
+        r#"SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel", is_subscribed, end_subscription_date FROM users WHERE username = $1"#,
         username
     )
         .fetch_optional(executor)
         .await
         .map_err(AppError::Database)?;
 
-    Ok(user.map(|u| User {
-        id: u.id,
-        username: u.username,
-        email: u.email,
-        password_hash: u.password_hash,
-        email_confirmed: u.email_confirmed,
-        google_id: u.google_id,
-        favorite_genres: u.favorite_genres,
-        privacy_level: u.privacy_level,
-    }))
+    Ok(user)
+}
+
+pub async fn enable_subscription<'c, E>(executor: E, user_id: Uuid) -> Result<User, AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    let user = sqlx::query_as!(User,
+        r#"UPDATE users SET (is_subscribed, end_subscription_date) = (TRUE, NOW() + INTERVAL '1 month') WHERE id = $1 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel", is_subscribed, end_subscription_date"#,
+        user_id
+    )
+        .fetch_one(executor)
+        .await
+        .map_err(AppError::Database)?;
+
+    Ok(user)
+}
+
+pub async fn deactivate_subscription<'c, E>(executor: E, user_id: Uuid) -> Result<User, AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    let user = sqlx::query_as!(
+        User,
+        r#"
+        UPDATE users
+        SET is_subscribed = FALSE
+        WHERE id = $1
+        RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as "privacy_level: PrivacyLevel", is_subscribed, end_subscription_date
+        "#,
+        user_id
+    )
+    .fetch_one(executor)
+    .await
+    .map_err(AppError::Database)?;
+
+    Ok(user)
 }

@@ -8,7 +8,9 @@ CREATE TABLE users (
     password_hash   TEXT,
     google_id       VARCHAR(255) UNIQUE,
     favorite_genres TEXT[] NOT NULL DEFAULT '{}',
-    privacy_level   privacy_level NOT NULL DEFAULT 'friends'
+    privacy_level   privacy_level NOT NULL DEFAULT 'friends',
+	is_subscribed	BOOLEAN NOT NULL DEFAULT FALSE,
+	end_subscription_date TIMESTAMPTZ DEFAULT NULL
 );
 
 ALTER TABLE users

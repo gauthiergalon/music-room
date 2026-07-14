@@ -49,6 +49,7 @@ pub async fn run() {
 
     services::cleanup::spawn_token_cleanup_task(pool.clone());
     services::cleanup::spawn_room_cleanup_task(pool.clone(), active_rooms);
+    services::cleanup::spawn_subscription_cleanup_task(pool.clone());
 
     start_server(app, "0.0.0.0:3000").await;
 }

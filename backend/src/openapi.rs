@@ -26,6 +26,7 @@ use utoipa::OpenApi;
         crate::handlers::user::send_email_confirmation_email,
         crate::handlers::user::update_favorite_genres,
         crate::handlers::user::update_privacy_level,
+        crate::handlers::user::enable_subscription,
 
         // Friends endpoints
         crate::handlers::friends::list,
@@ -117,6 +118,7 @@ use utoipa::OpenApi;
         (name = "Hifi", description = "Hifi search and track endpoints"),
         (name = "Invitations", description = "Room invitations endpoints"),
         (name = "Queue", description = "Queue management endpoints"),
+        (name = "Subscriptions", description = "Subscription management endpoints"),
     )
 )]
 pub struct ApiDoc;

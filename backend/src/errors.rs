@@ -112,6 +112,7 @@ pub enum ErrorMessage {
     NotRoomOwner,
     NotInvited,
     MissingLicense,
+    SubscriptionRequired,
 
     // Serveur
     InternalError,
@@ -157,6 +158,7 @@ impl ErrorMessage {
             Self::NotRoomOwner => "You are not the owner of this room",
             Self::NotInvited => "You are not invited to this room",
             Self::MissingLicense => "You need to be invited to edit this room's playlist",
+            Self::SubscriptionRequired => "This feature is available for premium subscribers only",
 
             // Server
             Self::InternalError => "Internal server error",

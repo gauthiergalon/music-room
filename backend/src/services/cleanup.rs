@@ -1,6 +1,5 @@
 use std::{sync::Arc, time::Duration};
 
-use chrono::Utc;
 use sqlx::PgPool;
 use tokio::{sync::RwLock, time};
 use uuid::Uuid;
@@ -16,7 +15,7 @@ pub fn spawn_token_cleanup_task(pool: PgPool) {
 
             let res_refresh = sqlx::query!(
                 "DELETE FROM refresh_tokens WHERE expires_at < $1",
-                Utc::now()
+                chrono::Utc::now()
             )
             .execute(&pool)
             .await;
@@ -28,13 +27,44 @@ pub fn spawn_token_cleanup_task(pool: PgPool) {
                 );
             }
 
-            let res_reset =
-                sqlx::query!("DELETE FROM reset_tokens WHERE expires_at < $1", Utc::now())
-                    .execute(&pool)
-                    .await;
+            let res_reset = sqlx::query!(
+                "DELETE FROM reset_tokens WHERE expires_at < $1",
+                chrono::Utc::now()
+            )
+            .execute(&pool)
+            .await;
 
             if let Ok(result) = res_reset {
                 tracing::info!("Cleaned up {} expired reset tokens", result.rows_affected());
+            }
+        }
+    });
+}
+
+pub fn spawn_subscription_cleanup_task(pool: PgPool) {
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(60 * 60));
+
+        loop {
+            interval.tick().await;
+
+            let result = sqlx::query!(
+                r#"
+                UPDATE users
+                SET is_subscribed = FALSE
+                WHERE is_subscribed = TRUE
+                  AND end_subscription_date IS NOT NULL
+                  AND end_subscription_date <= NOW()
+                "#
+            )
+            .execute(&pool)
+            .await;
+
+            if let Ok(result) = result {
+                tracing::info!(
+                    "Cleaned up {} expired subscriptions",
+                    result.rows_affected()
+                );
             }
         }
     });

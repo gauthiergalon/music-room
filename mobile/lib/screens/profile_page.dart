@@ -278,6 +278,44 @@ class _ProfilePageState extends State<ProfilePage> {
                             }
                           },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.diamond_outlined),
+                    title: const Text('Paid Subscription'),
+                    subtitle: Text(
+                      user.isSubscribed
+                          ? 'Active. Private rooms are unlocked.'
+                          : 'Tap to subscribe. Private rooms are premium only.',
+                    ),
+                    trailing: user.isSubscribed
+                        ? const Icon(Icons.check_circle)
+                        : const Icon(Icons.workspace_premium_outlined),
+                    onTap: user.isSubscribed
+                        ? null
+                        : () async {
+                            try {
+                              await context
+                                  .read<AuthController>()
+                                  .enableSubscription();
+                              if (context.mounted) {
+                                UiUtils.showSuccess(
+                                  context,
+                                  'Subscription created successfully!',
+                                );
+                              }
+                            } on ApiException catch (e) {
+                              if (context.mounted) {
+                                UiUtils.showError(context, e.message);
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                UiUtils.showError(
+                                  context,
+                                  'An unexpected error occurred while creating subscription.',
+                                );
+                              }
+                            }
+                          },
+                  ),
                 ],
               ),
             ),

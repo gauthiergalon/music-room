@@ -6,8 +6,8 @@ use crate::state::AppState;
 
 mod auth;
 mod friends;
-mod music;
 mod invitations;
+mod music;
 mod rooms;
 mod user;
 

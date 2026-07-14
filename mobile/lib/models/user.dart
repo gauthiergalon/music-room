@@ -6,6 +6,8 @@ class User {
   final String? googleId;
   final List<String>? favoriteGenres;
   final String privacyLevel;
+  final bool isSubscribed;
+  final DateTime? endSubscriptionDate;
 
   User({
     required this.id,
@@ -15,6 +17,8 @@ class User {
     this.googleId,
     this.favoriteGenres,
     this.privacyLevel = 'Friends',
+    this.isSubscribed = false,
+    this.endSubscriptionDate,
   });
 
   User copyWith({
@@ -25,6 +29,8 @@ class User {
     String? googleId,
     List<String>? favoriteGenres,
     String? privacyLevel,
+    bool? isSubscribed,
+    DateTime? endSubscriptionDate,
   }) {
     return User(
       id: id ?? this.id,
@@ -34,6 +40,8 @@ class User {
       googleId: googleId ?? this.googleId,
       favoriteGenres: favoriteGenres ?? this.favoriteGenres,
       privacyLevel: privacyLevel ?? this.privacyLevel,
+      isSubscribed: isSubscribed ?? this.isSubscribed,
+      endSubscriptionDate: endSubscriptionDate ?? this.endSubscriptionDate,
     );
   }
 }

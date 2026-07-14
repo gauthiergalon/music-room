@@ -91,6 +91,8 @@ pub async fn register(
             google_id: None,
             favorite_genres: None,
             privacy_level: crate::models::user::PrivacyLevel::Friends,
+            is_subscribed: false,
+            end_subscription_date: None,
         },
     )
     .await?;
@@ -302,6 +304,8 @@ pub async fn google_login(
                     google_id: Some(google_id),
                     favorite_genres: None,
                     privacy_level: crate::models::user::PrivacyLevel::Public,
+                    is_subscribed: false,
+                    end_subscription_date: None,
                 },
             )
             .await?

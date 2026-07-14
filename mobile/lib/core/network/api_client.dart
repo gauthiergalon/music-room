@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -13,10 +14,16 @@ import '../storage/session_storage.dart';
 final _log = AppLogger();
 
 class ApiClient {
-  static const String baseUrl = String.fromEnvironment(
-    'BACKEND_URL',
-    defaultValue: 'http://192.168.1.29:3000',
-  );
+  static String? _baseUrl;
+
+  static String get baseUrl {
+    final value = _baseUrl;
+    if (value == null || value.isEmpty) {
+      throw StateError('BACKEND_URL must be provided in .env');
+    }
+
+    return value;
+  }
 
   /// Synchronous callback triggered on 401 after refresh failure.
   /// Implementations must clear state synchronously (start any async
@@ -25,7 +32,6 @@ class ApiClient {
 
   static final Dio _dio = Dio(
     BaseOptions(
-      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 10),
       contentType: Headers.jsonContentType,
@@ -105,13 +111,20 @@ class ApiClient {
       _sendRequest(() => _dio.patch(endpoint, data: body));
 
   static Future<void> init() async {
+    final backendUrl = dotenv.env['BACKEND_URL']?.trim();
+    if (backendUrl == null || backendUrl.isEmpty) {
+      throw StateError('BACKEND_URL must be provided in .env');
+    }
+
+    _baseUrl = backendUrl;
+    _dio.options.baseUrl = backendUrl;
     final interceptor = await _DeviceInfoInterceptor.create();
     _dio.interceptors.add(interceptor);
   }
 }
 
 class _AuthInterceptor extends QueuedInterceptorsWrapper {
-  final Dio _refreshDio = Dio(BaseOptions(baseUrl: ApiClient.baseUrl));
+  Dio get _refreshDio => Dio(BaseOptions(baseUrl: ApiClient.baseUrl));
 
   static const List<String> _excludedPaths = [
     '/auth/login',

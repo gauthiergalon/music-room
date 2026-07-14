@@ -5,7 +5,7 @@ use crate::{
     errors::{AppError, ErrorMessage},
     models::room::Room,
     repositories::rooms as rooms_repo,
-    services::invitations as invitation_service,
+    services::{invitations as invitation_service, user as user_service},
 };
 
 pub async fn check_read_access(pool: &PgPool, room: &Room, user_id: Uuid) -> Result<(), AppError> {
@@ -108,6 +108,11 @@ pub async fn publish(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), 
 }
 
 pub async fn privatize(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
+    let subscription_user = user_service::refresh_subscription_status(pool, user_id).await?;
+    if !subscription_user.is_subscribed {
+        return Err(AppError::Forbidden(ErrorMessage::SubscriptionRequired));
+    }
+
     let room = get_room_for_owner_action(pool, room_id, user_id).await?;
     rooms_repo::update_visibility(pool, room_id, false, room.is_licensed).await
 }

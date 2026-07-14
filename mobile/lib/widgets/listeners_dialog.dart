@@ -182,27 +182,38 @@ void showListenersDialog(BuildContext context) {
                           title: const Text('Room Privacy'),
                           subtitle: Text(
                             currentRoom.isPublic
-                                ? 'Public'
+                                ? (currentUser.isSubscribed
+                                      ? 'Public'
+                                      : 'Public. Privatizing this room requires Premium.')
                                 : 'Private (friends invitations only)',
                           ),
                           value: currentRoom.isPublic,
-                          onChanged: (val) async {
-                            try {
-                              await controller.togglePrivacy(currentRoom);
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Failed to update room privacy',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            }
-                          },
+                          onChanged:
+                              (!currentUser.isSubscribed &&
+                                  currentRoom.isPublic)
+                              ? null
+                              : (val) async {
+                                  try {
+                                    await controller.togglePrivacy(currentRoom);
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Failed to update room privacy',
+                                          ),
+                                          backgroundColor: Colors.red,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          secondary: currentUser.isSubscribed
+                              ? null
+                              : const Icon(Icons.workspace_premium_outlined),
                         ),
                         SwitchListTile(
                           title: const Text('Room License'),

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
@@ -20,14 +21,18 @@ class AuthController extends ChangeNotifier {
   String? get token => _token;
   User? get user => _user;
 
+  String? get _googleClientId {
+    final value = dotenv.env['GOOGLE_CLIENT_ID']?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
   AuthController() {
     if (!kIsWeb) {
-      const googleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID');
-      if (googleClientId.isEmpty) {
-        throw StateError(
-          'GOOGLE_CLIENT_ID must be provided via --dart-define=GOOGLE_CLIENT_ID',
-        );
+      final googleClientId = _googleClientId;
+      if (googleClientId == null) {
+        throw StateError('GOOGLE_CLIENT_ID must be provided in .env');
       }
+
       GoogleSignIn.instance.initialize(serverClientId: googleClientId);
     }
     _loadSession();
@@ -113,6 +118,11 @@ class AuthController extends ChangeNotifier {
       googleId: data['google_id'],
       favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
       privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
+      isSubscribed:
+          data['is_subscribed'] == true || data['is_subscribed'] == 't',
+      endSubscriptionDate: data['end_subscription_date'] != null
+          ? DateTime.parse(data['end_subscription_date'])
+          : null,
     );
   }
 
@@ -315,6 +325,26 @@ class AuthController extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       throw Exception('Failed to verify email: $e');
+    }
+  }
+
+  Future<void> enableSubscription() async {
+    try {
+      final data = await ApiClient.post('/users/me/subscription');
+      debugPrint("Subscription data received: $data");
+
+      _user = _user?.copyWith(
+        isSubscribed: data['is_subscribed'] == true,
+        endSubscriptionDate: data['end_subscription_date'] != null
+            ? DateTime.parse(data['end_subscription_date'])
+            : null,
+      );
+      notifyListeners();
+      debugPrint(
+        "Subscription created successfully: ${_user?.isSubscribed}, ${_user?.endSubscriptionDate}",
+      );
+    } catch (e) {
+      throw Exception('Failed to enable subscription: $e');
     }
   }
 }

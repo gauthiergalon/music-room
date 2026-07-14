@@ -17,9 +17,7 @@ use crate::{
 };
 
 pub async fn get_me(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
-    users_repo::find_by_id(pool, user_id)
-        .await?
-        .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))
+    refresh_subscription_status(pool, user_id).await
 }
 
 pub async fn get_user(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
@@ -138,4 +136,25 @@ pub async fn update_privacy_level(
     privacy_level: PrivacyLevel,
 ) -> Result<User, AppError> {
     users_repo::update_privacy_level(pool, user_id, privacy_level).await
+}
+
+pub async fn enable_subscription(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
+    users_repo::enable_subscription(pool, user_id).await
+}
+
+pub async fn refresh_subscription_status(pool: &PgPool, user_id: Uuid) -> Result<User, AppError> {
+    let user = users_repo::find_by_id(pool, user_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
+
+    let subscription_expired = user.is_subscribed
+        && user
+            .end_subscription_date
+            .map_or(true, |end_date| end_date <= Utc::now());
+
+    if subscription_expired {
+        return users_repo::deactivate_subscription(pool, user_id).await;
+    }
+
+    Ok(user)
 }

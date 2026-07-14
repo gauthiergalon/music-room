@@ -152,3 +152,14 @@ pub async fn update_privacy_level(
             .await?;
     Ok(Json(user.into()))
 }
+
+#[utoipa::path(post, path = "/users/me/subscription", responses((status = 200, body = UserResponse)), tag = "Subscriptions")]
+pub async fn enable_subscription(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+) -> Result<Json<UserResponse>, AppError> {
+    tracing::info!("User ID: {:?}", claims.user_id);
+
+    let user = user_service::enable_subscription(&state.pool, claims.user_id).await?;
+    Ok(Json(user.into()))
+}

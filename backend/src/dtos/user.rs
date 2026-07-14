@@ -12,6 +12,8 @@ impl From<User> for UserResponse {
             email_confirmed: user.email_confirmed,
             favorite_genres: user.favorite_genres,
             privacy_level: user.privacy_level,
+            is_subscribed: user.is_subscribed,
+            end_subscription_date: user.end_subscription_date,
         }
     }
 }
@@ -24,6 +26,8 @@ pub struct UserResponse {
     pub email_confirmed: bool,
     pub favorite_genres: Vec<String>,
     pub privacy_level: PrivacyLevel,
+    pub is_subscribed: bool,
+    pub end_subscription_date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]

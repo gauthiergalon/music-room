@@ -5,8 +5,8 @@ use axum::{
 
 use crate::{
     handlers::user::{
-        confirm_email, get_me, get_user, send_email_confirmation_email, update_email,
-        update_favorite_genres, update_password, update_privacy_level, update_username,
+        confirm_email, enable_subscription, get_me, get_user, send_email_confirmation_email,
+        update_email, update_favorite_genres, update_password, update_privacy_level, update_username,
     },
     middleware::auth::auth_middleware,
     state::AppState,
@@ -22,6 +22,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/me/email", patch(update_email))
         .route("/me/password", patch(update_password))
         .route("/me/confirm-email", patch(confirm_email))
+        .route("/me/subscription", post(enable_subscription))
         .route(
             "/me/send-confirmation-email",
             post(send_email_confirmation_email),

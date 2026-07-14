@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -21,6 +22,8 @@ pub struct User {
     pub google_id: Option<String>,
     pub favorite_genres: Vec<String>,
     pub privacy_level: PrivacyLevel,
+    pub is_subscribed: bool,
+    pub end_subscription_date: Option<DateTime<Utc>>,
 }
 
 pub struct NewUser<'a> {
@@ -31,4 +34,6 @@ pub struct NewUser<'a> {
     pub google_id: Option<String>,
     pub favorite_genres: Option<Vec<String>>,
     pub privacy_level: PrivacyLevel,
+    pub is_subscribed: bool,
+    pub end_subscription_date: Option<DateTime<Utc>>,
 }

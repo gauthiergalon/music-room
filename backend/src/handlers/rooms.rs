@@ -144,6 +144,8 @@ pub async fn ws(
         email_confirmed: false,
         favorite_genres: vec![],
         privacy_level: PrivacyLevel::Public,
+        is_subscribed: false,
+        end_subscription_date: None,
     };
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, room_id, user_info, owner_id)))
