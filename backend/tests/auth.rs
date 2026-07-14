@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use chrono::{Duration, Utc};
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use backend::routes::app_router;
@@ -16,6 +17,7 @@ fn create_app(pool: PgPool) -> axum::Router {
         google_client_secret: "test_client_secret".to_string(),
         google_auth_url: "http://localhost:8080".to_string(),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
+        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
     };
     app_router(state.clone()).with_state(state)
 }
@@ -400,7 +402,7 @@ async fn test_reset_password_weak_password(pool: PgPool) {
     assert_eq!(error_res.error, "Validation Error");
     assert_eq!(
         error_res.details.unwrap()[0],
-        "Password does not meet the required policy (must be at least 8 characters)"
+        "Password does not meet the required policy (must be at least 8 and at most 128 characters)"
     );
 }
 
@@ -457,6 +459,7 @@ fn create_app_with_google_url(pool: PgPool, google_auth_url: String) -> axum::Ro
         google_client_secret: "test_client_secret".to_string(),
         google_auth_url,
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
+        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
     };
     app_router(state.clone()).with_state(state)
 }
@@ -471,7 +474,8 @@ async fn test_google_login_success(pool: PgPool) {
         "aud": "test_client_id",
         "sub": "1234567890",
         "email": "test.google@example.com",
-        "email_verified": "true",
+        "email_verified": true,
+        "exp": (Utc::now() + Duration::minutes(15)).timestamp() as usize,
         "name": "Test Google",
         "given_name": "Test",
         "family_name": "Google"
@@ -520,7 +524,8 @@ async fn test_google_login_existing_user(pool: PgPool) {
         "aud": "test_client_id",
         "sub": "new_google_id_987",
         "email": "test.existing@example.com", // Correspond à l'utilisateur en base
-        "email_verified": "true",
+        "email_verified": true,
+        "exp": (Utc::now() + Duration::minutes(15)).timestamp() as usize,
         "name": "Existing User",
         "given_name": "Existing",
         "family_name": "User"

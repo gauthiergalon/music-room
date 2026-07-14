@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use axum::http::StatusCode;
 use axum_test::TestServer;
 use backend::{routes::app_router, state::AppState};
+use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
@@ -21,6 +22,11 @@ struct TestUserResponse {
     email: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct TestSubscriptionResponse {
+    is_subscribed: bool,
+}
+
 fn create_app(pool: PgPool) -> axum::Router {
     let state = AppState {
         pool: pool.clone(),
@@ -29,6 +35,7 @@ fn create_app(pool: PgPool) -> axum::Router {
         google_client_secret: "test_client_secret".to_string(),
         google_auth_url: "http://localhost:8080".to_string(),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
+        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
     };
     app_router(state.clone()).with_state(state)
 }
@@ -65,6 +72,77 @@ async fn test_get_me(pool: PgPool) {
     let user = res.json::<TestUserResponse>();
     assert_eq!(user.username, "test_get_me");
     assert_eq!(user.email, "getme@example.com");
+}
+
+#[sqlx::test]
+async fn test_enable_subscription(pool: PgPool) {
+    let app = create_app(pool.clone());
+    let server = TestServer::new(app);
+    let token = register_and_login(&server, "test_enable_sub", "enable_sub@example.com").await;
+
+    let res = server
+        .post("/users/me/subscription")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+
+    res.assert_status(StatusCode::OK);
+
+    let user = res.json::<TestSubscriptionResponse>();
+    assert!(user.is_subscribed);
+
+    let me_res = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+
+    me_res.assert_status(StatusCode::OK);
+    let me = me_res.json::<TestSubscriptionResponse>();
+    assert!(me.is_subscribed);
+}
+
+#[sqlx::test]
+async fn test_subscription_deactivates_after_expiration(pool: PgPool) {
+    let app = create_app(pool.clone());
+    let server = TestServer::new(app);
+    let token = register_and_login(&server, "test_expire_sub", "expire_sub@example.com").await;
+
+    let me_res = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+    me_res.assert_status(StatusCode::OK);
+    let me = me_res.json::<TestUserResponse>();
+    let user_id = uuid::Uuid::parse_str(&me.id).unwrap();
+
+    sqlx::query!(
+        "UPDATE users SET is_subscribed = TRUE, end_subscription_date = $1 WHERE id = $2",
+        Utc::now() - Duration::seconds(1),
+        user_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let refreshed = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .await;
+
+    refreshed.assert_status(StatusCode::OK);
+    let refreshed_user = refreshed.json::<TestSubscriptionResponse>();
+    assert!(!refreshed_user.is_subscribed);
 }
 
 #[sqlx::test]

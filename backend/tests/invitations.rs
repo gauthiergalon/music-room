@@ -36,6 +36,7 @@ fn create_app(pool: PgPool) -> axum::Router {
         google_client_secret: "test_client_secret".to_string(),
         google_auth_url: "http://localhost:8080".to_string(),
         active_rooms: Arc::new(RwLock::new(HashMap::new())),
+        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
     };
     app_router(state.clone()).with_state(state)
 }
