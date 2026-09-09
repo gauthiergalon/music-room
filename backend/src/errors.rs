@@ -96,10 +96,14 @@ pub enum ErrorMessage {
     PasswordInvalidPolicy,
     PasswordSameAsCurrent,
     TrackIdInvalid,
+    DeviceNameInvalid,
+    CannotDelegateToSelf,
 
     // Ressources
     UserNotFound,
     RoomNotFound,
+    ActiveRoomNotFound,
+    DeviceNotInRoom,
     FriendNotFound,
     FriendAlreadyExists,
     SelfFriendRequest,
@@ -142,10 +146,14 @@ impl ErrorMessage {
             }
             Self::PasswordSameAsCurrent => "New password must be different from current password",
             Self::TrackIdInvalid => "Track ID must be a positive integer",
+            Self::DeviceNameInvalid => "Device name is invalid",
+            Self::CannotDelegateToSelf => "The room owner cannot delegate playback to themselves",
 
             // Resources
             Self::UserNotFound => "User not found",
             Self::RoomNotFound => "Room not found",
+            Self::ActiveRoomNotFound => "Room is not currently active",
+            Self::DeviceNotInRoom => "Device is not in this room",
             Self::FriendNotFound => "Friend or request not found",
             Self::FriendAlreadyExists => "Friendship or request already exists",
             Self::SelfFriendRequest => "Cannot be friend with yourself",

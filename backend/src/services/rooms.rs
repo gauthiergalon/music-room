@@ -82,16 +82,6 @@ pub async fn delete(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), A
     rooms_repo::delete(pool, room_id).await
 }
 
-pub async fn transfer_ownership(
-    pool: &PgPool,
-    room_id: Uuid,
-    current_owner_id: Uuid,
-    new_owner_id: Uuid,
-) -> Result<(), AppError> {
-    let _ = get_room_for_owner_action(pool, room_id, current_owner_id).await?;
-    rooms_repo::update_ownership(pool, room_id, new_owner_id).await
-}
-
 pub async fn enable_license(pool: &PgPool, room_id: Uuid, user_id: Uuid) -> Result<(), AppError> {
     let room = get_room_for_owner_action(pool, room_id, user_id).await?;
     rooms_repo::update_visibility(pool, room_id, room.is_public, true).await

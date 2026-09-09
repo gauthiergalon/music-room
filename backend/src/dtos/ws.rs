@@ -8,6 +8,8 @@ use crate::dtos::music::TrackItem;
 pub struct UserInfo {
     pub user_id: Uuid,
     pub username: String,
+    #[serde(default)]
+    pub device_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, utoipa::ToSchema)]
@@ -49,6 +51,8 @@ pub enum WsEventServer {
     UserState {
         user_list: Vec<UserInfo>,
         owner: Uuid,
+        delegate_user_id: Option<Uuid>,
+        delegate_device: Option<String>,
     },
     RoomClosed,
     Error {

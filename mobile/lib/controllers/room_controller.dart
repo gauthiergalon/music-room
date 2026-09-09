@@ -251,6 +251,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     final ownerId = payload['owner']?.toString();
     if (ownerId != null) _currentRoom!.owner = ownerId;
+    _currentRoom!.delegateUserId = payload['delegate_user_id']?.toString();
+    _currentRoom!.delegateDevice = payload['delegate_device']?.toString();
   }
 
   RoomUser? _roomUserFromPayload(dynamic payload) {
@@ -258,7 +260,8 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     final id = payload['user_id']?.toString();
     final username = payload['username']?.toString();
     if (id == null || username == null) return null;
-    return RoomUser(id: id, username: username);
+    final deviceName = payload['device_name']?.toString() ?? 'Unknown device';
+    return RoomUser(id: id, username: username, deviceName: deviceName);
   }
 
   Future<void> _playTrack(
@@ -303,6 +306,14 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> addTrack(Room room, Track track) async {
     await _roomRepository.addTrack(room.id, track.id);
+  }
+
+  Future<void> delegateDevice(Room room, RoomUser user) async {
+    await _roomRepository.delegateDevice(room.id, user.id, user.deviceName);
+  }
+
+  Future<void> revokeDelegate(Room room) async {
+    await _roomRepository.revokeDelegate(room.id);
   }
 
   Future<void> removeQueueItem(Room room, QueueItem item) async {
@@ -414,14 +425,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       logger.error('Failed to toggle license', error: e);
       notifyListeners();
       rethrow;
-    }
-  }
-
-  Future<void> promoteToOwner(Room room, RoomUser listener) async {
-    try {
-      await _roomRepository.transferOwnership(room.id, listener.id);
-    } catch (e) {
-      logger.error('Failed to transfer ownership', error: e);
     }
   }
 }

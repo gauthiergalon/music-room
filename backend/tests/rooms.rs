@@ -203,42 +203,38 @@ async fn test_disable_license_room(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_transfer_ownership(pool: PgPool) {
+async fn test_delegate_room_device_and_revoke(pool: PgPool) {
     let app = create_app(pool);
     let server = TestServer::new(app);
-    let token1 = register_and_login(&server, "test_own1", "own1@example.com").await;
-    let token2 = register_and_login(&server, "test_own2", "own2@example.com").await;
-
-    let user2 = get_me(&server, &token2).await;
+    let token = register_and_login(&server, "test_delegate", "delegate@example.com").await;
 
     let create_res = server
         .post("/rooms")
         .add_header(
             axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token1),
+            format!("Bearer {}", token),
         )
         .await;
     let room = create_res.json::<TestRoomResponse>();
 
-    let res = server
-        .post(&format!("/rooms/{}/transfer-ownership", room.id))
+    let delegate_res = server
+        .post(&format!("/rooms/{}/delegate", room.id))
         .add_header(
             axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token1),
+            format!("Bearer {}", token),
         )
-        .json(&json!({ "new_owner_id": user2.id }))
+        .json(&json!({ "device_name": "Pixel 8" }))
         .await;
 
-    res.assert_status(StatusCode::NO_CONTENT);
+    delegate_res.assert_status(StatusCode::NO_CONTENT);
 
-    let get_res = server
-        .get(&format!("/rooms/{}", room.id))
+    let revoke_res = server
+        .delete(&format!("/rooms/{}/delegate", room.id))
         .add_header(
             axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token1),
+            format!("Bearer {}", token),
         )
         .await;
 
-    let fetched_room = get_res.json::<TestRoomResponse>();
-    assert_eq!(fetched_room.owner_id, user2.id);
+    revoke_res.assert_status(StatusCode::NO_CONTENT);
 }

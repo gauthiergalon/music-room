@@ -268,6 +268,10 @@ void showListenersDialog(BuildContext context) {
                             final isMe = roomUser.id == currentUser.id;
                             final isOwnerUser =
                                 roomUser.id == currentRoom.owner;
+                            final isDelegated =
+                                currentRoom.delegateUserId == roomUser.id &&
+                                currentRoom.delegateDevice ==
+                                    roomUser.deviceName;
 
                             Widget? leadingIcon;
                             if (isOwnerUser) {
@@ -283,7 +287,7 @@ void showListenersDialog(BuildContext context) {
                             return ListTile(
                               leading: leadingIcon,
                               title: Text(
-                                roomUser.username,
+                                roomUser.displayName,
                                 style: TextStyle(
                                   fontWeight: isMe
                                       ? FontWeight.bold
@@ -297,22 +301,41 @@ void showListenersDialog(BuildContext context) {
                                       roomUser.id,
                                       initialUsername: roomUser.username,
                                     ),
-                              trailing: (amOwner && !isMe)
-                                  ? Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(
-                                            Icons.emoji_events,
-                                            size: 20,
-                                          ),
-                                          onPressed: () =>
-                                              controller.promoteToOwner(
-                                                currentRoom,
-                                                roomUser,
+                              trailing: amOwner && !isOwnerUser
+                                  ? IconButton(
+                                      tooltip: isDelegated
+                                          ? 'Revoke playback control'
+                                          : 'Delegate playback control',
+                                      icon: Icon(
+                                        isDelegated
+                                            ? Icons.stop_circle_outlined
+                                            : Icons.play_circle_outline,
+                                      ),
+                                      onPressed: () async {
+                                        try {
+                                          if (isDelegated) {
+                                            await controller.revokeDelegate(
+                                              currentRoom,
+                                            );
+                                          } else {
+                                            await controller.delegateDevice(
+                                              currentRoom,
+                                              roomUser,
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(e.toString()),
+                                                backgroundColor: Colors.red,
                                               ),
-                                        ),
-                                      ],
+                                            );
+                                          }
+                                        }
+                                      },
                                     )
                                   : null,
                             );

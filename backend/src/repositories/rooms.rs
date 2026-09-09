@@ -26,22 +26,6 @@ pub async fn delete(pool: &PgPool, room_id: Uuid) -> Result<(), AppError> {
     Ok(())
 }
 
-pub async fn update_ownership(
-    pool: &PgPool,
-    room_id: Uuid,
-    new_owner_id: Uuid,
-) -> Result<(), AppError> {
-    sqlx::query!(
-        "UPDATE rooms SET owner_id = $1 WHERE id = $2",
-        new_owner_id,
-        room_id
-    )
-    .execute(pool)
-    .await
-    .map_err(AppError::Database)?;
-    Ok(())
-}
-
 pub async fn update_visibility(
     pool: &PgPool,
     room_id: Uuid,

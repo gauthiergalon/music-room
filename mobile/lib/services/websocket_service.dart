@@ -33,7 +33,7 @@ class WebSocketService extends ChangeNotifier {
 
     try {
       logger.debug('WS connecting to $baseUrl');
-      _channel = createWsChannel(baseUrl, token);
+      _channel = createWsChannel(baseUrl, token, ApiClient.deviceName);
       _subscription = _channel!.stream.listen(
         _handleMessage,
         onError: (err) => logger.error('WS error', error: err),

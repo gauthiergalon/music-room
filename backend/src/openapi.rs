@@ -15,6 +15,8 @@ use utoipa::OpenApi;
         // Rooms endpoints
         crate::handlers::rooms::list,
         crate::handlers::rooms::create,
+        crate::handlers::rooms::delegate_room,
+        crate::handlers::rooms::revoke_delegate,
 
         // Users endpoints
         crate::handlers::user::get_me,
@@ -67,7 +69,7 @@ use utoipa::OpenApi;
 
             // Room DTOs
             crate::dtos::rooms::RoomResponse,
-            crate::dtos::rooms::TransferOwnershipRequest,
+            crate::dtos::rooms::DelegateRoomRequest,
 
             // User DTOs
             crate::dtos::user::UserResponse,

@@ -50,13 +50,6 @@ class RoomRepository {
     }
   }
 
-  Future<void> transferOwnership(String roomId, String newOwnerId) async {
-    await ApiClient.post(
-      '/rooms/$roomId/transfer-ownership',
-      body: {'new_owner_id': newOwnerId},
-    );
-  }
-
   Future<String> getStreamUrl(int trackId) async {
     final response = await ApiClient.get('/hifi/track/$trackId/stream-url');
     final streamUrl = response['stream_url'] as String?;
@@ -66,5 +59,20 @@ class RoomRepository {
     }
 
     return streamUrl;
+  }
+
+  Future<void> delegateDevice(
+    String roomId,
+    String userId,
+    String deviceName,
+  ) async {
+    await ApiClient.post(
+      '/rooms/$roomId/delegate',
+      body: {'user_id': userId, 'device_name': deviceName},
+    );
+  }
+
+  Future<void> revokeDelegate(String roomId) async {
+    await ApiClient.delete('/rooms/$roomId/delegate');
   }
 }

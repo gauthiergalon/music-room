@@ -3,6 +3,12 @@ use uuid::Uuid;
 
 use crate::models::room::Room;
 
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+pub struct DelegateRoomRequest {
+    pub user_id: Uuid,
+    pub device_name: String,
+}
+
 impl From<Room> for RoomResponse {
     fn from(room: Room) -> Self {
         Self {
@@ -28,9 +34,4 @@ pub struct RoomResponse {
     pub current_track: Option<i64>,
     pub current_position: i32,
     pub is_playing: bool,
-}
-
-#[derive(Deserialize, utoipa::ToSchema)]
-pub struct TransferOwnershipRequest {
-    pub new_owner_id: Uuid,
 }

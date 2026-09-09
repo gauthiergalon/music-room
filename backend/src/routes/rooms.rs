@@ -14,7 +14,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/", get(rooms::list).post(rooms::create))
         .route("/{id}", get(rooms::get).delete(rooms::delete))
         .route("/{id}/ws", get(rooms::ws))
-        .route("/{id}/transfer-ownership", post(rooms::transfer_ownership))
+        .route("/{id}/delegate", post(rooms::delegate_room).delete(rooms::revoke_delegate))
         .route("/{id}/publish", post(rooms::publish))
         .route("/{id}/privatize", post(rooms::privatize))
         .route("/{id}/enable-license", post(rooms::enable_license))

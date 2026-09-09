@@ -12,7 +12,7 @@ use crate::{
         ws::{WsEventClient, WsEventServer},
     },
     repositories::rooms as rooms_repo,
-    state::{ActiveRoom, AppState},
+    state::{ActiveRoom, AppState, RoomMember, RoomMemberKey},
     ws::{messages, room, send_room_state, send_user_state},
 };
 
@@ -22,8 +22,9 @@ pub async fn handle_socket(
     room_id: Uuid,
     user: UserResponse,
     owner_id: Uuid,
+    device_name: String,
 ) {
-    let rx = add_user_to_room(&state, room_id, &user, owner_id).await;
+    let rx = add_user_to_room(&state, room_id, &user, owner_id, device_name.clone()).await;
 
     // Broadcast new user list to everyone
     send_user_state(&state, room_id, owner_id).await;
@@ -39,14 +40,20 @@ pub async fn handle_socket(
     }
 
     let mut send_task = spawn_sender_task(sender, rx, user.id);
-    let mut recv_task = spawn_receiver_task(receiver, state.clone(), room_id, user.id, owner_id);
+    let mut recv_task = spawn_receiver_task(
+        receiver,
+        state.clone(),
+        room_id,
+        user.id,
+        device_name.clone(),
+    );
 
     tokio::select! {
         _ = (&mut send_task) => recv_task.abort(),
         _ = (&mut recv_task) => send_task.abort(),
     };
 
-    handle_user_disconnect(&state, room_id, user.id).await;
+    handle_user_disconnect(&state, room_id, user.id, &device_name).await;
 }
 
 async fn add_user_to_room(
@@ -54,28 +61,37 @@ async fn add_user_to_room(
     room_id: Uuid,
     user: &UserResponse,
     owner_id: Uuid,
+    device_name: String,
 ) -> Receiver<WsEventServer> {
     let mut rooms = state.active_rooms.write().await;
 
-    // Check if the server is reaching its capacity limit (e.g. 1000 rooms)
     if rooms.len() >= 1000 && !rooms.contains_key(&room_id) {
         tracing::warn!(
             "Max active rooms limit reached, cannot create room {}",
             room_id
         );
-        // Clean the oldest inactive room as an LRU fallback (simple approach) or just refuse?
-        // Refusing is safer for a quick fix without breaking too much
     }
 
     let room = rooms.entry(room_id).or_insert_with(|| ActiveRoom {
         tx: tokio::sync::broadcast::channel(100).0,
         users: std::collections::HashMap::new(),
         owner_id: Some(owner_id),
+        delegate: None,
         last_activity: chrono::Utc::now(),
     });
 
     room.last_activity = chrono::Utc::now();
-    room.users.insert(user.id, user.username.clone());
+    let member_key = RoomMemberKey {
+        user_id: user.id,
+        device_name: device_name.clone(),
+    };
+    room.users.insert(
+        member_key,
+        RoomMember {
+            username: user.username.clone(),
+            device_name: device_name.clone(),
+        },
+    );
     room.tx.subscribe()
 }
 
@@ -106,18 +122,30 @@ fn spawn_sender_task(
     })
 }
 
+fn can_control_playback(room: &ActiveRoom, user_id: Uuid, device_name: &str) -> bool {
+    match &room.delegate {
+        Some(delegate) => delegate.user_id == user_id && delegate.device_name == device_name,
+        None => room.owner_id == Some(user_id),
+    }
+}
+
 fn spawn_receiver_task(
     mut receiver: SplitStream<WebSocket>,
     state: AppState,
     room_id: Uuid,
     user_id: Uuid,
-    owner_id: Uuid,
+    device_name: String,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
             tracing::debug!("[WS RECV] User: {}, {}", user_id, text);
             if let Ok(event) = serde_json::from_str::<WsEventClient>(&text)
-                && user_id == owner_id
+                && state
+                    .active_rooms
+                    .read()
+                    .await
+                    .get(&room_id)
+                    .is_some_and(|room| can_control_playback(room, user_id, &device_name))
             {
                 handle_client_event(&state, room_id, event).await;
                 send_room_state(&state, room_id).await;
@@ -126,13 +154,25 @@ fn spawn_receiver_task(
     })
 }
 
-async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid) {
+async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid, device_name: &str) {
     let (should_close_room, current_owner_id) = {
         let mut rooms = state.active_rooms.write().await;
         if let Some(room) = rooms.get_mut(&room_id) {
             let owner_id = room.owner_id;
-            let should_close = owner_id == Some(user_id);
-            room.users.remove(&user_id);
+            let member_key = RoomMemberKey {
+                user_id,
+                device_name: device_name.to_string(),
+            };
+            room.users.remove(&member_key);
+            let should_close = owner_id == Some(user_id)
+                && !room.users.keys().any(|member| member.user_id == user_id);
+            if room
+                .delegate
+                .as_ref()
+                .is_some_and(|delegate| delegate.user_id == user_id && delegate.device_name == device_name)
+            {
+                room.delegate = None;
+            }
             (should_close, owner_id)
         } else {
             (false, None)

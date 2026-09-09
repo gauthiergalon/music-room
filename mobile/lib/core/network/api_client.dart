@@ -15,6 +15,9 @@ final _log = AppLogger();
 
 class ApiClient {
   static String? _baseUrl;
+  static String _deviceName = 'Unknown device';
+
+  static String get deviceName => _deviceName;
 
   static String get baseUrl {
     final value = _baseUrl;
@@ -119,6 +122,7 @@ class ApiClient {
     _baseUrl = backendUrl;
     _dio.options.baseUrl = backendUrl;
     final interceptor = await _DeviceInfoInterceptor.create();
+    _deviceName = interceptor.deviceName;
     _dio.interceptors.add(interceptor);
   }
 }
@@ -198,13 +202,18 @@ class _DeviceInfoInterceptor extends Interceptor {
 
   _DeviceInfoInterceptor._(this._headers);
 
+  String get deviceName => _headers['X-Device'] ?? 'Unknown device';
+
   static Future<_DeviceInfoInterceptor> create() async {
     final packageInfo = await PackageInfo.fromPlatform();
 
     final Map<String, String> deviceHeaders;
 
     if (kIsWeb) {
-      deviceHeaders = {'X-Platform': 'web', 'X-Device': 'browser'};
+      deviceHeaders = {
+        'X-Platform': 'web',
+        'X-Device': 'Web - ${Platform.operatingSystem}',
+      };
     } else if (Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
       deviceHeaders = {'X-Platform': 'android', 'X-Device': info.model};
