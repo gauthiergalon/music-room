@@ -124,12 +124,33 @@ class _SearchPageState extends State<SearchPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (!_hasSearched) {
-      return const Center(child: Text('Find your favorite songs'));
-    }
-
-    if (_results.isEmpty) {
-      return const Center(child: Text('No results found.'));
+    if (!_hasSearched || _results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_outlined, size: 64, color: Theme.of(context).colorScheme.secondary),
+            const SizedBox(height: 8),
+            Text(
+              !_hasSearched ? 'Find your favorite songs' : 'No results found.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Try searching for a song.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return ListView.builder(

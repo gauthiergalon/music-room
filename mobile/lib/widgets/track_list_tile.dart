@@ -24,10 +24,7 @@ class TrackListTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingMd,
-        vertical: 0.0,
-      ),
+      contentPadding: AppTheme.paddingMd,
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: track.imageUrl != null

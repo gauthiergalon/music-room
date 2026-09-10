@@ -56,7 +56,7 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          padding: AppTheme.screenPadding,
           children: [
             Card(
               child: Column(
@@ -329,7 +329,7 @@ class _ProfilePageState extends State<ProfilePage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
                 foregroundColor: Colors.redAccent,
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: AppTheme.paddingMd,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

@@ -11,16 +11,13 @@ class RoomListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingMd,
-        vertical: 6.0,
-      ),
+      padding: AppTheme.paddingMd,
       child: FilledButton(
         onPressed: onTap,
         style: FilledButton.styleFrom(
           minimumSize: const Size(double.infinity, 56),
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+          padding: AppTheme.paddingMd,
         ),
         child: Row(
           children: [

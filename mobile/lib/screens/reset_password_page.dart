@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
 import '../core/exceptions/api_exception.dart';
 import '../core/utils/ui_utils.dart';
+import 'package:mobile/core/theme.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   final String token;
@@ -71,7 +72,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: AppTheme.screenPadding,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -122,7 +123,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     : ElevatedButton(
                         onPressed: _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: AppTheme.paddingMd,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),

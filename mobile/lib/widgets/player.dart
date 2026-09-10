@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/room_controller.dart';
+import '../controllers/auth_controller.dart';
 import '../core/theme.dart';
 
 class PlayerWidget extends StatefulWidget {
@@ -21,6 +22,12 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     final track = room?.currentTrack;
 
     final isPlaying = controller.isPlaying;
+    final auth = context.read<AuthController>();
+    final myId = auth.user?.id;
+    final delegateId = controller.currentRoom?.delegateUserId;
+    final ownerId = controller.currentRoom?.owner;
+    final canControl = (delegateId != null && delegateId == myId) ||
+        (delegateId == null && ownerId == myId);
 
     return Padding(
       padding: AppTheme.paddingLg,
@@ -103,12 +110,12 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                         _dragValue = v;
                       });
                     },
-                    onChanged: (v) {
+                    onChanged: canControl ? (v) {
                       setState(() {
                         _dragValue = v;
                       });
-                    },
-                    onChangeEnd: (v) {
+                    } : null,
+                    onChangeEnd: canControl ? (v) {
                       setState(() {
                         _dragValue = null;
                       });
@@ -118,7 +125,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                           Duration(milliseconds: v.toInt()),
                         );
                       }
-                    },
+                    } : null,
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -145,17 +152,17 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             children: [
               IconButton(
                 iconSize: 36,
-                onPressed: () => controller.skipPrev(),
+                onPressed: canControl ? () => controller.skipPrev() : null,
                 icon: const Icon(Icons.skip_previous_rounded),
               ),
               const SizedBox(width: 12),
               ElevatedButton(
-                onPressed: room == null || track == null
-                    ? null
-                    : () => controller.togglePlay(room),
+                onPressed: canControl && room != null && track != null
+                    ? () => controller.togglePlay(room)
+                    : null,
                 style: ElevatedButton.styleFrom(
                   shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(14),
+                  padding: AppTheme.paddingMd,
                 ),
                 child: Icon(
                   isPlaying ? Icons.pause : Icons.play_arrow,
@@ -165,7 +172,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
               const SizedBox(width: 12),
               IconButton(
                 iconSize: 36,
-                onPressed: () => controller.skipNext(),
+                onPressed: canControl ? () => controller.skipNext() : null,
                 icon: const Icon(Icons.skip_next_rounded),
               ),
             ],

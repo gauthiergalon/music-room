@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
 import '../core/exceptions/api_exception.dart';
 import '../core/utils/ui_utils.dart';
+import 'package:mobile/core/theme.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -118,7 +119,7 @@ class _LoginPageState extends State<LoginPage> {
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
+            padding: AppTheme.screenPadding,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -226,7 +227,7 @@ class _LoginPageState extends State<LoginPage> {
                   children: [
                     Expanded(child: Divider()),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
+                      padding: AppTheme.paddingMd,
                       child: Text('OR'),
                     ),
                     Expanded(child: Divider()),

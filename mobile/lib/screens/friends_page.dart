@@ -4,6 +4,7 @@ import '../controllers/auth_controller.dart';
 import '../controllers/friends_controller.dart';
 import '../core/utils/ui_utils.dart';
 import '../widgets/user_profile_dialog.dart';
+import 'package:mobile/core/theme.dart';
 
 class FriendsPage extends StatefulWidget {
   const FriendsPage({super.key});
@@ -121,7 +122,7 @@ class _FriendsPageState extends State<FriendsPage> {
               children: [
                 if (pendingRequests.isNotEmpty) ...[
                   const Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: AppTheme.screenPadding,
                     child: Text(
                       'Friend Requests',
                       style: TextStyle(
@@ -133,10 +134,7 @@ class _FriendsPageState extends State<FriendsPage> {
                   ...pendingRequests.map((friend) {
                     final friendId = friend.friendId;
                     return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 4.0,
-                      ),
+                      margin: AppTheme.paddingMd,
                       child: ListTile(
                         title: Text(
                           friend.username ?? 'Unknown User',
@@ -178,10 +176,10 @@ class _FriendsPageState extends State<FriendsPage> {
                   }),
                   const Divider(height: 32),
                 ],
-                const Padding(padding: EdgeInsets.all(16.0)),
+                const Padding(padding: AppTheme.screenPadding),
                 if (acceptedFriends.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.all(32.0),
+                    padding: AppTheme.paddingMd,
                     child: Center(
                       child: Text(
                         "You don't have any friends yet.",
@@ -194,10 +192,7 @@ class _FriendsPageState extends State<FriendsPage> {
                     final friendId = friend.friendId;
                     return Card(
                       elevation: 0,
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16.0,
-                        vertical: 2.0,
-                      ),
+                      margin: AppTheme.paddingMd,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8.0),
                       ),

@@ -307,7 +307,7 @@ class _RoomPageState extends State<RoomPage> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: AppTheme.paddingMd,
                   child: Row(
                     children: [
                       const Expanded(
@@ -335,7 +335,7 @@ class _RoomPageState extends State<RoomPage> {
                       : _pendingInvitations.isEmpty
                       ? const Center(
                           child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 24.0),
+                            padding: AppTheme.paddingMd,
                             child: Text(
                               'No pending invitations',
                               textAlign: TextAlign.center,
@@ -344,7 +344,7 @@ class _RoomPageState extends State<RoomPage> {
                           ),
                         )
                       : ListView.separated(
-                          padding: const EdgeInsets.all(12),
+                          padding: AppTheme.paddingMd,
                           itemCount: _pendingInvitations.length,
                           separatorBuilder: (_, index) =>
                               const SizedBox(height: 10),
@@ -355,7 +355,7 @@ class _RoomPageState extends State<RoomPage> {
 
                             return Card(
                               child: Padding(
-                                padding: const EdgeInsets.all(12.0),
+                                padding: AppTheme.paddingMd,
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -437,6 +437,34 @@ class _RoomPageState extends State<RoomPage> {
   }
 
   Widget _buildRoomList(RoomController controller, String username) {
+    final current = controller.currentRoom;
+    if (current != null) {
+      final delegateId = current.delegateUserId;
+      final ownerId = current.owner;
+      final isDelegate = delegateId != null && delegateId.isNotEmpty;
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.room,
+              size: 64,
+              color: Theme.of(context).colorScheme.secondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isDelegate ? 'Delegate' : 'Owner',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isDelegate ? 'Device: ${current.delegateDevice ?? 'unknown'}' : 'User: $ownerId',
+              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      );
+    }
     final rooms = controller.availableRooms.where((r) => r.isPublic).toList();
 
     if (rooms.isEmpty) {
@@ -484,7 +512,7 @@ class _RoomPageState extends State<RoomPage> {
     return RefreshIndicator(
       onRefresh: _refreshRooms,
       child: ListView.builder(
-        padding: const EdgeInsets.only(top: 10.0, bottom: AppTheme.spacingMd),
+        padding: AppTheme.screenPadding,
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: rooms.length,
         itemBuilder: (context, index) => RoomListItem(

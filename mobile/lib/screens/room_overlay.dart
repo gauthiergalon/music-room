@@ -25,9 +25,7 @@ class RoomOverlay extends StatelessWidget {
             left: 0,
             right: 0,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingSm,
-              ),
+              padding: AppTheme.paddingMd,
               child: Row(
                 children: [
                   Material(

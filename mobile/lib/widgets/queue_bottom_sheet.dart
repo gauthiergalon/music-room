@@ -24,9 +24,7 @@ void showQueueBottomSheet(BuildContext context) {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppTheme.spacingMd,
-                  ),
+                  padding: AppTheme.paddingMd,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -60,7 +58,7 @@ void showQueueBottomSheet(BuildContext context) {
                           direction: DismissDirection.endToStart,
                           background: Container(
                             alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            padding: AppTheme.paddingMd,
                             color: Colors.red,
                             child: const Icon(
                               Icons.delete_outline,

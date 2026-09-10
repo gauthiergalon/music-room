@@ -82,7 +82,14 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      refreshRooms();
+      refreshRooms().then((_) {
+        if (_currentRoom != null) {
+          final stillExists = _availableRooms.any(
+            (r) => r.id == _currentRoom!.id,
+          );
+          if (!stillExists) leaveRoom();
+        }
+      });
       if (_currentRoom != null && !_wsService.isConnected) {
         _wsService.connect(_currentRoom!.id);
       }

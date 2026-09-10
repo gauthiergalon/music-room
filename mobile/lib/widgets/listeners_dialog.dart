@@ -63,7 +63,7 @@ Future<void> _showInviteFriendDialog(
                 itemBuilder: (itemContext, index) {
                   final friend = availableFriends[index];
                   return ListTile(
-                    contentPadding: EdgeInsets.zero,
+                    contentPadding: AppTheme.paddingMd,
                     leading: const Icon(Icons.person),
                     title: Text(friend.username ?? 'Unknown User'),
                     onTap: () => showUserProfileDialog(
@@ -155,10 +155,7 @@ void showListenersDialog(BuildContext context) {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppTheme.spacingMd,
-                          vertical: 12,
-                        ),
+                        padding: AppTheme.paddingMd,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -254,10 +251,7 @@ void showListenersDialog(BuildContext context) {
                         const Divider(),
                       ],
                       const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
+                        padding: AppTheme.paddingMd,
                       ),
                       Expanded(
                         child: ListView.builder(
@@ -279,6 +273,12 @@ void showListenersDialog(BuildContext context) {
                                 Icons.emoji_events,
                                 size: 18,
                                 color: Colors.amber,
+                              );
+                            } else if (isDelegated) {
+                              leadingIcon = Icon(
+                                Icons.star,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary,
                               );
                             } else {
                               leadingIcon = const SizedBox(width: 18);
