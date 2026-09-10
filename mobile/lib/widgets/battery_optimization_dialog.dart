@@ -1,11 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/app_settings_service.dart';
 
 Future<void> showBatteryOptimizationDialog(BuildContext context) async {
-  if (!Platform.isAndroid) return;
+  if (kIsWeb || !Platform.isAndroid) return;
 
   final settings = await AppSettingsService.getInstance();
 
@@ -55,7 +56,7 @@ Future<void> showBatteryOptimizationDialog(BuildContext context) async {
 }
 
 void _openBatterySettings() {
-  if (Platform.isAndroid) {
+  if (!kIsWeb && Platform.isAndroid) {
     try {
       const platform = MethodChannel('com.music_room/battery');
       platform.invokeMethod('openBatteryOptimizationSettings');

@@ -212,7 +212,7 @@ class _DeviceInfoInterceptor extends Interceptor {
     if (kIsWeb) {
       deviceHeaders = {
         'X-Platform': 'web',
-        'X-Device': 'Web - ${Platform.operatingSystem}',
+        'X-Device': 'Web',
       };
     } else if (Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
