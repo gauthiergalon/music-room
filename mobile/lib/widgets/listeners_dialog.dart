@@ -251,7 +251,7 @@ void showListenersDialog(BuildContext context) {
                         const Divider(),
                       ],
                       const Padding(
-                        padding: AppTheme.paddingMd,
+                        padding: AppTheme.paddingSm,
                       ),
                       Expanded(
                         child: ListView.builder(

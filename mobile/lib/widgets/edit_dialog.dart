@@ -22,6 +22,9 @@ Future<void> showEditDialog(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            titleTextStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             title: Text('Edit $title'),
             content: Form(
               key: formKey,

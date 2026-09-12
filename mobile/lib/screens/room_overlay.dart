@@ -28,15 +28,15 @@ class RoomOverlay extends StatelessWidget {
               padding: AppTheme.paddingMd,
               child: Row(
                 children: [
-                  Material(
-                    color: Colors.transparent,
-                    child: IconButton(
-                      tooltip: 'Leave room',
-                      icon: const Icon(Icons.exit_to_app),
-                      onPressed: () {
-                        controller.leaveRoom();
-                      },
-                      color: Colors.red,
+                  IconButton(
+                    tooltip: 'Leave room',
+                    icon: const Icon(Icons.exit_to_app_rounded),
+                    onPressed: () {
+                      controller.leaveRoom();
+                    },
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                      foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
                     ),
                   ),
                   const Spacer(),
@@ -45,18 +45,21 @@ class RoomOverlay extends StatelessWidget {
                     child: Center(
                       child: Text(
                         room.name,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
                   const Spacer(),
-                  Material(
-                    color: Colors.transparent,
-                    child: IconButton(
-                      tooltip: 'Listeners',
-                      icon: const Icon(Icons.people),
-                      onPressed: () => showListenersDialog(context),
+                  IconButton(
+                    tooltip: 'Listeners',
+                    icon: const Icon(Icons.people_rounded),
+                    onPressed: () => showListenersDialog(context),
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                      foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
                     ),
                   ),
                 ],

@@ -141,12 +141,19 @@ class _ProfilePageState extends State<ProfilePage> {
                   ListTile(
                     leading: const Icon(Icons.library_music_outlined),
                     title: const Text('Music Tastes'),
-                    subtitle: Text(
-                      (user.favoriteGenres == null ||
-                              user.favoriteGenres!.isEmpty)
-                          ? 'Tap to add your favorite genres'
-                          : user.favoriteGenres!.join(', '),
-                    ),
+                    subtitle: (user.favoriteGenres == null || user.favoriteGenres!.isEmpty)
+                        ? const Text('Tap to add your favorite genres')
+                        : Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: user.favoriteGenres!.map((genre) =>
+                              Chip(
+                                label: Text(genre, style: const TextStyle(fontSize: 12)),
+                                backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                side: BorderSide.none,
+                              )
+                            ).toList(),
+                          ),
                     trailing: _isUpdatingGenres
                         ? const SizedBox(
                             width: 18,

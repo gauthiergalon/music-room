@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/track.dart';
-import '../core/theme.dart';
 
 class TrackListTile extends StatelessWidget {
   final Track track;
@@ -24,7 +23,6 @@ class TrackListTile extends StatelessWidget {
 
     return ListTile(
       onTap: onTap,
-      contentPadding: AppTheme.paddingMd,
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(8),
         child: track.imageUrl != null

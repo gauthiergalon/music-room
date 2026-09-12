@@ -12,6 +12,10 @@ void showQueueBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
     builder: (ctx) {
       return Consumer<RoomController>(
         builder: (ctx2, controller, _) {

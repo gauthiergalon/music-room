@@ -37,7 +37,9 @@ class _FriendsPageState extends State<FriendsPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         title: const Text('Add Friend'),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(
@@ -135,6 +137,11 @@ class _FriendsPageState extends State<FriendsPage> {
                     final friendId = friend.friendId;
                     return Card(
                       margin: AppTheme.paddingMd,
+                      elevation: 1,
+                      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: ListTile(
                         title: Text(
                           friend.username ?? 'Unknown User',
@@ -191,10 +198,11 @@ class _FriendsPageState extends State<FriendsPage> {
                   ...acceptedFriends.map((friend) {
                     final friendId = friend.friendId;
                     return Card(
-                      elevation: 0,
+                      elevation: 1,
                       margin: AppTheme.paddingMd,
+                      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8.0),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: ListTile(
                         title: Text(friend.username ?? 'Unknown User'),

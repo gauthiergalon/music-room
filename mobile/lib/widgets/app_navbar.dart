@@ -12,21 +12,33 @@ class AppNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return NavigationBar(
       selectedIndex: selectedIndex,
       onDestinationSelected: onIndexSelected,
-      destinations: const <NavigationDestination>[
-        NavigationDestination(icon: Icon(Icons.group_outlined), label: 'Room'),
+      indicatorColor: theme.colorScheme.primary,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      destinations: [
         NavigationDestination(
-          icon: Icon(Icons.search_outlined),
+          icon: Icon(
+            selectedIndex == 0 ? Icons.group : Icons.group_outlined,
+          ),
+          label: 'Room',
+        ),
+        NavigationDestination(
+          icon: Icon(
+            selectedIndex == 1 ? Icons.search : Icons.search_outlined,
+          ),
           label: 'Search',
         ),
         NavigationDestination(
-          icon: Icon(Icons.person_outline),
+          icon: Icon(
+            selectedIndex == 2 ? Icons.person : Icons.person_outline,
+          ),
           label: 'Profile',
         ),
       ],
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: theme.colorScheme.surface,
     );
   }
 }

@@ -101,31 +101,40 @@ class _PlayerWidgetState extends State<PlayerWidget> {
 
               return Column(
                 children: [
-                  Slider(
-                    min: 0,
-                    max: sliderMax,
-                    value: _dragValue ?? sliderValue,
-                    onChangeStart: (v) {
-                      setState(() {
-                        _dragValue = v;
-                      });
-                    },
-                    onChanged: canControl ? (v) {
-                      setState(() {
-                        _dragValue = v;
-                      });
-                    } : null,
-                    onChangeEnd: canControl ? (v) {
-                      setState(() {
-                        _dragValue = null;
-                      });
-                      if (room != null) {
-                        controller.seekTo(
-                          room,
-                          Duration(milliseconds: v.toInt()),
-                        );
-                      }
-                    } : null,
+                  SliderTheme(
+                    data: SliderThemeData(
+                      activeTrackColor: theme.colorScheme.primary,
+                      inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
+                      thumbColor: theme.colorScheme.primary,
+                      overlayColor: theme.colorScheme.primary.withValues(alpha: 0.2),
+                      valueIndicatorColor: theme.colorScheme.secondaryContainer,
+                    ),
+                    child: Slider(
+                      min: 0,
+                      max: sliderMax,
+                      value: _dragValue ?? sliderValue,
+                      onChangeStart: (v) {
+                        setState(() {
+                          _dragValue = v;
+                        });
+                      },
+                      onChanged: canControl ? (v) {
+                        setState(() {
+                          _dragValue = v;
+                        });
+                      } : null,
+                      onChangeEnd: canControl ? (v) {
+                        setState(() {
+                          _dragValue = null;
+                        });
+                        if (room != null) {
+                          controller.seekTo(
+                            room,
+                            Duration(milliseconds: v.toInt()),
+                          );
+                        }
+                      } : null,
+                    ),
                   ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -156,16 +165,19 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                 icon: const Icon(Icons.skip_previous_rounded),
               ),
               const SizedBox(width: 12),
-              ElevatedButton(
+              FilledButton(
                 onPressed: canControl && room != null && track != null
                     ? () => controller.togglePlay(room)
                     : null,
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   shape: const CircleBorder(),
                   padding: AppTheme.paddingMd,
+                  backgroundColor: theme.colorScheme.secondaryContainer,
+                  foregroundColor: theme.colorScheme.onSecondaryContainer,
+                  elevation: 2,
                 ),
                 child: Icon(
-                  isPlaying ? Icons.pause : Icons.play_arrow,
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                   size: 28,
                 ),
               ),
