@@ -56,7 +56,7 @@ impl MusicProvider for HifiProvider {
         let host = get_hifi_host();
 
         let url = format!(
-            "http://{}:8000/search/?s={}",
+            "http://{}/search/?s={}",
             host,
             urlencoding::encode(query)
         );
