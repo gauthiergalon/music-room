@@ -75,7 +75,7 @@ impl MusicProvider for HifiProvider {
         let client = get_http_client();
         let host = get_hifi_host();
 
-        let url = format!("http://{}:8000/track/?id={}&quality=LOW", host, track_id);
+        let url = format!("http://{}/track/?id={}&quality=LOW", host, track_id);
 
         let response = fetch_hifi_json(client, &url, host).await?;
         let response: TrackResponse = serde_json::from_value(response)
@@ -110,7 +110,7 @@ impl MusicProvider for HifiProvider {
 
         let client = get_http_client();
         let host = get_hifi_host();
-        let url = format!("http://{}:8000/info/?id={}", host, track_id);
+        let url = format!("http://{}/info/?id={}", host, track_id);
         let info_payload = client.get(&url).send().await?.json::<Value>().await?;
         let track_data = info_payload.get("data").cloned().ok_or_else(|| {
             AppError::InternalError("Missing track data in info response".to_string())
@@ -231,7 +231,7 @@ impl HifiProvider {
         let host = get_hifi_host();
 
         let url = format!(
-            "http://{}:8000/trackManifests/?id={}&adaptive=true&manifestType={}&uriScheme=HTTPS&usage=PLAYBACK&formats={}",
+            "http://{}/trackManifests/?id={}&adaptive=true&manifestType={}&uriScheme=HTTPS&usage=PLAYBACK&formats={}",
             host,
             track_id,
             TRACK_MANIFEST_TYPE_HLS,
@@ -283,7 +283,7 @@ async fn resolve_pending_response(
     let status_url = if status_path.starts_with("http://") || status_path.starts_with("https://") {
         status_path.to_string()
     } else {
-        format!("http://{}:8000{}", host, status_path)
+        format!("http://{}{}", host, status_path)
     };
 
     for _ in 0..30 {
