@@ -26,7 +26,8 @@ class _PlayerWidgetState extends State<PlayerWidget> {
     final myId = auth.user?.id;
     final delegateId = controller.currentRoom?.delegateUserId;
     final ownerId = controller.currentRoom?.owner;
-    final canControl = (delegateId != null && delegateId == myId) ||
+    final canControl =
+        (delegateId != null && delegateId == myId) ||
         (delegateId == null && ownerId == myId);
 
     return Padding(
@@ -104,9 +105,12 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                   SliderTheme(
                     data: SliderThemeData(
                       activeTrackColor: theme.colorScheme.primary,
-                      inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
+                      inactiveTrackColor:
+                          theme.colorScheme.surfaceContainerHighest,
                       thumbColor: theme.colorScheme.primary,
-                      overlayColor: theme.colorScheme.primary.withValues(alpha: 0.2),
+                      overlayColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.2,
+                      ),
                       valueIndicatorColor: theme.colorScheme.secondaryContainer,
                     ),
                     child: Slider(
@@ -118,22 +122,26 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                           _dragValue = v;
                         });
                       },
-                      onChanged: canControl ? (v) {
-                        setState(() {
-                          _dragValue = v;
-                        });
-                      } : null,
-                      onChangeEnd: canControl ? (v) {
-                        setState(() {
-                          _dragValue = null;
-                        });
-                        if (room != null) {
-                          controller.seekTo(
-                            room,
-                            Duration(milliseconds: v.toInt()),
-                          );
-                        }
-                      } : null,
+                      onChanged: canControl
+                          ? (v) {
+                              setState(() {
+                                _dragValue = v;
+                              });
+                            }
+                          : null,
+                      onChangeEnd: canControl
+                          ? (v) {
+                              setState(() {
+                                _dragValue = null;
+                              });
+                              if (room != null) {
+                                controller.seekTo(
+                                  room,
+                                  Duration(milliseconds: v.toInt()),
+                                );
+                              }
+                            }
+                          : null,
                     ),
                   ),
                   Row(
@@ -172,8 +180,8 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                 style: FilledButton.styleFrom(
                   shape: const CircleBorder(),
                   padding: AppTheme.paddingMd,
-                  backgroundColor: theme.colorScheme.secondaryContainer,
-                  foregroundColor: theme.colorScheme.onSecondaryContainer,
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: theme.colorScheme.onPrimary,
                   elevation: 2,
                 ),
                 child: Icon(

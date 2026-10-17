@@ -512,7 +512,10 @@ class _RoomPageState extends State<RoomPage> {
     return RefreshIndicator(
       onRefresh: _refreshRooms,
       child: ListView.builder(
-        padding: AppTheme.screenPadding,
+        padding: const EdgeInsets.symmetric(
+          vertical: AppTheme.spacingLg,
+          horizontal: AppTheme.spacingSm,
+        ),
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: rooms.length,
         itemBuilder: (context, index) => RoomListItem(

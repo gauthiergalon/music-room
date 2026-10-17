@@ -35,8 +35,12 @@ class RoomOverlay extends StatelessWidget {
                       controller.leaveRoom();
                     },
                     style: IconButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                      foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.errorContainer,
+                      foregroundColor: Theme.of(
+                        context,
+                      ).colorScheme.onErrorContainer,
                     ),
                   ),
                   const Spacer(),
@@ -45,9 +49,8 @@ class RoomOverlay extends StatelessWidget {
                     child: Center(
                       child: Text(
                         room.name,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -58,8 +61,8 @@ class RoomOverlay extends StatelessWidget {
                     icon: const Icon(Icons.people_rounded),
                     onPressed: () => showListenersDialog(context),
                     style: IconButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                      foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
                     ),
                   ),
                 ],

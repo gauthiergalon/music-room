@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reqwest::Client;
 use serde_json::Value;
+use tokio::time::{Duration, sleep};
 use urlencoding;
 
 use crate::{
@@ -74,14 +75,11 @@ impl MusicProvider for HifiProvider {
         let client = get_http_client();
         let host = get_hifi_host();
 
-        let url = format!("http://{}:8000/track/?id={}&quality=HIGH", host, track_id);
+        let url = format!("http://{}:8000/track/?id={}&quality=LOW", host, track_id);
 
-        let response = client
-            .get(&url)
-            .send()
-            .await?
-            .json::<TrackResponse>()
-            .await?;
+        let response = fetch_hifi_json(client, &url, host).await?;
+        let response: TrackResponse = serde_json::from_value(response)
+            .map_err(|error| AppError::InternalError(error.to_string()))?;
 
         Ok(response)
     }
@@ -242,9 +240,9 @@ impl HifiProvider {
         let response = client
             .get(&url)
             .send()
-            .await?
-            .json::<Value>()
             .await?;
+
+        let response = resolve_pending_response(client, response, host).await?;
 
         let manifest_url = response
             .get("data")
@@ -256,6 +254,56 @@ impl HifiProvider {
 
         Ok(manifest_url)
     }
+}
+
+async fn fetch_hifi_json(
+    client: &Client,
+    url: &str,
+    host: &str,
+) -> Result<Value, AppError> {
+    let response = client.get(url).send().await?;
+    resolve_pending_response(client, response, host).await
+}
+
+async fn resolve_pending_response(
+    client: &Client,
+    response: reqwest::Response,
+    host: &str,
+) -> Result<Value, AppError> {
+    if response.status().as_u16() != 202 {
+        return Ok(response.json::<Value>().await?);
+    }
+
+    let pending = response.json::<Value>().await?;
+    let status_path = pending
+        .get("statusUrl")
+        .or_else(|| pending.get("status_url"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| AppError::InternalError("HiFi playback request is pending without a status URL".to_string()))?;
+    let status_url = if status_path.starts_with("http://") || status_path.starts_with("https://") {
+        status_path.to_string()
+    } else {
+        format!("http://{}:8000{}", host, status_path)
+    };
+
+    for _ in 0..30 {
+        sleep(Duration::from_millis(500)).await;
+        let poll = client.get(&status_url).send().await?;
+        if poll.status().as_u16() == 202 {
+            continue;
+        }
+        if !poll.status().is_success() {
+            return Err(AppError::InternalError(format!(
+                "HiFi playback request failed with status {}",
+                poll.status()
+            )));
+        }
+        return Ok(poll.json::<Value>().await?);
+    }
+
+    Err(AppError::InternalError(
+        "HiFi playback request timed out".to_string(),
+    ))
 }
 
 #[cfg(test)]

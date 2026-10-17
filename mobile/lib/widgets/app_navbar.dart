@@ -20,21 +20,15 @@ class AppNavBar extends StatelessWidget {
       labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
       destinations: [
         NavigationDestination(
-          icon: Icon(
-            selectedIndex == 0 ? Icons.group : Icons.group_outlined,
-          ),
-          label: 'Room',
+          icon: Icon(selectedIndex == 0 ? Icons.group : Icons.group_outlined),
+          label: 'Rooms',
         ),
         NavigationDestination(
-          icon: Icon(
-            selectedIndex == 1 ? Icons.search : Icons.search_outlined,
-          ),
+          icon: Icon(selectedIndex == 1 ? Icons.search : Icons.search_outlined),
           label: 'Search',
         ),
         NavigationDestination(
-          icon: Icon(
-            selectedIndex == 2 ? Icons.person : Icons.person_outline,
-          ),
+          icon: Icon(selectedIndex == 2 ? Icons.person : Icons.person_outline),
           label: 'Profile',
         ),
       ],

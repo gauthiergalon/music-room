@@ -13,8 +13,9 @@ class RoomListItem extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Padding(
-      padding: AppTheme.paddingMd,
+      padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
       child: Card.filled(
+        margin: EdgeInsets.zero,
         elevation: 0,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -28,12 +29,14 @@ class RoomListItem extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
+                    color: theme.colorScheme.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    room.status == 1 ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                    color: theme.colorScheme.onSecondaryContainer,
+                    room.status == 1
+                        ? Icons.play_arrow_rounded
+                        : Icons.pause_rounded,
+                    color: theme.colorScheme.onPrimary,
                     size: 20,
                   ),
                 ),
