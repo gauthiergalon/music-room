@@ -9,6 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +25,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Create .env
+      - name: Create the .env
         env:
           BACKEND_URL: https://music-room-z6n9.onrender.com
           GOOGLE_CLIENT_ID: 1068662764722-kfnc69v1mk1aq8gsb6e8h3kh1kl287qf.apps.googleusercontent.com
@@ -37,5 +40,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: mobile/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
