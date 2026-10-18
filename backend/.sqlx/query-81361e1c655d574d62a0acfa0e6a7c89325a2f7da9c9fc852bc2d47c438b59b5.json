@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing FROM rooms",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_licensed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_playing",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "81361e1c655d574d62a0acfa0e6a7c89325a2f7da9c9fc852bc2d47c438b59b5"
+}

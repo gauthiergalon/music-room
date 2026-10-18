@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT title, artist, album, cover, duration FROM tracks WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "title",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "artist",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "album",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "cover",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "duration",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "7feb02dfa5b66ae080e3abb20a3e35334595b369f9afd69869bd36cf219cba69"
+}

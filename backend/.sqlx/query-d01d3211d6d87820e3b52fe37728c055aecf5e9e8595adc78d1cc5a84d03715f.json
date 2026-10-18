@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM refresh_tokens WHERE token_hash = $1 AND user_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d01d3211d6d87820e3b52fe37728c055aecf5e9e8595adc78d1cc5a84d03715f"
+}

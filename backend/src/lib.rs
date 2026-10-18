@@ -30,8 +30,13 @@ pub async fn run() {
     dotenv().ok();
     setup_tracing();
 
-    let pool = db::create_pool(&get_env("DATABASE_URL")).await;
-    tracing::info!("Connected to PostgreSQL");
+	let pool = match db::create_pool(&get_env("DATABASE_URL")).await {
+        Ok(pool) => pool,
+        Err(e) => {
+            eprintln!("Cannot connect to database: {e}");
+            std::process::exit(1);
+        }
+    };    tracing::info!("Connected to PostgreSQL");
 
     let active_rooms = Arc::new(RwLock::new(HashMap::new()));
     let state = AppState {

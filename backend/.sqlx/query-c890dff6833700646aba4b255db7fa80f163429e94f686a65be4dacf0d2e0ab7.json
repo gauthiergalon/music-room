@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO rooms (owner_id, name) VALUES ($1, $2) RETURNING id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_licensed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_playing",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c890dff6833700646aba4b255db7fa80f163429e94f686a65be4dacf0d2e0ab7"
+}

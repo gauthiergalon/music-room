@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_track, is_playing, current_position, played_at FROM rooms WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "is_playing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "played_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a97ee889411faebfc922ec9cec4a1a0443b19d7d6e833939a9dbb4cbc9cb950f"
+}

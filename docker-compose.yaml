@@ -18,13 +18,12 @@ services:
     working_dir: /app
     volumes:
       - ./backend:/app:Z
-    command: cargo run
+    command: cargo run --release
     ports:
       - "3000:3000"
     env_file: .env
-    depends_on:
-      postgres:
-        condition: service_healthy
+    environment:
+      - SQLX_OFFLINE=true
 
   mailhog:
     image: mailhog/mailhog:latest
