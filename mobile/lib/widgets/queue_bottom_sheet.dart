@@ -41,7 +41,7 @@ void showQueueBottomSheet(BuildContext context) {
                 ),
                 Expanded(
                   child: ReorderableListView(
-                    onReorder: (oldIndex, newIndex) async {
+                    onReorderItem: (oldIndex, newIndex) async {
                       try {
                         await controller.reorderQueueItem(
                           currentRoom,

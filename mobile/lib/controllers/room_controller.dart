@@ -47,7 +47,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   bool _isInitialRoomState = false;
   bool _isLoadingTrack = false;
-  String? _pendingTrackId;
   DateTime? _lastSeekTimestamp;
   StreamSubscription? _playerSubscription;
 
@@ -210,7 +209,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
       if (trackChanged) {
         _isLoadingTrack = true;
-        _pendingTrackId = track.id.toString();
       }
 
       _currentRoom!.currentTrack = track;
@@ -328,7 +326,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     } finally {
       _isLoadingTrack = false;
-      _pendingTrackId = null;
     }
   }
 
@@ -354,7 +351,6 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     int oldIndex,
     int newIndex,
   ) async {
-    if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex < 0 || oldIndex >= queue.length) return;
 
     final item = queue[oldIndex];
