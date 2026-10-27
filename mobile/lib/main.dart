@@ -15,6 +15,7 @@ import 'controllers/friends_controller.dart';
 import 'controllers/room_controller.dart';
 import 'controllers/theme_controller.dart';
 import 'services/audio_service.dart';
+import 'widgets/battery_optimization_dialog.dart';
 import 'screens/login_page.dart';
 import 'screens/main_screen.dart';
 import 'screens/reset_password_page.dart';
@@ -75,6 +76,20 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _initDeepLinks();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final navContext = navigatorKey.currentContext;
+      if (navContext != null && navContext.mounted) {
+        try {
+          logger.info('Showing battery optimization dialog...');
+          await showBatteryOptimizationDialog(navContext);
+          logger.info('Battery optimization dialog finished.');
+        } catch (e, st) {
+          logger.error('Battery optimization dialog error', error: e, stackTrace: st);
+        }
+      } else {
+        logger.info('Battery optimization dialog skipped: context null or not mounted');
+      }
+    });
   }
 
   @override
