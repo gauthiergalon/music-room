@@ -11,19 +11,20 @@ use crate::services::music_provider::MusicProvider;
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct RoomMemberKey {
     pub user_id: Uuid,
-    pub device_name: String,
+    pub connection_id: Uuid,
 }
 
 #[derive(Clone, Debug)]
 pub struct RoomMember {
     pub username: String,
     pub device_name: String,
+    pub connection_id: Uuid,
 }
 
 #[derive(Clone, Debug)]
 pub struct RoomDelegate {
     pub user_id: Uuid,
-    pub device_name: String,
+    pub connection_id: Uuid,
 }
 
 pub struct ActiveRoom {
@@ -41,6 +42,7 @@ impl ActiveRoom {
             .map(|(member_key, member)| UserInfo {
                 user_id: member_key.user_id,
                 username: member.username.clone(),
+                connection_id: member_key.connection_id,
                 device_name: member.device_name.clone(),
             })
             .collect()

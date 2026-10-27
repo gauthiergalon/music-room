@@ -6,7 +6,7 @@ use crate::models::room::Room;
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct DelegateRoomRequest {
     pub user_id: Uuid,
-    pub device_name: String,
+    pub connection_id: Uuid,
 }
 
 impl From<Room> for RoomResponse {
