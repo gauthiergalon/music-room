@@ -264,8 +264,8 @@ void showListenersDialog(BuildContext context) {
                                 roomUser.id == currentRoom.owner;
                             final isDelegated =
                                 currentRoom.delegateUserId == roomUser.id &&
-                                currentRoom.delegateDevice ==
-                                    roomUser.deviceName;
+                                currentRoom.delegateConnectionId ==
+                                    roomUser.connectionId;
 
                             Widget? leadingIcon;
                             if (isOwnerUser) {

@@ -12,10 +12,7 @@ class RoomListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
-      child: Card.filled(
-        margin: EdgeInsets.zero,
+    return Card.filled(
         elevation: 0,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -33,9 +30,7 @@ class RoomListItem extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    room.status == 1
-                        ? Icons.play_arrow_rounded
-                        : Icons.pause_rounded,
+                    room.status == 1 ? Icons.play_arrow_rounded : Icons.pause_rounded,
                     color: theme.colorScheme.onPrimary,
                     size: 20,
                   ),
@@ -59,7 +54,6 @@ class RoomListItem extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }

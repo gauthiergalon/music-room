@@ -30,6 +30,8 @@ class _PlayerWidgetState extends State<PlayerWidget> {
         (delegateId != null && delegateId == myId) ||
         (delegateId == null && ownerId == myId);
 
+    final coverSize = MediaQuery.of(context).size.width * 0.65;
+
     return Padding(
       padding: AppTheme.paddingLg,
       child: Column(
@@ -40,19 +42,19 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             child: track?.imageUrl != null
                 ? Image.network(
                     track!.imageUrl!,
-                    width: 260,
-                    height: 260,
+                    width: coverSize,
+                    height: coverSize,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stack) => Container(
-                      width: 260,
-                      height: 260,
+                      width: coverSize,
+                      height: coverSize,
                       color: theme.colorScheme.surfaceContainerHighest,
                       child: const Icon(Icons.music_note, size: 72),
                     ),
                   )
                 : Container(
-                    width: 260,
-                    height: 260,
+                    width: coverSize,
+                    height: coverSize,
                     color: theme.colorScheme.surfaceContainerHighest,
                     child: Icon(
                       Icons.music_note,
