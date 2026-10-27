@@ -46,6 +46,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   List<Room> get availableRooms => _availableRooms;
 
   bool _isInitialRoomState = false;
+  bool _isLoadingTrack = false;
+  String? _pendingTrackId;
+  DateTime? _lastSeekTimestamp;
   StreamSubscription? _playerSubscription;
 
   RoomController({
@@ -203,7 +206,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       final bool trackChanged =
           currentTrack?.id != track.id ||
           _isInitialRoomState ||
-          _audioService.player.audioSource == null;
+          (_audioService.player.audioSource == null && !_isLoadingTrack);
+
+      if (trackChanged) {
+        _isLoadingTrack = true;
+        _pendingTrackId = track.id.toString();
+      }
 
       _currentRoom!.currentTrack = track;
 
@@ -239,10 +247,18 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
         if (diff > 0) posMs += diff;
       }
 
-      final currentPosMs = _audioService.position.inMilliseconds;
-      final seekDiff = (posMs - currentPosMs).abs();
-      if (seekDiff > 1000) {
-        _audioService.seek(Duration(milliseconds: posMs));
+      final messageTimestampStr = payload['timestamp']?.toString();
+      final messageTimestamp = messageTimestampStr != null ? DateTime.tryParse(messageTimestampStr)?.toUtc() : null;
+
+      // Ignore server seek if it's older than our last local seek
+      if (_lastSeekTimestamp != null && messageTimestamp != null && messageTimestamp.isBefore(_lastSeekTimestamp!)) {
+        // Skip applying this seek; the server state is older than our local seek.
+      } else {
+        final currentPosMs = _audioService.position.inMilliseconds;
+        final seekDiff = (posMs - currentPosMs).abs();
+        if (seekDiff > 1000) {
+          _audioService.seek(Duration(milliseconds: posMs));
+        }
       }
     }
 
@@ -310,6 +326,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           ? 'Error of the player: impossible to load the track.'
           : 'Error playing track.';
       notifyListeners();
+    } finally {
+      _isLoadingTrack = false;
+      _pendingTrackId = null;
     }
   }
 
@@ -395,9 +414,10 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   void seekTo(Room room, Duration position) {
     if (_currentRoom?.id == room.id) {
       _audioService.seek(position);
+      _lastSeekTimestamp = DateTime.now().toUtc();
       _sendWsEvent(_eventSeekTo, {
         'position': position.inMilliseconds,
-        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'timestamp': _lastSeekTimestamp!.toIso8601String(),
       });
     }
   }

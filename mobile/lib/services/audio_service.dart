@@ -28,10 +28,13 @@ class AudioService extends ChangeNotifier {
 
   Future<void> playTrack(Track track, Duration position) async {
     final streamUrl = track.streamUrl;
+    if (streamUrl.isEmpty) {
+      throw Exception("Stream URL is empty for track ${track.id}");
+    }
 
     await _audioPlayer.stop();
 
-    logger.debug('Audio playing: ${track.title}');
+    logger.debug('Audio playing: ${track.title} at $position');
 
     final audioSource = AudioSource.uri(
       Uri.parse(streamUrl),
@@ -43,10 +46,9 @@ class AudioService extends ChangeNotifier {
       ),
     );
 
-    await _audioPlayer.setAudioSource(audioSource);
+    await _audioPlayer.setAudioSource(audioSource, initialPosition: position);
 
     _currentTrack = track;
-    await _audioPlayer.seek(position);
     await _audioPlayer.play();
 
     notifyListeners();

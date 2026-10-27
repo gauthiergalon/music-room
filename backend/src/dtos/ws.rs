@@ -43,6 +43,7 @@ pub enum WsEventClient {
 pub enum WsEventServer {
     RoomState {
         current_track: Option<TrackItem>,
+        message_id: String,
         is_playing: bool,
         current_position: i32,
         timestamp: DateTime<Utc>,

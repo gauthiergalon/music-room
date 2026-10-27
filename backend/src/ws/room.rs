@@ -30,11 +30,13 @@ pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsE
     let current_track_item = get_current_track_item(state, room.current_track).await;
     let queue_items = get_queue_items(state, room_id).await;
 
+    let timestamp = room.played_at.unwrap_or_else(Utc::now);
     Some(WsEventServer::RoomState {
         current_track: current_track_item,
+        message_id: timestamp.to_rfc3339(),
         is_playing: room.is_playing,
         current_position: room.current_position,
-        timestamp: room.played_at.unwrap_or_else(Utc::now),
+        timestamp: timestamp,
         queue: queue_items,
     })
 }
