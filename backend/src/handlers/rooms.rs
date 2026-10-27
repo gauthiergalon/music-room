@@ -103,17 +103,13 @@ pub async fn delegate_room(
         return Err(AppError::Validation(vec![ErrorMessage::CannotDelegateToSelf]));
     }
 
-    if payload.device_name.trim().is_empty() {
-        return Err(AppError::Validation(vec![ErrorMessage::DeviceNameInvalid]));
-    }
-
     let mut rooms = state.active_rooms.write().await;
     let active_room = rooms
         .get_mut(&room_id)
         .ok_or(AppError::NotFound(ErrorMessage::ActiveRoomNotFound))?;
     let target_key = crate::state::RoomMemberKey {
         user_id: payload.user_id,
-        device_name: payload.device_name.clone(),
+        connection_id: payload.connection_id,
     };
     if !active_room.users.contains_key(&target_key) {
         return Err(AppError::NotFound(ErrorMessage::DeviceNotInRoom));
@@ -121,13 +117,13 @@ pub async fn delegate_room(
 
     active_room.delegate = Some(crate::state::RoomDelegate {
         user_id: payload.user_id,
-        device_name: payload.device_name.clone(),
+        connection_id: payload.connection_id,
     });
     let _ = active_room.tx.send(WsEventServer::UserState {
         user_list: active_room.user_list(),
         owner: active_room.owner_id.unwrap_or(claims.user_id),
         delegate_user_id: Some(payload.user_id),
-        delegate_device: Some(payload.device_name.clone()),
+        delegate_connection_id: Some(payload.connection_id),
     });
 
     Ok(StatusCode::NO_CONTENT)
@@ -159,7 +155,7 @@ pub async fn revoke_delegate(
             user_list: room.user_list(),
             owner: room.owner_id.unwrap_or(claims.user_id),
             delegate_user_id: None,
-            delegate_device: None,
+            delegate_connection_id: None,
         });
     }
     Ok(StatusCode::NO_CONTENT)
