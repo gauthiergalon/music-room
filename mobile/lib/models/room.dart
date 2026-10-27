@@ -13,7 +13,7 @@ class Room {
   bool isPublic;
   bool isLicensed;
   String? delegateUserId;
-  String? delegateDevice;
+  String? delegateConnectionId;
 
   Duration positionAtLastSync;
   DateTime updatedAt;
@@ -31,7 +31,7 @@ class Room {
     this.isPublic = true,
     this.isLicensed = false,
     this.delegateUserId,
-    this.delegateDevice,
+    this.delegateConnectionId,
   }) : queue = queue ?? [],
        listeners = listeners ?? [],
        positionAtLastSync = positionAtLastSync ?? Duration.zero,

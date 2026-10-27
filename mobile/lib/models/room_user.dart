@@ -3,7 +3,9 @@ class RoomUser {
   final String username;
   final String deviceName;
 
-  RoomUser({required this.id, required this.username, this.deviceName = 'Unknown device'});
+  final String connectionId;
+
+  RoomUser({required this.id, required this.username, required this.connectionId, this.deviceName = 'Unknown device'});
 
   String get displayName => deviceName.isEmpty ? username : '$username ($deviceName)';
 
@@ -13,8 +15,8 @@ class RoomUser {
       other is RoomUser &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          deviceName == other.deviceName;
+          connectionId == other.connectionId;
 
   @override
-  int get hashCode => Object.hash(id, deviceName);
+  int get hashCode => Object.hash(id, connectionId);
 }

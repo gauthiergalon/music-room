@@ -34,6 +34,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   String? _playerErrorMessage;
   String? get playerErrorMessage => _playerErrorMessage;
   Track? get currentTrack => _currentRoom?.currentTrack;
+
   bool get isPlaying => _audioService.isPlaying;
   Duration get playbackPosition => _audioService.position;
   Duration? get playbackDuration => _audioService.duration;
@@ -259,7 +260,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     final ownerId = payload['owner']?.toString();
     if (ownerId != null) _currentRoom!.owner = ownerId;
     _currentRoom!.delegateUserId = payload['delegate_user_id']?.toString();
-    _currentRoom!.delegateDevice = payload['delegate_device']?.toString();
+    _currentRoom!.delegateConnectionId = payload['delegate_connection_id']?.toString();
   }
 
   RoomUser? _roomUserFromPayload(dynamic payload) {
@@ -267,8 +268,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     final id = payload['user_id']?.toString();
     final username = payload['username']?.toString();
     if (id == null || username == null) return null;
+    final connectionId = payload['connection_id']?.toString() ?? '';
     final deviceName = payload['device_name']?.toString() ?? 'Unknown device';
-    return RoomUser(id: id, username: username, deviceName: deviceName);
+    return RoomUser(id: id, username: username, connectionId: connectionId, deviceName: deviceName);
   }
 
   Future<void> _playTrack(
@@ -316,7 +318,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> delegateDevice(Room room, RoomUser user) async {
-    await _roomRepository.delegateDevice(room.id, user.id, user.deviceName);
+    await _roomRepository.delegateDevice(room.id, user.id, user.connectionId);
   }
 
   Future<void> revokeDelegate(Room room) async {
@@ -377,10 +379,12 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void togglePlay(Room room) {
     if (_audioService.isPlaying) {
+      _audioService.pause();
       _sendWsEvent(_eventPause, {
         'position': _audioService.position.inMilliseconds,
       });
     } else {
+      _audioService.play();
       _sendWsEvent(_eventPlay, {
         'position': _audioService.position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -390,6 +394,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void seekTo(Room room, Duration position) {
     if (_currentRoom?.id == room.id) {
+      _audioService.seek(position);
       _sendWsEvent(_eventSeekTo, {
         'position': position.inMilliseconds,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -404,6 +409,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void skipPrev() {
+    _audioService.seek(Duration.zero);
     _sendWsEvent(_eventSeekTo, {
       'position': 0,
       'timestamp': DateTime.now().toUtc().toIso8601String(),

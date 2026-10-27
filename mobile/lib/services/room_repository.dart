@@ -64,11 +64,11 @@ class RoomRepository {
   Future<void> delegateDevice(
     String roomId,
     String userId,
-    String deviceName,
+    String connectionId,
   ) async {
     await ApiClient.post(
       '/rooms/$roomId/delegate',
-      body: {'user_id': userId, 'device_name': deviceName},
+      body: {'user_id': userId, 'connection_id': connectionId},
     );
   }
 
