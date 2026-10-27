@@ -24,7 +24,8 @@ pub async fn handle_socket(
     owner_id: Uuid,
     device_name: String,
 ) {
-    let rx = add_user_to_room(&state, room_id, &user, owner_id, device_name.clone()).await;
+    let connection_id = Uuid::new_v4();
+    let rx = add_user_to_room(&state, room_id, &user, owner_id, device_name.clone(), connection_id).await;
 
     // Broadcast new user list to everyone
     send_user_state(&state, room_id, owner_id).await;
@@ -45,7 +46,7 @@ pub async fn handle_socket(
         state.clone(),
         room_id,
         user.id,
-        device_name.clone(),
+        connection_id,
     );
 
     tokio::select! {
@@ -53,7 +54,7 @@ pub async fn handle_socket(
         _ = (&mut recv_task) => send_task.abort(),
     };
 
-    handle_user_disconnect(&state, room_id, user.id, &device_name).await;
+    handle_user_disconnect(&state, room_id, user.id, connection_id).await;
 }
 
 async fn add_user_to_room(
@@ -62,6 +63,7 @@ async fn add_user_to_room(
     user: &UserResponse,
     owner_id: Uuid,
     device_name: String,
+    connection_id: Uuid,
 ) -> Receiver<WsEventServer> {
     let mut rooms = state.active_rooms.write().await;
 
@@ -83,13 +85,14 @@ async fn add_user_to_room(
     room.last_activity = chrono::Utc::now();
     let member_key = RoomMemberKey {
         user_id: user.id,
-        device_name: device_name.clone(),
+        connection_id,
     };
     room.users.insert(
         member_key,
         RoomMember {
             username: user.username.clone(),
             device_name: device_name.clone(),
+            connection_id,
         },
     );
     room.tx.subscribe()
@@ -122,9 +125,9 @@ fn spawn_sender_task(
     })
 }
 
-fn can_control_playback(room: &ActiveRoom, user_id: Uuid, device_name: &str) -> bool {
+fn can_control_playback(room: &ActiveRoom, user_id: Uuid, connection_id: Uuid) -> bool {
     match &room.delegate {
-        Some(delegate) => delegate.user_id == user_id && delegate.device_name == device_name,
+        Some(delegate) => delegate.user_id == user_id && delegate.connection_id == connection_id,
         None => room.owner_id == Some(user_id),
     }
 }
@@ -134,7 +137,7 @@ fn spawn_receiver_task(
     state: AppState,
     room_id: Uuid,
     user_id: Uuid,
-    device_name: String,
+    connection_id: Uuid,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         while let Some(Ok(Message::Text(text))) = receiver.next().await {
@@ -145,7 +148,7 @@ fn spawn_receiver_task(
                     .read()
                     .await
                     .get(&room_id)
-                    .is_some_and(|room| can_control_playback(room, user_id, &device_name))
+                    .is_some_and(|room| can_control_playback(room, user_id, connection_id))
             {
                 handle_client_event(&state, room_id, event).await;
                 send_room_state(&state, room_id).await;
@@ -154,14 +157,14 @@ fn spawn_receiver_task(
     })
 }
 
-async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid, device_name: &str) {
+async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid, connection_id: Uuid) {
     let (should_close_room, current_owner_id) = {
         let mut rooms = state.active_rooms.write().await;
         if let Some(room) = rooms.get_mut(&room_id) {
             let owner_id = room.owner_id;
             let member_key = RoomMemberKey {
                 user_id,
-                device_name: device_name.to_string(),
+                connection_id,
             };
             room.users.remove(&member_key);
             let should_close = owner_id == Some(user_id)
@@ -169,7 +172,7 @@ async fn handle_user_disconnect(state: &AppState, room_id: Uuid, user_id: Uuid, 
             if room
                 .delegate
                 .as_ref()
-                .is_some_and(|delegate| delegate.user_id == user_id && delegate.device_name == device_name)
+                .is_some_and(|delegate| delegate.user_id == user_id && delegate.connection_id == connection_id)
             {
                 room.delegate = None;
             }

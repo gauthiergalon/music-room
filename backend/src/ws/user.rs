@@ -13,7 +13,7 @@ pub async fn send_user_state(state: &AppState, room_id: Uuid, owner_id: Uuid) {
             user_list,
             owner: owner_id,
             delegate_user_id: room.delegate.as_ref().map(|delegate| delegate.user_id),
-            delegate_device: room.delegate.as_ref().map(|delegate| delegate.device_name.clone()),
+            delegate_connection_id: room.delegate.as_ref().map(|delegate| delegate.connection_id),
         };
 
         let _ = room.tx.send(event);
