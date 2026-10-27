@@ -34,6 +34,11 @@ services:
   hifi-api:
     build: https://github.com/binimum/hifi-api.git#main
     env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     environment:
       - CLIENT_ID=${HIFI_API_CLIENT_ID}
       - CLIENT_SECRET=${HIFI_API_CLIENT_SECRET}
