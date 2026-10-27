@@ -458,7 +458,7 @@ class _RoomPageState extends State<RoomPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              isDelegate ? 'Device: ${current.delegateDevice ?? 'unknown'}' : 'User: $ownerId',
+              isDelegate ? 'Connection: ${current.delegateConnectionId ?? 'unknown'}' : 'User: $ownerId',
               style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
             ),
           ],
