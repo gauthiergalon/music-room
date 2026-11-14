@@ -3,7 +3,9 @@ name: Build APK
 on:
   push:
     branches: [main, dev]
+    paths: ["mobile/**", ".github/workflows/build-apk.yaml"]
   pull_request:
+    paths: ["mobile/**", ".github/workflows/build-apk.yaml"]
   workflow_dispatch:
 
 jobs:
@@ -34,6 +36,7 @@ jobs:
 
       - run: flutter pub get
       - run: flutter analyze
+      - run: flutter test
       - run: flutter build apk --release
 
       - uses: actions/upload-artifact@v4
