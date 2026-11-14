@@ -108,7 +108,19 @@ impl MusicProvider for HifiProvider {
             urlencoding::encode(query)
         );
 
-        Ok(self.get(&url).await?.json::<SearchResponse>().await?)
+        let mut payload = self.get(&url).await?.json::<Value>().await?;
+
+        // Files uploaded by the provider's users show up in searches, but the
+        // provider refuses to stream them to API clients. Leave them out so
+        // nobody picks a track that cannot be played.
+        if let Some(items) = payload
+            .pointer_mut("/data/items")
+            .and_then(Value::as_array_mut)
+        {
+            items.retain(|item| !is_user_upload(item));
+        }
+
+        serde_json::from_value(payload).map_err(|_| invalid_upstream("Invalid search response"))
     }
 
     async fn get_track_details(&self, track_id: i64) -> Result<TrackResponse, AppError> {
@@ -239,6 +251,12 @@ impl HifiProvider {
     }
 }
 
+/// Whether a search result is a file uploaded by a user of the provider,
+/// as opposed to a track of its catalogue.
+fn is_user_upload(item: &Value) -> bool {
+    item.get("upload").and_then(Value::as_bool) == Some(true)
+}
+
 /// The provider answered, but not with something usable.
 fn invalid_upstream(reason: impl Into<String>) -> AppError {
     tracing::error!("HiFi API error: {}", reason.into());
@@ -288,8 +306,42 @@ async fn resolve_pending_response(
 mod tests {
     use base64::{Engine, engine::general_purpose::STANDARD};
     use serde_json::json;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path, query_param},
+    };
 
-    use super::HifiProvider;
+    use super::{HifiProvider, MusicProvider};
+
+    #[tokio::test]
+    async fn search_leaves_out_user_uploads() {
+        let hifi = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/search/"))
+            .and(query_param("s", "triple baka"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "version": "2.4",
+                "data": {
+                    "limit": 25,
+                    "offset": 0,
+                    "totalNumberOfItems": 3,
+                    "items": [
+                        { "id": 1, "title": "Some upload.mp3", "duration": 100, "upload": true },
+                        { "id": 2, "title": "Catalogue track", "duration": 200, "upload": false },
+                        // Older payloads have no `upload` field at all.
+                        { "id": 3, "title": "Another catalogue track", "duration": 300 }
+                    ]
+                }
+            })))
+            .mount(&hifi)
+            .await;
+        let provider = HifiProvider::new(hifi.address().to_string());
+
+        let results = provider.search_tracks("triple baka").await.unwrap();
+
+        let ids: Vec<i64> = results.data.items.iter().map(|track| track.id).collect();
+        assert_eq!(ids, vec![2, 3]);
+    }
 
     #[test]
     fn extracts_direct_stream_url_from_bts_manifest() {
