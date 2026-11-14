@@ -21,15 +21,23 @@ class RoomOverlay extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: Stack(
-        children: [
-          const Center(child: PlayerWidget()),
-          Positioned(
-            top: AppTheme.spacingSm,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: AppTheme.paddingMd,
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'queue',
+        onPressed: () => showQueueBottomSheet(context),
+        child: const Icon(Icons.queue_music),
+      ),
+      // The header takes the height it needs and the player gets the rest,
+      // so they never overlap whatever the shape of the window.
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppTheme.spacingMd,
+                AppTheme.spacingMd,
+                AppTheme.spacingMd,
+                0,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -45,20 +53,22 @@ class RoomOverlay extends StatelessWidget {
                           foregroundColor: theme.colorScheme.onErrorContainer,
                         ),
                       ),
-                      const Spacer(),
                       Expanded(
-                        flex: 2,
-                        child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTheme.spacingMd,
+                          ),
                           child: Text(
                             roomName,
                             style: theme.textTheme.headlineSmall?.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
-                      const Spacer(),
                       IconButton(
                         tooltip: 'Listeners',
                         icon: const Icon(Icons.people_rounded),
@@ -75,17 +85,9 @@ class RoomOverlay extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          Positioned(
-            right: AppTheme.spacingMd,
-            bottom: AppTheme.spacingMd,
-            child: FloatingActionButton(
-              heroTag: 'queue',
-              onPressed: () => showQueueBottomSheet(context),
-              child: const Icon(Icons.queue_music),
-            ),
-          ),
-        ],
+            const Expanded(child: PlayerWidget()),
+          ],
+        ),
       ),
     );
   }
