@@ -48,6 +48,8 @@ use utoipa::OpenApi;
         crate::handlers::music::search,
         crate::handlers::music::get_track,
         crate::handlers::music::get_stream_url,
+        crate::handlers::music::stream_playlist,
+        crate::handlers::music::stream_segment,
 
         // Invitations endpoints
         crate::handlers::invitations::invite,

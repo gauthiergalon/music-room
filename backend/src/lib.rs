@@ -14,6 +14,7 @@ use crate::{
         email::{SmtpConfig, SmtpMailer},
         google::{DEFAULT_JWKS_URL, GoogleAuth},
         music_provider::hifi::HifiProvider,
+        stream_proxy::StreamProxy,
     },
     state::AppState,
     ws::manager::RoomManager,
@@ -62,9 +63,11 @@ pub async fn run() {
         Err(e) => exit_with(e),
     };
 
+    let jwt_secret = required_env("JWT_SECRET");
     let state = AppState {
         pool: pool.clone(),
-        jwt_secret: required_env("JWT_SECRET"),
+        stream_proxy: Arc::new(StreamProxy::from_env(&jwt_secret)),
+        jwt_secret,
         google: Arc::new(GoogleAuth::new(
             required_env("GOOGLE_CLIENT_ID"),
             env::var("GOOGLE_JWKS_URL").unwrap_or_else(|_| DEFAULT_JWKS_URL.to_string()),

@@ -218,6 +218,7 @@ dependencies = [
  "dotenv",
  "futures-util",
  "hex",
+ "hmac",
  "http",
  "jsonwebtoken",
  "lettre",

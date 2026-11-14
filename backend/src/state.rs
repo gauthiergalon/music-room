@@ -4,7 +4,9 @@ use sqlx::PgPool;
 
 use crate::{
     middleware::rate_limit::RateLimiter,
-    services::{email::Mailer, google::GoogleAuth, music_provider::MusicProvider},
+    services::{
+        email::Mailer, google::GoogleAuth, music_provider::MusicProvider, stream_proxy::StreamProxy,
+    },
     ws::manager::RoomManager,
 };
 
@@ -16,6 +18,8 @@ pub struct AppState {
     /// Presence of connected clients. The database decides whether a room exists.
     pub rooms: Arc<RoomManager>,
     pub music_provider: Arc<dyn MusicProvider>,
+    /// Relays HLS streams to browsers, which the audio CDN refuses to serve.
+    pub stream_proxy: Arc<StreamProxy>,
     pub mailer: Arc<dyn Mailer>,
     /// `None` disables rate limiting on the public auth routes.
     pub auth_rate_limiter: Option<Arc<RateLimiter>>,

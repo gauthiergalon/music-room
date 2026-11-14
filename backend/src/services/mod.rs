@@ -7,6 +7,7 @@ pub mod invitations;
 pub mod music_provider;
 pub mod queue;
 pub mod rooms;
+pub mod stream_proxy;
 pub mod tokens;
 pub mod tracks;
 pub mod user;

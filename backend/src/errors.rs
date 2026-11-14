@@ -146,6 +146,8 @@ pub enum ErrorMessage {
     NotInvited,
     MissingLicense,
     SubscriptionRequired,
+    StreamLinkInvalid,
+    StreamLinkExpired,
 
     // Server
     UpstreamUnavailable,
@@ -210,6 +212,8 @@ impl ErrorMessage {
             Self::NotInvited => "You are not invited to this room",
             Self::MissingLicense => "You need to be invited to edit this room's playlist",
             Self::SubscriptionRequired => "This feature is available for premium subscribers only",
+            Self::StreamLinkInvalid => "Invalid stream link",
+            Self::StreamLinkExpired => "This stream link has expired",
 
             // Server
             Self::UpstreamUnavailable => "An external service is unavailable, try again later",

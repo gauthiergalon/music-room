@@ -17,7 +17,10 @@ use backend::{
     errors::{AppError, ErrorMessage},
     middleware::rate_limit::RateLimiter,
     routes::app_router,
-    services::{email::MemoryMailer, google::GoogleAuth, music_provider::MusicProvider},
+    services::{
+        email::MemoryMailer, google::GoogleAuth, music_provider::MusicProvider,
+        stream_proxy::StreamProxy,
+    },
     state::AppState,
     ws::manager::{DEFAULT_MAX_ROOMS, RoomManager},
 };
@@ -40,6 +43,8 @@ pub const UNSTREAMABLE_TRACK_ID: i64 = 403_403;
 #[derive(Default)]
 pub struct MockMusicProvider {
     pub track_info_calls: AtomicUsize,
+    /// When set, every track streams from this URL instead of a made-up one.
+    pub stream_url: std::sync::Mutex<Option<String>>,
 }
 
 impl MockMusicProvider {
@@ -102,6 +107,9 @@ impl MusicProvider for MockMusicProvider {
         if track_id == UNSTREAMABLE_TRACK_ID {
             return Err(AppError::NotFound(ErrorMessage::TrackNotStreamable));
         }
+        if let Some(url) = self.stream_url.lock().unwrap().clone() {
+            return Ok(url);
+        }
         Ok(format!("https://stream.test/{track_id}"))
     }
 }
@@ -112,6 +120,8 @@ pub struct TestConfig {
     pub owner_grace: Duration,
     pub max_rooms: usize,
     pub auth_rate_limit: Option<u32>,
+    /// Hosts the stream relay may fetch from.
+    pub stream_hosts: Vec<String>,
 }
 
 impl Default for TestConfig {
@@ -122,6 +132,7 @@ impl Default for TestConfig {
             owner_grace: Duration::from_millis(300),
             max_rooms: DEFAULT_MAX_ROOMS,
             auth_rate_limit: None,
+            stream_hosts: vec!["stream.test".to_string()],
         }
     }
 }
@@ -148,6 +159,7 @@ impl TestApp {
             google: Arc::new(GoogleAuth::new(GOOGLE_CLIENT_ID, config.google_jwks_url)),
             rooms: Arc::new(RoomManager::new(config.max_rooms, config.owner_grace)),
             music_provider: music.clone(),
+            stream_proxy: Arc::new(StreamProxy::new(JWT_SECRET, config.stream_hosts)),
             mailer: mailer.clone(),
             auth_rate_limiter: config
                 .auth_rate_limit
