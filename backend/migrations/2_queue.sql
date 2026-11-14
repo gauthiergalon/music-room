@@ -1,4 +1,4 @@
-CREATE TABLE queue (
+CREATE TABLE IF NOT EXISTS queue (
     id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     room_id     UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
     track_id    BIGINT NOT NULL,
