@@ -33,7 +33,7 @@ pub async fn get_track(
     Ok(Json(track))
 }
 
-#[utoipa::path(get, path = "/hifi/track/{id}/stream-url", responses((status = 200, body = StreamUrlResponse)), tag = "Hifi")]
+#[utoipa::path(get, path = "/hifi/track/{id}/stream-url", responses((status = 200, body = StreamUrlResponse), (status = 404, description = "Unknown track, or track not available for streaming"), (status = 502)), tag = "Hifi")]
 pub async fn get_stream_url(
     State(state): State<AppState>,
     Path(track_id): Path<i64>,

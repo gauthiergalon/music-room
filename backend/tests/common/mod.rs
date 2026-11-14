@@ -33,6 +33,8 @@ pub const PASSWORD: &str = "password123";
 pub const UNKNOWN_TRACK_ID: i64 = 404_404;
 /// Tracks for which the provider is down.
 pub const FAILING_TRACK_ID: i64 = 502_502;
+/// Tracks the provider knows but refuses to stream.
+pub const UNSTREAMABLE_TRACK_ID: i64 = 403_403;
 
 /// A music provider that answers from memory and counts metadata lookups.
 #[derive(Default)]
@@ -97,6 +99,9 @@ impl MusicProvider for MockMusicProvider {
         track_id: i64,
         _platform: Option<&str>,
     ) -> Result<String, AppError> {
+        if track_id == UNSTREAMABLE_TRACK_ID {
+            return Err(AppError::NotFound(ErrorMessage::TrackNotStreamable));
+        }
         Ok(format!("https://stream.test/{track_id}"))
     }
 }

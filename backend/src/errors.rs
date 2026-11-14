@@ -137,6 +137,7 @@ pub enum ErrorMessage {
     AlreadyInvited,
     NotInvitedUser,
     TrackNotFound,
+    TrackNotStreamable,
     QueueItemNotFound,
     QueuePositionTaken,
 
@@ -200,6 +201,7 @@ impl ErrorMessage {
             Self::AlreadyInvited => "User is already invited",
             Self::NotInvitedUser => "You are not the invited user",
             Self::TrackNotFound => "Track not found",
+            Self::TrackNotStreamable => "This track is not available for streaming",
             Self::QueueItemNotFound => "This track is no longer in the queue",
             Self::QueuePositionTaken => "Another track already has this position in the queue",
 

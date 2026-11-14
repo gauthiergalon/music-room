@@ -40,6 +40,10 @@ pub async fn create(
 
     // Permissions first: only someone allowed to edit may trigger a provider call.
     track_service::ensure_cached(state, track_id).await?;
+    // Refuse a track nobody will be able to play instead of letting the room
+    // get stuck on it. The resolved URL is cached, so the listeners' requests
+    // that follow do not pay for it again.
+    state.music_provider.get_stream_url(track_id, None).await?;
     queue_repo::create(&state.pool, room_id, track_id).await?;
 
     // No-op unless the room has no current track.

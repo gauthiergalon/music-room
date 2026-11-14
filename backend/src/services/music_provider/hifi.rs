@@ -81,6 +81,22 @@ impl HifiProvider {
         }
         Ok(response.error_for_status()?)
     }
+
+    /// GET one of the endpoints that resolve the audio of a track.
+    ///
+    /// The provider answers 403 (or 451) when it knows the track but will not
+    /// serve it to us: region or licence restriction, user-uploaded content...
+    /// Nothing is broken on either side, so that is not a gateway error.
+    async fn get_playback(&self, url: &str) -> Result<reqwest::Response, AppError> {
+        let response = self.client.get(url).send().await?;
+        match response.status() {
+            StatusCode::NOT_FOUND => Err(AppError::NotFound(ErrorMessage::TrackNotFound)),
+            StatusCode::FORBIDDEN | StatusCode::UNAVAILABLE_FOR_LEGAL_REASONS => {
+                Err(AppError::NotFound(ErrorMessage::TrackNotStreamable))
+            }
+            _ => Ok(response.error_for_status()?),
+        }
+    }
 }
 
 #[async_trait]
@@ -98,7 +114,7 @@ impl MusicProvider for HifiProvider {
     async fn get_track_details(&self, track_id: i64) -> Result<TrackResponse, AppError> {
         let url = format!("http://{}/track/?id={}&quality=LOW", self.host, track_id);
 
-        let response = self.get(&url).await?;
+        let response = self.get_playback(&url).await?;
         let response = resolve_pending_response(&self.client, response, &self.host).await?;
         serde_json::from_value(response).map_err(|error| invalid_upstream(error.to_string()))
     }
@@ -208,7 +224,7 @@ impl HifiProvider {
             "http://{}/trackManifests/?id={}&adaptive=true&manifestType={}&uriScheme=HTTPS&usage=PLAYBACK&formats={}",
             self.host, track_id, TRACK_MANIFEST_TYPE_HLS, TRACK_MANIFEST_FORMAT,
         );
-        let response = self.get(&url).await?;
+        let response = self.get_playback(&url).await?;
         let response = resolve_pending_response(&self.client, response, &self.host).await?;
 
         let manifest_url = response

@@ -2,7 +2,7 @@ mod common;
 
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use common::{FAILING_TRACK_ID, TestApp, UNKNOWN_TRACK_ID, create_app};
+use common::{FAILING_TRACK_ID, TestApp, UNKNOWN_TRACK_ID, UNSTREAMABLE_TRACK_ID, create_app};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
@@ -407,4 +407,45 @@ async fn test_queue_remove_and_reorder_report_missing_items_and_conflicts(pool: 
         .json(&json!({ "id": queue[0].id, "new_position": queue[1].position }))
         .await
         .assert_status(StatusCode::CONFLICT);
+}
+
+#[sqlx::test]
+async fn test_queue_add_refuses_a_track_that_cannot_be_streamed(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let owner = common::register(&server, "nostream").await;
+    let room_id = common::create_room(&server, &owner).await;
+    let auth = common::bearer(&owner.access_token);
+
+    let res = server
+        .post(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "track_id": UNSTREAMABLE_TRACK_ID }))
+        .await;
+    res.assert_status(StatusCode::NOT_FOUND);
+    assert_eq!(
+        res.json::<serde_json::Value>()["details"][0],
+        "This track is not available for streaming"
+    );
+
+    // The room is untouched: nothing queued, nothing playing.
+    let room = server
+        .get(&format!("/rooms/{room_id}"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(room["current_track"], serde_json::Value::Null);
+    let queue = server
+        .get(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .json::<Vec<TestQueueResponse>>();
+    assert!(queue.is_empty());
+
+    // The stream endpoint reports the same reason.
+    server
+        .get(&format!("/hifi/track/{UNSTREAMABLE_TRACK_ID}/stream-url"))
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
 }
