@@ -3,9 +3,14 @@ import 'package:flutter/material.dart';
 
 import '../services/audio_service.dart';
 
+/// Derives the app's seed colour from the cover of the current track.
 class ThemeController extends ChangeNotifier {
   final AudioService _audioService;
-  Color _seedColor = Colors.deepPurple;
+  Color _seedColor = _defaultSeedColor;
+
+  /// Cover the current colour was computed from (or is being computed from).
+  String? _imageUrl;
+  bool _disposed = false;
 
   static const Color _defaultSeedColor = Colors.deepPurple;
 
@@ -18,38 +23,33 @@ class ThemeController extends ChangeNotifier {
   void _onTrackChanged() {
     if (kIsWeb) return;
 
-    final track = _audioService.currentTrack;
-    final imageUrl = track?.imageUrl;
+    final imageUrl = _audioService.currentTrack?.imageUrl;
+    final normalized = imageUrl == null || imageUrl.isEmpty ? null : imageUrl;
+    if (normalized == _imageUrl) return;
+    _imageUrl = normalized;
 
-    if (imageUrl == null || imageUrl.isEmpty) {
+    if (normalized == null) {
       _updateSeedColor(_defaultSeedColor);
-      return;
+    } else {
+      _extractColorFromImage(normalized);
     }
-
-    _extractColorFromImage(imageUrl);
-  }
-
-  void setTrackColor(String? imageUrl) {
-    if (kIsWeb) return;
-
-    if (imageUrl == null || imageUrl.isEmpty) {
-      _updateSeedColor(_defaultSeedColor);
-      return;
-    }
-
-    _extractColorFromImage(imageUrl);
   }
 
   Future<void> _extractColorFromImage(String imageUrl) async {
+    Color color;
     try {
       final colorScheme = await ColorScheme.fromImageProvider(
         provider: NetworkImage(imageUrl),
         brightness: Brightness.dark,
       );
-      _updateSeedColor(colorScheme.primary);
+      color = colorScheme.primary;
     } catch (e) {
-      _updateSeedColor(_defaultSeedColor);
+      color = _defaultSeedColor;
     }
+
+    // The track changed again while this cover was being analysed.
+    if (_disposed || imageUrl != _imageUrl) return;
+    _updateSeedColor(color);
   }
 
   void _updateSeedColor(Color color) {
@@ -61,6 +61,7 @@ class ThemeController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _audioService.removeListener(_onTrackChanged);
     super.dispose();
   }

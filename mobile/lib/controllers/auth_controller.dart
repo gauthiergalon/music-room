@@ -1,193 +1,131 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:provider/provider.dart';
 
 import '../core/exceptions/api_exception.dart';
 import '../core/logger/logger.dart';
 import '../core/network/api_client.dart';
 import '../core/storage/session_storage.dart';
-import '../main.dart';
 import '../models/user.dart';
 
 class AuthController extends ChangeNotifier {
   bool _isAuthenticated = false;
   bool _isLoadingUser = false;
-  String? _token;
+  bool _isLoggingOut = false;
   User? _user;
+  Future<void>? _googleInit;
 
   bool get isAuthenticated => _isAuthenticated;
   bool get isLoadingUser => _isLoadingUser;
-  String? get token => _token;
   User? get user => _user;
 
-  String? get _googleClientId {
-    final value = dotenv.env['GOOGLE_CLIENT_ID']?.trim();
-    return value == null || value.isEmpty ? null : value;
-  }
+  /// Called at the start of every logout, before the session is cleared, so
+  /// the rest of the app can drop what belongs to the user (open room,
+  /// friends list...). Must be synchronous.
+  VoidCallback? onLoggedOut;
 
   AuthController() {
-    if (!kIsWeb) {
-      final googleClientId = _googleClientId;
-      if (googleClientId == null) {
-        throw StateError('GOOGLE_CLIENT_ID must be provided in .env');
-      }
-
-      GoogleSignIn.instance.initialize(serverClientId: googleClientId);
-    }
+    ApiClient.onUnauthorized = _handleUnauthorized;
     _loadSession();
   }
 
-  /// Unregisters the unauthorized callback to prevent double-logout,
-  /// then performs a full logout of all controllers and storage.
-  static void _handleUnauthorized() {
-    final auth = navigatorKey.currentContext?.read<AuthController>();
-    auth?._performLogout();
-  }
-
-  /// Register or re-register the unauthorized handler.
-  void attachUnauthorizedHandler() {
-    ApiClient.onUnauthorized = _handleUnauthorized;
-  }
-
-  /// Unregister to prevent referencing disposed controller.
-  void detachUnauthorizedHandler() {
+  @override
+  void dispose() {
     if (ApiClient.onUnauthorized == _handleUnauthorized) {
       ApiClient.onUnauthorized = null;
     }
+    super.dispose();
   }
 
-  /// Internal logout that clears all controller state across the app.
-  /// Handles the case where the user may have been deleted from the DB.
+  /// The session could not be refreshed: the refresh token is no longer
+  /// valid, so there is nothing to revoke on the server.
+  void _handleUnauthorized() {
+    _performLogout(sendServerLogout: false);
+  }
+
   Future<void> _performLogout({bool sendServerLogout = true}) async {
-    final refreshToken = await SessionStorage.getRefreshToken();
-    final wasAuthenticated = _isAuthenticated;
+    if (_isLoggingOut || !_isAuthenticated) return;
+    _isLoggingOut = true;
 
-    _isAuthenticated = false;
-    _token = null;
-    _user = null;
+    try {
+      onLoggedOut?.call();
 
-    if (wasAuthenticated && sendServerLogout && refreshToken != null) {
-      try {
-        await ApiClient.post(
-          '/auth/logout',
-          body: {'refresh_token': refreshToken},
-        );
-      } catch (e) {
-        // Ignore errors: server may already have revoked token or user was deleted
-        logger.debug('Server logout failed (expected if DB was wiped)');
+      _isAuthenticated = false;
+      _user = null;
+      notifyListeners();
+
+      final refreshToken = await SessionStorage.getRefreshToken();
+      await SessionStorage.clear();
+
+      if (sendServerLogout && refreshToken != null) {
+        try {
+          await ApiClient.post(
+            '/auth/logout',
+            body: {'refresh_token': refreshToken},
+          );
+        } catch (e) {
+          // Best effort: the local session is gone either way.
+          logger.debug('Server logout failed');
+        }
       }
+    } finally {
+      _isLoggingOut = false;
     }
-
-    await SessionStorage.clear();
-
-    notifyListeners();
   }
 
   Future<void> _loadSession() async {
-    attachUnauthorizedHandler();
-    _token = await SessionStorage.getAccessToken();
+    final token = await SessionStorage.getAccessToken();
+    if (token == null) return;
 
-    if (_token != null) {
-      _isAuthenticated = true;
-      notifyListeners();
-      await fetchUserInfo();
-    }
-  }
-
-  List<String>? _parseFavoriteGenres(dynamic rawFavoriteGenres) {
-    if (rawFavoriteGenres is! List) {
-      return null;
-    }
-
-    final favoriteGenres = rawFavoriteGenres
-        .map((item) => item.toString())
-        .where((item) => item.isNotEmpty)
-        .toList();
-
-    return favoriteGenres.isEmpty ? null : favoriteGenres;
-  }
-
-  User _buildUser(Map<String, dynamic> data) {
-    return User(
-      id: data['id'],
-      username: data['username'],
-      email: data['email'],
-      emailConfirmed:
-          data['email_confirmed'] == true || data['email_confirmed'] == 't',
-      googleId: data['google_id'],
-      favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
-      privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
-      isSubscribed:
-          data['is_subscribed'] == true || data['is_subscribed'] == 't',
-      endSubscriptionDate: data['end_subscription_date'] != null
-          ? DateTime.parse(data['end_subscription_date'])
-          : null,
-    );
+    _isAuthenticated = true;
+    notifyListeners();
+    await fetchUserInfo();
   }
 
   Future<void> _storeAuthenticatedSession(Map<String, dynamic> data) async {
+    await _saveTokens(data);
+    _isAuthenticated = true;
+    notifyListeners();
+    await fetchUserInfo();
+  }
+
+  Future<void> _saveTokens(Map<String, dynamic> data) async {
     final accessToken = data['access_token']?.toString();
     if (accessToken == null || accessToken.isEmpty) {
       throw ApiException('Authentication response is missing an access token.');
     }
 
-    _token = accessToken;
-    _isAuthenticated = true;
-
     await SessionStorage.saveSession(
       accessToken: accessToken,
       refreshToken: data['refresh_token']?.toString(),
     );
-
-    notifyListeners();
-    await fetchUserInfo();
   }
 
-  Future<Map<String, dynamic>> _authenticateWithGoogle() async {
-    if (kIsWeb) {
-      throw ApiException(
-        'La connexion Google nest pas disponible sur le navigateur. Utilisez email et mot de passe.',
-      );
-    }
-
-    final GoogleSignInAccount account = await GoogleSignIn.instance
-        .authenticate(scopeHint: ['email', 'profile']);
-
-    final GoogleSignInAuthentication auth = account.authentication;
-    final String? idToken = auth.idToken;
-
-    if (idToken == null) {
-      throw ApiException('Échec de la récupération du token Google.');
-    }
-
-    final response = await ApiClient.post(
-      '/auth/google-login',
-      body: {'id_token': idToken},
-    );
-
-    return Map<String, dynamic>.from(response as Map);
+  void _setUserFrom(dynamic data) {
+    if (data is! Map) return;
+    _user = User.fromJson(Map<String, dynamic>.from(data));
+    notifyListeners();
   }
 
   Future<void> fetchUserInfo() async {
-    if (_token == null) return;
+    if (!_isAuthenticated) return;
     try {
       _isLoadingUser = true;
       notifyListeners();
 
       final data = await ApiClient.get('/users/me');
-      if (data != null) {
-        _user = _buildUser(Map<String, dynamic>.from(data as Map));
+      if (data is Map) {
+        _user = User.fromJson(Map<String, dynamic>.from(data));
       }
     } on ApiException catch (e) {
+      logger.error('Failed to fetch user info', error: e);
       if (e.statusCode == 401) {
         await logout();
       } else if (e.statusCode == 404) {
-        // User was deleted from the DB (db wipe/delete)
-        logger.warning('User no longer exists in DB, forcing logout');
+        // The account no longer exists on the server.
+        logger.warning('User no longer exists, forcing logout');
         await _performLogout(sendServerLogout: false);
       }
-      logger.error('Failed to fetch user info', error: e);
     } catch (e) {
       logger.error('Unexpected error fetching user info', error: e);
     } finally {
@@ -196,79 +134,14 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<void> updateUsername(String newUsername) async {
-    final data = await ApiClient.patch(
-      '/users/me/username',
-      body: {'username': newUsername},
-    );
-    if (data != null) {
-      _user = _user?.copyWith(username: data['username']);
-      notifyListeners();
-    }
-  }
-
-  Future<void> updateEmail(String newEmail) async {
-    final data = await ApiClient.patch(
-      '/users/me/email',
-      body: {'new_email': newEmail},
-    );
-    if (data != null) {
-      _user = _user?.copyWith(email: data['email'], emailConfirmed: false);
-      notifyListeners();
-    }
-  }
-
-  Future<void> updatePassword(
-    String currentPassword,
-    String newPassword,
-  ) async {
-    await ApiClient.patch(
-      '/users/me/password',
-      body: {'current_password': currentPassword, 'new_password': newPassword},
-    );
-  }
-
-  Future<void> updateFavoriteGenres(List<String>? favoriteGenres) async {
-    final data = await ApiClient.patch(
-      '/users/me/favorite-genres',
-      body: {'favorite_genres': favoriteGenres},
-    );
-
-    if (data != null) {
-      _user = _user?.copyWith(
-        favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
-      );
-      notifyListeners();
-    }
-  }
-
-  Future<void> updatePrivacyLevel(String privacyLevel) async {
-    final data = await ApiClient.patch(
-      '/users/me/privacy',
-      body: {'privacy_level': privacyLevel},
-    );
-
-    if (data != null) {
-      _user = _user?.copyWith(
-        privacyLevel: data['privacy_level']?.toString() ?? privacyLevel,
-      );
-      notifyListeners();
-    }
-  }
-
-  Future<void> sendEmailConfirmation() async {
-    await ApiClient.post('/users/me/send-confirmation-email');
-  }
+  // ------------------------------------------------------------- account
 
   Future<void> register(String username, String email, String password) async {
     final data = await ApiClient.post(
       '/auth/register',
       body: {'username': username, 'email': email, 'password': password},
     );
-
-    if (data != null) {
-      await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
-    }
+    await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
   }
 
   Future<void> login(String email, String password) async {
@@ -276,11 +149,10 @@ class AuthController extends ChangeNotifier {
       '/auth/login',
       body: {'email': email, 'password': password},
     );
-
-    if (data != null) {
-      await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
-    }
+    await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
   }
+
+  Future<void> logout() => _performLogout(sendServerLogout: true);
 
   Future<void> forgotPassword(String email) async {
     await ApiClient.post('/auth/forgot-password', body: {'email': email});
@@ -293,58 +165,138 @@ class AuthController extends ChangeNotifier {
     );
   }
 
+  // -------------------------------------------------------------- Google
+
+  String? get _googleClientId {
+    final value = dotenv.env['GOOGLE_CLIENT_ID']?.trim();
+    return value == null || value.isEmpty ? null : value;
+  }
+
+  /// Runs the Google sign-in flow and returns the Google ID token.
+  Future<String> _googleIdToken() async {
+    if (kIsWeb) {
+      throw ApiException(
+        'Google sign-in is not available in the browser. '
+        'Use your email and password.',
+      );
+    }
+
+    final clientId = _googleClientId;
+    if (clientId == null) {
+      throw ApiException('Google sign-in is not configured.');
+    }
+
+    try {
+      await (_googleInit ??= GoogleSignIn.instance.initialize(
+        serverClientId: clientId,
+      ));
+    } catch (e) {
+      _googleInit = null;
+      rethrow;
+    }
+
+    final account = await GoogleSignIn.instance.authenticate(
+      scopeHint: ['email', 'profile'],
+    );
+    final idToken = account.authentication.idToken;
+    if (idToken == null) {
+      throw ApiException('Could not get a token from Google.');
+    }
+    return idToken;
+  }
+
   Future<void> loginWithGoogle() async {
     try {
-      final data = await _authenticateWithGoogle();
-      await _storeAuthenticatedSession(data);
+      final idToken = await _googleIdToken();
+      final data = await ApiClient.post(
+        '/auth/google-login',
+        body: {'id_token': idToken},
+      );
+      await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      logger.error('Erreur lors de la connexion Google', error: e);
-      throw ApiException('La connexion Google a échoué: $e');
+      logger.error('Google sign-in failed', error: e);
+      throw ApiException('Google sign-in failed.');
     }
   }
 
+  /// Links a Google account to the account that is currently logged in.
   Future<void> linkGoogleAccount() async {
     try {
-      final data = await _authenticateWithGoogle();
-      await _storeAuthenticatedSession(data);
+      final idToken = await _googleIdToken();
+      final data = await ApiClient.post(
+        '/users/me/google',
+        body: {'id_token': idToken},
+      );
+      _setUserFrom(data);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      logger.error('Erreur lors de la liaison du compte Google', error: e);
-      throw ApiException('Google link failed');
+      logger.error('Linking the Google account failed', error: e);
+      throw ApiException('Could not link the Google account.');
     }
   }
 
-  Future<void> logout() async {
-    await _performLogout(sendServerLogout: true);
+  // ------------------------------------------------------------- profile
+
+  Future<void> updateUsername(String newUsername) async {
+    final data = await ApiClient.patch(
+      '/users/me/username',
+      body: {'username': newUsername},
+    );
+    _setUserFrom(data);
   }
 
+  /// Asks for an email change. The address only changes once the link sent
+  /// to [newEmail] has been confirmed.
+  Future<void> updateEmail(String newEmail) async {
+    await ApiClient.patch('/users/me/email', body: {'new_email': newEmail});
+  }
+
+  /// Changes the password. The server revokes every other session and
+  /// returns new tokens for this one.
+  Future<void> updatePassword(
+    String currentPassword,
+    String newPassword,
+  ) async {
+    final data = await ApiClient.patch(
+      '/users/me/password',
+      body: {'current_password': currentPassword, 'new_password': newPassword},
+    );
+    if (data is Map && data['access_token'] != null) {
+      await _saveTokens(Map<String, dynamic>.from(data));
+    }
+  }
+
+  Future<void> updateFavoriteGenres(List<String> favoriteGenres) async {
+    final data = await ApiClient.patch(
+      '/users/me/favorite-genres',
+      body: {'favorite_genres': favoriteGenres},
+    );
+    _setUserFrom(data);
+  }
+
+  Future<void> updatePrivacyLevel(String privacyLevel) async {
+    final data = await ApiClient.patch(
+      '/users/me/privacy',
+      body: {'privacy_level': privacyLevel},
+    );
+    _setUserFrom(data);
+  }
+
+  Future<void> sendEmailConfirmation() async {
+    await ApiClient.post('/users/me/send-confirmation-email');
+  }
+
+  /// Confirms an email address (current or new) with the token of the link.
   Future<void> confirmEmail(String token) async {
-    try {
-      await ApiClient.patch('/users/me/confirm-email', body: {'token': token});
-
-      _user = _user?.copyWith(emailConfirmed: true);
-      notifyListeners();
-    } catch (e) {
-      throw Exception('Failed to verify email: $e');
-    }
+    await ApiClient.patch('/users/me/confirm-email', body: {'token': token});
+    await fetchUserInfo();
   }
 
   Future<void> enableSubscription() async {
-    try {
-      final data = await ApiClient.post('/users/me/subscription');
-      debugPrint("Subscription data received: $data");
-
-      _user = _user?.copyWith(
-        isSubscribed: data['is_subscribed'] == true,
-        endSubscriptionDate: data['end_subscription_date'] != null
-            ? DateTime.parse(data['end_subscription_date'])
-            : null,
-      );
-      notifyListeners();
-      debugPrint(
-        "Subscription created successfully: ${_user?.isSubscribed}, ${_user?.endSubscriptionDate}",
-      );
-    } catch (e) {
-      throw Exception('Failed to enable subscription: $e');
-    }
+    final data = await ApiClient.post('/users/me/subscription');
+    _setUserFrom(data);
   }
 }

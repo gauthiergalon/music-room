@@ -226,10 +226,7 @@ class _LoginPageState extends State<LoginPage> {
                 const Row(
                   children: [
                     Expanded(child: Divider()),
-                    Padding(
-                      padding: AppTheme.paddingMd,
-                      child: Text('OR'),
-                    ),
+                    Padding(padding: AppTheme.paddingMd, child: Text('OR')),
                     Expanded(child: Divider()),
                   ],
                 ),

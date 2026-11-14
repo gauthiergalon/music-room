@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
+import '../controllers/invitations_controller.dart';
 import '../controllers/room_controller.dart';
-import '../core/network/api_client.dart';
 import '../models/room.dart';
+import '../models/room_invitation.dart';
 import '../widgets/room_list_item.dart';
 import '../core/theme.dart';
 import '../core/utils/ui_utils.dart';
@@ -19,29 +20,53 @@ class RoomPage extends StatefulWidget {
 class _RoomPageState extends State<RoomPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  late final RoomController _roomController;
   bool _isCreating = false;
-  bool _isLoadingInvitations = false;
-  final Set<String> _processingInvitationIds = <String>{};
-  List<_RoomInvitation> _pendingInvitations = <_RoomInvitation>[];
 
   @override
   void initState() {
     super.initState();
+    _roomController = context.read<RoomController>();
+    _roomController.addListener(_showRoomMessages);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshRooms();
     });
   }
 
-  Future<void> _createRoom(String username) async {
+  @override
+  void dispose() {
+    _roomController.removeListener(_showRoomMessages);
+    super.dispose();
+  }
+
+  /// Shows the one-off messages of the room controller (room closed, player
+  /// error) as snackbars.
+  void _showRoomMessages() {
+    if (!_roomController.hasRoomClosedMessage &&
+        !_roomController.hasPlayerErrorMessage) {
+      return;
+    }
+    // The controller may notify while the tree is being built, so wait for
+    // the end of the frame (and make sure there is one).
+    WidgetsBinding.instance.ensureVisualUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final closedMessage = _roomController.takeRoomClosedMessage();
+      if (closedMessage != null) UiUtils.showSnackBar(context, closedMessage);
+      final errorMessage = _roomController.takePlayerErrorMessage();
+      if (errorMessage != null) UiUtils.showError(context, errorMessage);
+    });
+  }
+
+  Future<void> _createRoom() async {
     if (_isCreating) return;
 
     setState(() {
       _isCreating = true;
     });
 
-    final controller = context.read<RoomController>();
     try {
-      await controller.createRoom();
+      await _roomController.createRoom();
     } catch (e) {
       if (mounted) {
         UiUtils.showError(context, e.toString());
@@ -58,8 +83,8 @@ class _RoomPageState extends State<RoomPage> {
   Future<void> _refreshRooms() async {
     try {
       await Future.wait([
-        context.read<RoomController>().refreshRooms(),
-        _fetchPendingInvitations(showErrors: false),
+        _roomController.refreshRooms(),
+        context.read<InvitationsController>().fetch(),
       ]).timeout(const Duration(seconds: 10));
     } catch (e) {
       if (mounted) {
@@ -68,114 +93,28 @@ class _RoomPageState extends State<RoomPage> {
     }
   }
 
-  Future<void> _fetchPendingInvitations({bool showErrors = true}) async {
-    if (mounted) {
-      setState(() {
-        _isLoadingInvitations = true;
-      });
-    }
-
+  Future<void> _fetchInvitations({required bool showErrors}) async {
     try {
-      final response = await ApiClient.get('/me/invitations');
-      final rawList = List<dynamic>.from(response as List<dynamic>);
-      final invitations = rawList
-          .map(
-            (item) => _RoomInvitation.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            ),
-          )
-          .where((inv) => inv.isPending)
-          .toList();
-
-      final inviterIds = invitations
-          .map((inv) => inv.inviterId)
-          .where((id) => id.isNotEmpty)
-          .toSet();
-
-      final Map<String, String> usernamesById = <String, String>{};
-      await Future.wait(
-        inviterIds.map((inviterId) async {
-          try {
-            final userRes = await ApiClient.get('/users/$inviterId');
-            final username = userRes['username']?.toString();
-            if (username != null && username.isNotEmpty) {
-              usernamesById[inviterId] = username;
-            }
-          } catch (_) {
-            // Keep fallback username when user details are unavailable.
-          }
-        }),
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _pendingInvitations = invitations
-            .map(
-              (inv) => inv.copyWith(
-                inviterUsername: usernamesById[inv.inviterId] ?? 'Unknown user',
-              ),
-            )
-            .toList();
-      });
+      await context.read<InvitationsController>().fetch();
     } catch (e) {
       if (showErrors && mounted) {
         UiUtils.showError(context, 'Failed to load invitations');
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingInvitations = false;
-        });
-      }
     }
   }
 
-  Future<void> _handleInvitationAction(
-    _RoomInvitation invitation, {
+  Future<void> _answerInvitation(
+    RoomInvitation invitation, {
     required bool accept,
   }) async {
-    if (_processingInvitationIds.contains(invitation.id)) {
-      return;
-    }
-
-    setState(() {
-      _processingInvitationIds.add(invitation.id);
-    });
+    final invitations = context.read<InvitationsController>();
+    if (invitations.isProcessing(invitation.id)) return;
 
     try {
-      final endpoint = accept
-          ? '/me/invitations/${invitation.id}/accept'
-          : '/me/invitations/${invitation.id}/reject';
-      await ApiClient.post(endpoint);
-
-      if (!mounted) return;
-
-      setState(() {
-        _pendingInvitations.removeWhere((i) => i.id == invitation.id);
-      });
-
-      await context.read<RoomController>().refreshRooms();
-
-      if (mounted) {
-        UiUtils.showSuccess(
-          context,
-          accept ? 'Invitation accepted' : 'Invitation rejected',
-        );
-      }
-
-      if (accept && mounted) {
-        final roomController = context.read<RoomController>();
-        Room? roomToJoin;
-        try {
-          roomToJoin = roomController.availableRooms.firstWhere(
-            (room) => room.id == invitation.roomId,
-          );
-        } catch (e) {
-          // Room not found, that's ok
-        }
-        if (roomToJoin != null) {
-          await roomController.openRoom(roomToJoin);
-        }
+      if (accept) {
+        await invitations.accept(invitation);
+      } else {
+        await invitations.reject(invitation);
       }
     } catch (e) {
       if (mounted) {
@@ -186,17 +125,27 @@ class _RoomPageState extends State<RoomPage> {
               : 'Failed to reject invitation',
         );
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _processingInvitationIds.remove(invitation.id);
-        });
-      }
+      return;
     }
-  }
 
-  void _openRoom(Room room) {
-    context.read<RoomController>().openRoom(room);
+    if (!mounted) return;
+    UiUtils.showSuccess(
+      context,
+      accept ? 'Invitation accepted' : 'Invitation rejected',
+    );
+    if (!accept) return;
+
+    // Join the room the invitation was for.
+    try {
+      await _roomController.refreshRooms();
+      final room = _roomController.availableRooms
+          .where((room) => room.id == invitation.roomId)
+          .firstOrNull;
+      if (room != null) await _roomController.openRoom(room);
+    } catch (_) {
+      // The invitation is accepted; the room can still be joined from the
+      // list once it loads.
+    }
   }
 
   @override
@@ -232,41 +181,24 @@ class _RoomPageState extends State<RoomPage> {
       );
     }
 
-    final controller = context.watch<RoomController>();
-    final closedMessage = controller.roomClosedMessage;
-    if (closedMessage != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          UiUtils.showSnackBar(context, closedMessage);
-          controller.clearRoomClosedMessage();
-        }
-      });
-    }
-
-    final playerErrorMessage = controller.playerErrorMessage;
-    if (playerErrorMessage != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          UiUtils.showError(context, playerErrorMessage);
-          controller.clearPlayerErrorMessage();
-        }
-      });
-    }
-
-    final current = controller.currentRoom;
+    final inRoom = context.select<RoomController, bool>(
+      (c) => c.currentRoom != null,
+    );
+    final hasInvitations = context.select<InvitationsController, bool>(
+      (c) => c.pending.isNotEmpty,
+    );
 
     return PopScope(
-      canPop: current == null,
+      canPop: !inRoom,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (current != null) {
-          controller.leaveRoom();
-        }
+        _roomController.leaveRoom();
       },
       child: Scaffold(
         key: _scaffoldKey,
-        appBar: current == null
-            ? AppBar(
+        appBar: inRoom
+            ? null
+            : AppBar(
                 actions: [
                   IconButton(
                     icon: const Icon(Icons.refresh),
@@ -280,11 +212,11 @@ class _RoomPageState extends State<RoomPage> {
                         icon: const Icon(Icons.notifications_none),
                         tooltip: 'Room invitations',
                         onPressed: () {
-                          _fetchPendingInvitations(showErrors: false);
+                          _fetchInvitations(showErrors: false);
                           _scaffoldKey.currentState?.openEndDrawer();
                         },
                       ),
-                      if (_pendingInvitations.isNotEmpty)
+                      if (hasInvitations)
                         Positioned(
                           right: 12,
                           top: 12,
@@ -300,120 +232,15 @@ class _RoomPageState extends State<RoomPage> {
                     ],
                   ),
                 ],
-              )
-            : null,
-        endDrawer: Drawer(
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: AppTheme.paddingMd,
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Room invitations',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _isLoadingInvitations
-                            ? null
-                            : () => _fetchPendingInvitations(showErrors: true),
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh',
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: _isLoadingInvitations
-                      ? const Center(child: CircularProgressIndicator())
-                      : _pendingInvitations.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: AppTheme.paddingMd,
-                            child: Text(
-                              'No pending invitations',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: AppTheme.paddingMd,
-                          itemCount: _pendingInvitations.length,
-                          separatorBuilder: (_, index) =>
-                              const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final invitation = _pendingInvitations[index];
-                            final isProcessing = _processingInvitationIds
-                                .contains(invitation.id);
-
-                            return Card(
-                              child: Padding(
-                                padding: AppTheme.paddingMd,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      invitation.inviterUsername,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    const Text('invited you to join a room'),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: ElevatedButton.icon(
-                                            onPressed: isProcessing
-                                                ? null
-                                                : () => _handleInvitationAction(
-                                                    invitation,
-                                                    accept: true,
-                                                  ),
-                                            icon: const Icon(Icons.check),
-                                            label: const Text('Accept'),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            onPressed: isProcessing
-                                                ? null
-                                                : () => _handleInvitationAction(
-                                                    invitation,
-                                                    accept: false,
-                                                  ),
-                                            icon: const Icon(Icons.close),
-                                            label: const Text('Reject'),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
+              ),
+        endDrawer: _InvitationsDrawer(
+          onRefresh: () => _fetchInvitations(showErrors: true),
+          onAnswer: _answerInvitation,
         ),
-        floatingActionButton: current == null
-            ? FloatingActionButton(
-                onPressed: _isCreating
-                    ? null
-                    : () => _createRoom(user.username),
+        floatingActionButton: inRoom
+            ? null
+            : FloatingActionButton(
+                onPressed: _isCreating ? null : _createRoom,
                 child: _isCreating
                     ? const SizedBox(
                         width: 24,
@@ -421,55 +248,32 @@ class _RoomPageState extends State<RoomPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.add),
-              )
-            : null,
+              ),
         body: SafeArea(
           bottom: false,
-          child: Stack(
-            children: [
-              _buildRoomList(controller, user.username),
-              if (current != null) const Positioned.fill(child: RoomOverlay()),
-            ],
-          ),
+          child: inRoom
+              ? const RoomOverlay()
+              : _RoomList(onRefresh: _refreshRooms),
         ),
       ),
     );
   }
+}
 
-  Widget _buildRoomList(RoomController controller, String username) {
-    final current = controller.currentRoom;
-    if (current != null) {
-      final delegateId = current.delegateUserId;
-      final ownerId = current.owner;
-      final isDelegate = delegateId != null && delegateId.isNotEmpty;
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.room,
-              size: 64,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              isDelegate ? 'Delegate' : 'Owner',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              isDelegate ? 'Connection: ${current.delegateConnectionId ?? 'unknown'}' : 'User: $ownerId',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-            ),
-          ],
-        ),
-      );
-    }
-    final rooms = controller.availableRooms.where((r) => r.isPublic).toList();
+class _RoomList extends StatelessWidget {
+  const _RoomList({required this.onRefresh});
+
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final rooms = context.select<RoomController, List<Room>>(
+      (c) => c.availableRooms,
+    );
 
     if (rooms.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _refreshRooms,
+        onRefresh: onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -485,7 +289,7 @@ class _RoomPageState extends State<RoomPage> {
                       color: Theme.of(context).colorScheme.secondary,
                     ),
                     const SizedBox(height: 16),
-                    Text(
+                    const Text(
                       'No rooms available',
                       style: TextStyle(
                         fontSize: 18,
@@ -510,7 +314,7 @@ class _RoomPageState extends State<RoomPage> {
     }
 
     return RefreshIndicator(
-      onRefresh: _refreshRooms,
+      onRefresh: onRefresh,
       child: ListView.builder(
         padding: const EdgeInsets.symmetric(
           vertical: AppTheme.spacingLg,
@@ -520,45 +324,145 @@ class _RoomPageState extends State<RoomPage> {
         itemCount: rooms.length,
         itemBuilder: (context, index) => RoomListItem(
           room: rooms[index],
-          onTap: () => _openRoom(rooms[index]),
+          onTap: () => context.read<RoomController>().openRoom(rooms[index]),
         ),
       ),
     );
   }
 }
 
-class _RoomInvitation {
-  final String id;
-  final String roomId;
-  final String inviterId;
-  final bool isPending;
-  final String inviterUsername;
+class _InvitationsDrawer extends StatelessWidget {
+  const _InvitationsDrawer({required this.onRefresh, required this.onAnswer});
 
-  const _RoomInvitation({
-    required this.id,
-    required this.roomId,
-    required this.inviterId,
-    required this.isPending,
-    required this.inviterUsername,
-  });
+  final VoidCallback onRefresh;
+  final Future<void> Function(RoomInvitation invitation, {required bool accept})
+  onAnswer;
 
-  factory _RoomInvitation.fromJson(Map<String, dynamic> json) {
-    return _RoomInvitation(
-      id: json['id']?.toString() ?? '',
-      roomId: json['room_id']?.toString() ?? '',
-      inviterId: json['inviter_id']?.toString() ?? '',
-      isPending: json['is_pending'] == true,
-      inviterUsername: 'Unknown user',
+  @override
+  Widget build(BuildContext context) {
+    final invitations = context.watch<InvitationsController>();
+    final pending = invitations.pending;
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: AppTheme.paddingMd,
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Room invitations',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: invitations.isLoading ? null : onRefresh,
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh',
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: invitations.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : pending.isEmpty
+                  ? const Center(
+                      child: Padding(
+                        padding: AppTheme.paddingMd,
+                        child: Text(
+                          'No pending invitations',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: AppTheme.paddingMd,
+                      itemCount: pending.length,
+                      separatorBuilder: (_, index) =>
+                          const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final invitation = pending[index];
+                        return _InvitationCard(
+                          invitation: invitation,
+                          isProcessing: invitations.isProcessing(invitation.id),
+                          onAnswer: onAnswer,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
 
-  _RoomInvitation copyWith({String? inviterUsername}) {
-    return _RoomInvitation(
-      id: id,
-      roomId: roomId,
-      inviterId: inviterId,
-      isPending: isPending,
-      inviterUsername: inviterUsername ?? this.inviterUsername,
+class _InvitationCard extends StatelessWidget {
+  const _InvitationCard({
+    required this.invitation,
+    required this.isProcessing,
+    required this.onAnswer,
+  });
+
+  final RoomInvitation invitation;
+  final bool isProcessing;
+  final Future<void> Function(RoomInvitation invitation, {required bool accept})
+  onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final roomName = invitation.roomName;
+
+    return Card(
+      child: Padding(
+        padding: AppTheme.paddingMd,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              invitation.inviterUsername,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              roomName == null || roomName.isEmpty
+                  ? 'invited you to join a room'
+                  : 'invited you to join "$roomName"',
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isProcessing
+                        ? null
+                        : () => onAnswer(invitation, accept: true),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Accept'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: isProcessing
+                        ? null
+                        : () => onAnswer(invitation, accept: false),
+                    icon: const Icon(Icons.close),
+                    label: const Text('Reject'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

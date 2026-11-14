@@ -30,7 +30,17 @@ class TrackListTile extends StatelessWidget {
                 track.imageUrl!,
                 width: 56,
                 height: 56,
+                cacheWidth: 168,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stack) => Container(
+                  width: 56,
+                  height: 56,
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  child: Icon(
+                    Icons.music_note,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               )
             : Container(
                 width: 56,

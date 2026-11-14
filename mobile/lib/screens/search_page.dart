@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/models/track.dart';
-import 'package:mobile/controllers/room_controller.dart';
+import '../controllers/room_controller.dart';
 import '../core/theme.dart';
-import '../core/network/api_client.dart';
 import '../core/utils/ui_utils.dart';
+import '../models/track.dart';
+import '../services/music_repository.dart';
 import '../widgets/track_list_tile.dart';
 
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.musicRepository = const MusicRepository()});
+
+  final MusicRepository musicRepository;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -20,10 +22,16 @@ class _SearchPageState extends State<SearchPage> {
   bool _hasSearched = false;
   List<Track> _results = [];
 
-  void _performSearch(String query) async {
+  /// Number of the latest search; answers to older ones are dropped.
+  int _searchRequest = 0;
+
+  Future<void> _performSearch(String query) async {
+    final request = ++_searchRequest;
+
     if (query.trim().isEmpty) {
       setState(() {
         _results = [];
+        _isLoading = false;
         _hasSearched = false;
       });
       return;
@@ -35,31 +43,18 @@ class _SearchPageState extends State<SearchPage> {
     });
 
     try {
-      final encodedQuery = Uri.encodeComponent(query);
-      final response = await ApiClient.get('/hifi/search/$encodedQuery');
-
-      if (!mounted) return;
-
-      if (response != null &&
-          response['data'] != null &&
-          response['data']['items'] != null) {
-        final List<dynamic> itemsJson = response['data']['items'];
-        setState(() {
-          _results = itemsJson.map((json) => Track.fromJson(json)).toList();
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _results = [];
-          _isLoading = false;
-        });
-      }
+      final results = await widget.musicRepository.searchTracks(query);
+      if (!mounted || request != _searchRequest) return;
+      setState(() {
+        _results = results;
+        _isLoading = false;
+      });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || request != _searchRequest) return;
       setState(() {
         _isLoading = false;
       });
-      UiUtils.showError(context, 'Error: $e');
+      UiUtils.showError(context, 'Search failed: $e');
     }
   }
 
@@ -129,24 +124,22 @@ class _SearchPageState extends State<SearchPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_outlined, size: 64, color: Theme.of(context).colorScheme.secondary),
+            Icon(
+              Icons.search_outlined,
+              size: 64,
+              color: Theme.of(context).colorScheme.secondary,
+            ),
             const SizedBox(height: 8),
             Text(
               !_hasSearched ? 'Find your favorite songs' : 'No results found.',
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
               'Try searching for a song.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
@@ -163,11 +156,10 @@ class _SearchPageState extends State<SearchPage> {
           trailingIcon: Icons.add_circle_outline,
           onTapTrailing: () async {
             final controller = context.read<RoomController>();
-            final currentRoom = controller.currentRoom;
 
-            if (currentRoom != null) {
+            if (controller.currentRoom != null) {
               try {
-                await controller.addTrack(currentRoom, track);
+                await controller.addTrack(track);
                 if (context.mounted) {
                   UiUtils.showSuccess(
                     context,

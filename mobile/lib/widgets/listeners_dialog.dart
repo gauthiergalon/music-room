@@ -9,11 +9,11 @@ import 'user_profile_dialog.dart';
 
 Future<void> _showInviteFriendDialog(
   BuildContext context,
-  String roomId,
   List<RoomUser> listeners,
 ) async {
   final authController = context.read<AuthController>();
   final friendsController = context.read<FriendsController>();
+  final roomController = context.read<RoomController>();
   final currentUser = authController.user;
 
   if (currentUser == null) {
@@ -21,7 +21,7 @@ Future<void> _showInviteFriendDialog(
   }
 
   try {
-    await friendsController.fetchFriends(currentUser.id);
+    await friendsController.fetchFriends();
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,10 +76,7 @@ Future<void> _showInviteFriendDialog(
                       onPressed: () async {
                         Navigator.of(dialogContext).pop();
                         try {
-                          await friendsController.inviteToRoom(
-                            roomId,
-                            friend.friendId,
-                          );
+                          await roomController.inviteToRoom(friend.friendId);
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
@@ -191,7 +188,7 @@ void showListenersDialog(BuildContext context) {
                               ? null
                               : (val) async {
                                   try {
-                                    await controller.togglePrivacy(currentRoom);
+                                    await controller.togglePrivacy();
                                   } catch (e) {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(
@@ -222,7 +219,7 @@ void showListenersDialog(BuildContext context) {
                           value: currentRoom.isLicensed,
                           onChanged: (val) async {
                             try {
-                              await controller.toggleLicense(currentRoom);
+                              await controller.toggleLicense();
                             } catch (e) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -242,17 +239,12 @@ void showListenersDialog(BuildContext context) {
                           leading: const Icon(Icons.person_add),
                           title: const Text('Invite a friend'),
                           subtitle: const Text('Choose from your friends list'),
-                          onTap: () => _showInviteFriendDialog(
-                            context,
-                            currentRoom.id,
-                            otherListeners,
-                          ),
+                          onTap: () =>
+                              _showInviteFriendDialog(context, otherListeners),
                         ),
                         const Divider(),
                       ],
-                      const Padding(
-                        padding: AppTheme.paddingSm,
-                      ),
+                      const Padding(padding: AppTheme.paddingSm),
                       Expanded(
                         child: ListView.builder(
                           itemCount: otherListeners.length,
@@ -314,12 +306,9 @@ void showListenersDialog(BuildContext context) {
                                       onPressed: () async {
                                         try {
                                           if (isDelegated) {
-                                            await controller.revokeDelegate(
-                                              currentRoom,
-                                            );
+                                            await controller.revokeDelegate();
                                           } else {
                                             await controller.delegateDevice(
-                                              currentRoom,
                                               roomUser,
                                             );
                                           }

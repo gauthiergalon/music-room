@@ -1,26 +1,24 @@
-import 'package:mobile/models/track.dart';
-import 'package:mobile/models/track_cache.dart';
+import 'track.dart';
 
 class QueueItem {
   final String id;
-  final String roomId;
-  final int trackId;
   final double position;
   final Track track;
 
-  QueueItem({
+  const QueueItem({
     required this.id,
-    required this.roomId,
-    required this.trackId,
     required this.position,
-  }) : track = getCachedTrack(trackId);
+    required this.track,
+  });
 
-  factory QueueItem.fromJson(Map<String, dynamic> json) {
+  int get trackId => track.id;
+
+  /// Parses one entry of the `queue` array of a `RoomState` message.
+  factory QueueItem.fromJson(Map<String, dynamic> json, {double? fallback}) {
     return QueueItem(
-      id: json['id'],
-      roomId: json['room_id'],
-      trackId: json['track_id'],
-      position: json['position'].toDouble(),
+      id: json['id'].toString(),
+      position: (json['position'] as num?)?.toDouble() ?? fallback ?? 0,
+      track: Track.fromJson(Map<String, dynamic>.from(json['track'] as Map)),
     );
   }
 }

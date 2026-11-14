@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../controllers/auth_controller.dart';
 import '../controllers/friends_controller.dart';
 import '../core/utils/ui_utils.dart';
 import '../widgets/user_profile_dialog.dart';
@@ -23,72 +22,32 @@ class _FriendsPageState extends State<FriendsPage> {
   }
 
   Future<void> _fetchFriends() async {
-    final authController = context.read<AuthController>();
-    final friendsController = context.read<FriendsController>();
     try {
-      await friendsController.fetchFriends(authController.user?.id);
+      await context.read<FriendsController>().fetchFriends();
     } catch (e) {
       if (mounted) UiUtils.showError(context, e.toString());
     }
   }
 
-  void _showAddFriendDialog() {
-    final controller = TextEditingController();
-    showDialog(
+  Future<void> _showAddFriendDialog() async {
+    final username = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: const Text('Add Friend'),
-        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Username',
-            hintText: 'Enter username',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (controller.text.isEmpty) return;
-              final username = controller.text;
-              Navigator.pop(ctx);
+      builder: (_) => const _AddFriendDialog(),
+    );
+    if (username == null || username.isEmpty || !mounted) return;
 
-              final authController = context.read<AuthController>();
-              final friendsController = context.read<FriendsController>();
-
-              try {
-                await friendsController.addFriend(
-                  username,
-                  authController.user?.id,
-                );
-                if (mounted) {
-                  UiUtils.showSuccess(context, 'Request sent to $username');
-                }
-              } catch (e) {
-                if (mounted) UiUtils.showError(context, e.toString());
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
+    await _runFriendAction(
+      (friends) => friends.addFriend(username),
+      'Request sent to $username',
     );
   }
 
-  Future<void> _handleFriendAction(
-    String endpoint,
+  Future<void> _runFriendAction(
+    Future<void> Function(FriendsController friends) action,
     String successMessage,
   ) async {
-    final authController = context.read<AuthController>();
-    final friendsController = context.read<FriendsController>();
-
     try {
-      await friendsController.handleAction(endpoint, authController.user?.id);
+      await action(context.read<FriendsController>());
       if (mounted) {
         UiUtils.showSuccess(context, successMessage);
       }
@@ -138,7 +97,9 @@ class _FriendsPageState extends State<FriendsPage> {
                     return Card(
                       margin: AppTheme.paddingMd,
                       elevation: 1,
-                      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
+                      surfaceTintColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceTint,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -161,8 +122,8 @@ class _FriendsPageState extends State<FriendsPage> {
                                 Icons.check_circle,
                                 color: Colors.green,
                               ),
-                              onPressed: () => _handleFriendAction(
-                                '/friends/$friendId/accept',
+                              onPressed: () => _runFriendAction(
+                                (friends) => friends.acceptRequest(friendId),
                                 'Friend request accepted',
                               ),
                             ),
@@ -171,8 +132,8 @@ class _FriendsPageState extends State<FriendsPage> {
                                 Icons.cancel,
                                 color: Colors.grey,
                               ),
-                              onPressed: () => _handleFriendAction(
-                                '/friends/$friendId/reject',
+                              onPressed: () => _runFriendAction(
+                                (friends) => friends.rejectRequest(friendId),
                                 'Friend request rejected',
                               ),
                             ),
@@ -200,7 +161,9 @@ class _FriendsPageState extends State<FriendsPage> {
                     return Card(
                       elevation: 1,
                       margin: AppTheme.paddingMd,
-                      surfaceTintColor: Theme.of(context).colorScheme.surfaceTint,
+                      surfaceTintColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceTint,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -216,8 +179,8 @@ class _FriendsPageState extends State<FriendsPage> {
                             Icons.person_remove,
                             color: Colors.redAccent,
                           ),
-                          onPressed: () => _handleFriendAction(
-                            '/friends/$friendId',
+                          onPressed: () => _runFriendAction(
+                            (friends) => friends.removeFriend(friendId),
                             'Friend removed',
                           ),
                         ),
@@ -229,6 +192,54 @@ class _FriendsPageState extends State<FriendsPage> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Asks for a username; pops with it, or with nothing when cancelled.
+class _AddFriendDialog extends StatefulWidget {
+  const _AddFriendDialog();
+
+  @override
+  State<_AddFriendDialog> createState() => _AddFriendDialogState();
+}
+
+class _AddFriendDialogState extends State<_AddFriendDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final username = _controller.text.trim();
+    if (username.isEmpty) return;
+    Navigator.pop(context, username);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      title: const Text('Add Friend'),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      content: TextField(
+        controller: _controller,
+        onSubmitted: (_) => _submit(),
+        decoration: const InputDecoration(
+          labelText: 'Username',
+          hintText: 'Enter username',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(onPressed: _submit, child: const Text('Add')),
+      ],
     );
   }
 }

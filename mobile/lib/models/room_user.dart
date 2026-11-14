@@ -5,9 +5,15 @@ class RoomUser {
 
   final String connectionId;
 
-  RoomUser({required this.id, required this.username, required this.connectionId, this.deviceName = 'Unknown device'});
+  RoomUser({
+    required this.id,
+    required this.username,
+    required this.connectionId,
+    this.deviceName = 'Unknown device',
+  });
 
-  String get displayName => deviceName.isEmpty ? username : '$username ($deviceName)';
+  String get displayName =>
+      deviceName.isEmpty ? username : '$username ($deviceName)';
 
   @override
   bool operator ==(Object other) =>

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/logger/logger.dart';
 import '../services/app_settings_service.dart';
 
 Future<void> showBatteryOptimizationDialog(BuildContext context) async {
@@ -55,14 +56,13 @@ Future<void> showBatteryOptimizationDialog(BuildContext context) async {
   );
 }
 
-void _openBatterySettings() {
-  if (!kIsWeb && Platform.isAndroid) {
-    try {
-      const platform = MethodChannel('com.music_room/battery');
-      platform.invokeMethod('openBatteryOptimizationSettings');
-    } catch (_) {
-      // Fallback: try to open general settings
-      SystemNavigator.pop();
-    }
+Future<void> _openBatterySettings() async {
+  if (kIsWeb || !Platform.isAndroid) return;
+
+  try {
+    const platform = MethodChannel('com.music_room/battery');
+    await platform.invokeMethod<void>('openBatteryOptimizationSettings');
+  } catch (e) {
+    logger.error('Could not open the battery settings', error: e);
   }
 }

@@ -12,6 +12,7 @@ import 'core/utils/ui_utils.dart';
 import 'core/network/api_client.dart';
 import 'controllers/auth_controller.dart';
 import 'controllers/friends_controller.dart';
+import 'controllers/invitations_controller.dart';
 import 'controllers/room_controller.dart';
 import 'controllers/theme_controller.dart';
 import 'services/audio_service.dart';
@@ -44,13 +45,16 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthController()),
         ChangeNotifierProvider(create: (_) => AudioService()),
-        ChangeNotifierProxyProvider<AudioService, RoomController>(
+        // The room controller needs to know who is logged in to tell whether
+        // this device controls the playback.
+        ChangeNotifierProxyProvider<AuthController, RoomController>(
           create: (context) =>
               RoomController(audioService: context.read<AudioService>()),
-          update: (_, audio, previous) =>
-              previous ?? RoomController(audioService: audio),
+          update: (_, auth, previous) =>
+              previous!..setCurrentUserId(auth.user?.id),
         ),
         ChangeNotifierProvider(create: (_) => FriendsController()),
+        ChangeNotifierProvider(create: (_) => InvitationsController()),
         ChangeNotifierProxyProvider<AudioService, ThemeController>(
           create: (context) => ThemeController(context.read<AudioService>()),
           update: (_, audio, previous) => previous ?? ThemeController(audio),
@@ -75,6 +79,8 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    // Everything that belongs to the user goes away with the session.
+    context.read<AuthController>().onLoggedOut = _clearUserState;
     _initDeepLinks();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final navContext = navigatorKey.currentContext;
@@ -84,12 +90,24 @@ class _MyAppState extends State<MyApp> {
           await showBatteryOptimizationDialog(navContext);
           logger.info('Battery optimization dialog finished.');
         } catch (e, st) {
-          logger.error('Battery optimization dialog error', error: e, stackTrace: st);
+          logger.error(
+            'Battery optimization dialog error',
+            error: e,
+            stackTrace: st,
+          );
         }
       } else {
-        logger.info('Battery optimization dialog skipped: context null or not mounted');
+        logger.info(
+          'Battery optimization dialog skipped: context null or not mounted',
+        );
       }
     });
+  }
+
+  void _clearUserState() {
+    context.read<RoomController>().reset();
+    context.read<FriendsController>().clear();
+    context.read<InvitationsController>().clear();
   }
 
   @override
@@ -125,8 +143,14 @@ class _MyAppState extends State<MyApp> {
     final currentContext = navigatorKey.currentContext;
     if (currentContext == null) return;
 
+    final auth = currentContext.read<AuthController>();
+    if (!auth.isAuthenticated) {
+      UiUtils.showError(currentContext, 'Log in to confirm your email');
+      return;
+    }
+
     try {
-      await currentContext.read<AuthController>().confirmEmail(token);
+      await auth.confirmEmail(token);
       if (currentContext.mounted) {
         UiUtils.showSuccess(
           currentContext,

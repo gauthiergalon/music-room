@@ -1,28 +1,23 @@
 import 'package:flutter/material.dart';
-import '../core/network/api_client.dart';
 import '../models/user.dart';
+import '../services/user_repository.dart';
 
 Future<void> showUserProfileDialog(
   BuildContext context,
   String userId, {
   String? initialUsername,
+  UserRepository userRepository = const UserRepository(),
 }) async {
   final scaffoldMessenger = ScaffoldMessenger.of(context);
 
   try {
-    final data = await ApiClient.getUser(userId);
-    final user = User(
-      id: data['id'].toString(),
-      username: data['username'] ?? initialUsername ?? 'Unknown',
-      email: data['email'],
-      emailConfirmed: data['email_confirmed'],
-      googleId: data['google_id'],
-      favoriteGenres: _parseFavoriteGenres(data['favorite_genres']),
-      privacyLevel: data['privacy_level']?.toString() ?? 'Friends',
+    final profile = await userRepository.getPublicProfile(
+      userId,
+      fallbackUsername: initialUsername,
     );
 
     if (!context.mounted) return;
-    _buildDialog(context, user);
+    _buildDialog(context, profile);
   } catch (e) {
     scaffoldMessenger.showSnackBar(
       SnackBar(
@@ -34,7 +29,7 @@ Future<void> showUserProfileDialog(
   }
 }
 
-void _buildDialog(BuildContext context, User user) {
+void _buildDialog(BuildContext context, PublicProfile user) {
   showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -54,37 +49,11 @@ void _buildDialog(BuildContext context, User user) {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(user.username, style: const TextStyle(fontSize: 18)),
-                if (user.email != null)
-                  Text(
-                    user.email!,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Theme.of(ctx).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-              ],
-            ),
+            child: Text(user.username, style: const TextStyle(fontSize: 18)),
           ),
         ],
       ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (user.emailConfirmed != null)
-            _buildInfoRow(
-              ctx,
-              'Email verified',
-              user.emailConfirmed! ? Icons.check_circle : Icons.cancel,
-              user.emailConfirmed! ? Colors.green : Colors.red,
-            ),
-          _buildMusicTastesSection(ctx, user),
-        ],
-      ),
+      content: _buildMusicTastesSection(ctx, user),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(),
@@ -95,13 +64,11 @@ void _buildDialog(BuildContext context, User user) {
   );
 }
 
-Widget _buildMusicTastesSection(BuildContext ctx, User user) {
-  final isPrivate = user.privacyLevel.toLowerCase() == 'private';
-  final genres = user.favoriteGenres ?? [];
-  final hasGenres = genres.isNotEmpty;
+Widget _buildMusicTastesSection(BuildContext ctx, PublicProfile user) {
+  final genres = user.favoriteGenres;
 
-  // Si private ou pas d'accès (favoriteGenres == null), affiche "This profile is private"
-  if (isPrivate || user.favoriteGenres == null) {
+  // No genres in the answer means the viewer is not allowed to see them.
+  if (genres == null || user.privacyLevel.toLowerCase() == 'private') {
     return Text(
       'This profile is private',
       style: TextStyle(
@@ -112,13 +79,13 @@ Widget _buildMusicTastesSection(BuildContext ctx, User user) {
     );
   }
 
-  // On a accès (amis ou public, genres définis ou non)
   return Column(
+    mainAxisSize: MainAxisSize.min,
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Text('Music Tastes', style: TextStyle(fontWeight: FontWeight.bold)),
       const SizedBox(height: 8),
-      if (!hasGenres)
+      if (genres.isEmpty)
         const Text('None', style: TextStyle(fontSize: 14))
       else
         Wrap(
@@ -131,46 +98,6 @@ Widget _buildMusicTastesSection(BuildContext ctx, User user) {
             );
           }).toList(),
         ),
-    ],
-  );
-}
-
-List<String>? _parseFavoriteGenres(dynamic rawFavoriteGenres) {
-  if (rawFavoriteGenres is! List) {
-    return null;
-  }
-  final favoriteGenres = rawFavoriteGenres
-      .map((item) => item.toString())
-      .where((item) => item.isNotEmpty)
-      .toList();
-  return favoriteGenres.isEmpty ? [] : favoriteGenres;
-}
-
-Widget _buildInfoRow(
-  BuildContext context,
-  String label,
-  IconData icon,
-  Color iconColor, {
-  String? subtitle,
-}) {
-  return Row(
-    children: [
-      Icon(icon, size: 20, color: iconColor),
-      const SizedBox(width: 8),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-          if (subtitle != null)
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-        ],
-      ),
     ],
   );
 }

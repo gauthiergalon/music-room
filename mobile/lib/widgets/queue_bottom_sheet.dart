@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
 import '../core/theme.dart';
 import '../core/utils/ui_utils.dart';
+import '../models/queue_item.dart';
 import '../widgets/track_list_tile.dart';
 
 void showQueueBottomSheet(BuildContext context) {
@@ -17,11 +18,12 @@ void showQueueBottomSheet(BuildContext context) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (ctx) {
-      return Consumer<RoomController>(
-        builder: (ctx2, controller, _) {
-          final currentRoom = controller.currentRoom;
-          if (currentRoom == null) return const SizedBox.shrink();
-          final queue = currentRoom.queue.toList();
+      // Rebuilds only when the queue itself is replaced.
+      return Selector<RoomController, List<QueueItem>?>(
+        selector: (_, c) => c.currentRoom?.queue,
+        builder: (ctx2, queue, _) {
+          if (queue == null) return const SizedBox.shrink();
+          final controller = ctx2.read<RoomController>();
 
           return SizedBox(
             height: MediaQuery.of(ctx).size.height * 0.6,
@@ -43,12 +45,7 @@ void showQueueBottomSheet(BuildContext context) {
                   child: ReorderableListView(
                     onReorderItem: (oldIndex, newIndex) async {
                       try {
-                        await controller.reorderQueueItem(
-                          currentRoom,
-                          queue,
-                          oldIndex,
-                          newIndex,
-                        );
+                        await controller.reorderQueueItem(oldIndex, newIndex);
                       } catch (_) {
                         if (ctx2.mounted) {
                           UiUtils.showError(ctx2, 'Failed to reorder queue.');
@@ -71,10 +68,7 @@ void showQueueBottomSheet(BuildContext context) {
                           ),
                           onDismissed: (_) async {
                             try {
-                              await controller.removeQueueItem(
-                                currentRoom,
-                                item,
-                              );
+                              await controller.removeQueueItem(item);
                             } catch (_) {
                               if (ctx2.mounted) {
                                 UiUtils.showError(

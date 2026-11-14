@@ -26,7 +26,11 @@ class ProfileInfoTile extends StatelessWidget {
           color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
-      trailing: Icon(Icons.edit_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
+      trailing: Icon(
+        Icons.edit_rounded,
+        size: 20,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );

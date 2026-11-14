@@ -1,18 +1,32 @@
+import '../core/exceptions/api_exception.dart';
 import '../core/network/api_client.dart';
 import '../models/room.dart';
+import '../models/room_invitation.dart';
 
 class RoomRepository {
   Future<List<Room>> getRooms() async {
     final response = await ApiClient.get('/rooms');
-    if (response is List) {
-      return response.map((data) => Room.fromJson(data)).toList();
-    }
-    return [];
+    if (response is! List) return [];
+    return response
+        .map((data) => Room.fromJson(Map<String, dynamic>.from(data as Map)))
+        .toList();
   }
 
   Future<Room> createRoom() async {
     final response = await ApiClient.post('/rooms');
-    return Room.fromJson(response);
+    return Room.fromJson(Map<String, dynamic>.from(response as Map));
+  }
+
+  /// Whether the room still exists and the user may join it. Throws when the
+  /// server cannot be reached.
+  Future<bool> isRoomAvailable(String roomId) async {
+    try {
+      await ApiClient.get('/rooms/$roomId');
+      return true;
+    } on ApiException catch (e) {
+      if (e.statusCode == 403 || e.statusCode == 404) return false;
+      rethrow;
+    }
   }
 
   Future<void> addTrack(String roomId, int trackId) async {
@@ -34,28 +48,27 @@ class RoomRepository {
     );
   }
 
+  /// Makes a public room private, or a private room public.
   Future<void> togglePrivacy(String roomId, bool isPublic) async {
-    if (isPublic) {
-      await ApiClient.post('/rooms/$roomId/privatize');
-    } else {
-      await ApiClient.post('/rooms/$roomId/publish');
-    }
+    await ApiClient.post(
+      isPublic ? '/rooms/$roomId/privatize' : '/rooms/$roomId/publish',
+    );
   }
 
   Future<void> toggleLicense(String roomId, bool isLicensed) async {
-    if (isLicensed) {
-      await ApiClient.post('/rooms/$roomId/disable-license');
-    } else {
-      await ApiClient.post('/rooms/$roomId/enable-license');
-    }
+    await ApiClient.post(
+      isLicensed
+          ? '/rooms/$roomId/disable-license'
+          : '/rooms/$roomId/enable-license',
+    );
   }
 
   Future<String> getStreamUrl(int trackId) async {
     final response = await ApiClient.get('/hifi/track/$trackId/stream-url');
-    final streamUrl = response['stream_url'] as String?;
+    final streamUrl = response is Map ? response['stream_url'] : null;
 
-    if (streamUrl == null || streamUrl.isEmpty) {
-      throw Exception('No stream URL found for track $trackId');
+    if (streamUrl is! String || streamUrl.isEmpty) {
+      throw ApiException('No stream URL found for track $trackId');
     }
 
     return streamUrl;
@@ -74,5 +87,29 @@ class RoomRepository {
 
   Future<void> revokeDelegate(String roomId) async {
     await ApiClient.delete('/rooms/$roomId/delegate');
+  }
+
+  Future<void> inviteToRoom(String roomId, String inviteeId) async {
+    await ApiClient.post('/rooms/$roomId/invite/$inviteeId');
+  }
+
+  Future<List<RoomInvitation>> getPendingInvitations() async {
+    final response = await ApiClient.get('/me/invitations');
+    if (response is! List) return [];
+    return response
+        .map(
+          (item) =>
+              RoomInvitation.fromJson(Map<String, dynamic>.from(item as Map)),
+        )
+        .where((invitation) => invitation.isPending)
+        .toList();
+  }
+
+  Future<void> acceptInvitation(String invitationId) async {
+    await ApiClient.post('/me/invitations/$invitationId/accept');
+  }
+
+  Future<void> rejectInvitation(String invitationId) async {
+    await ApiClient.post('/me/invitations/$invitationId/reject');
   }
 }

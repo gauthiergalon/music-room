@@ -1,22 +1,19 @@
-import 'package:mobile/models/queue_item.dart';
-import 'package:mobile/models/room_user.dart';
-import 'package:mobile/models/track.dart';
+import 'queue_item.dart';
+import 'room_user.dart';
+import 'track.dart';
 
 class Room {
-  String id;
+  final String id;
   String owner;
   String name;
   Track? currentTrack;
   List<QueueItem> queue;
-  int status;
+  bool isPlaying;
   List<RoomUser> listeners;
   bool isPublic;
   bool isLicensed;
   String? delegateUserId;
   String? delegateConnectionId;
-
-  Duration positionAtLastSync;
-  DateTime updatedAt;
 
   Room({
     required this.id,
@@ -24,46 +21,23 @@ class Room {
     required this.name,
     this.currentTrack,
     List<QueueItem>? queue,
-    this.status = 0,
+    this.isPlaying = false,
     List<RoomUser>? listeners,
-    Duration? positionAtLastSync,
-    DateTime? updatedAt,
     this.isPublic = true,
     this.isLicensed = false,
     this.delegateUserId,
     this.delegateConnectionId,
-  }) : queue = queue ?? [],
-       listeners = listeners ?? [],
-       positionAtLastSync = positionAtLastSync ?? Duration.zero,
-       updatedAt = updatedAt ?? DateTime.now();
+  }) : queue = queue ?? const [],
+       listeners = listeners ?? const [];
 
   factory Room.fromJson(Map<String, dynamic> json) {
     return Room(
-      id: json['id'],
-      owner: json['owner_id'],
-      name: json['name'] ?? 'Unnamed Room',
-      isPublic: json['is_public'] ?? true,
-      isLicensed: json['has_license'] ?? json['is_licensed'] ?? false,
-      status: (json['is_playing'] == true) ? 1 : 0,
-      positionAtLastSync: Duration(
-        milliseconds: (json['current_position']?.toDouble() ?? 0.0).toInt(),
-      ),
+      id: json['id'].toString(),
+      owner: json['owner_id'].toString(),
+      name: json['name']?.toString() ?? 'Unnamed Room',
+      isPublic: json['is_public'] != false,
+      isLicensed: json['is_licensed'] == true,
+      isPlaying: json['is_playing'] == true,
     );
   }
-
-  Duration get currentPosition {
-    if (currentTrack == null) return Duration.zero;
-    if (status != 1) return positionAtLastSync;
-
-    final now = DateTime.now();
-    final elapsed = now.difference(updatedAt);
-    final calculatedPos = positionAtLastSync + elapsed;
-
-    if (calculatedPos > currentTrack!.duration) {
-      return currentTrack!.duration;
-    }
-    return calculatedPos;
-  }
-
-  int get people => listeners.length;
 }

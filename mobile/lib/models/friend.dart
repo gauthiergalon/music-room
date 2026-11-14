@@ -1,40 +1,26 @@
 class Friend {
-  final String userId1;
-  final String userId2;
-  final String senderId;
+  /// Id of the other user of the friendship.
+  final String friendId;
+  final String? username;
   final bool isPending;
 
-  // App-specific resolved fields
-  String friendId;
-  bool isSender;
-  String? username;
+  /// True when the current user sent the request.
+  final bool isSender;
 
-  Friend({
-    required this.userId1,
-    required this.userId2,
-    required this.senderId,
-    required this.isPending,
+  const Friend({
     required this.friendId,
+    required this.isPending,
     required this.isSender,
     this.username,
   });
 
-  factory Friend.fromJson(Map<String, dynamic> json, String? currentUserId) {
-    final String u1 = json['user_id_1']?.toString() ?? '';
-    final String u2 = json['user_id_2']?.toString() ?? '';
-    final String resolvedFriendId = (u1 == currentUserId) ? u2 : u1;
-
-    // Some backend versions might use 'status' instead of 'is_pending'
-    final isPending = json['is_pending'] == true || json['status'] == 'pending';
-
+  factory Friend.fromJson(Map<String, dynamic> json) {
+    final friendId = json['friend_id']?.toString() ?? '';
     return Friend(
-      userId1: u1,
-      userId2: u2,
-      senderId: json['sender_id']?.toString() ?? '',
-      isPending: isPending,
-      friendId: resolvedFriendId,
-      isSender: json['sender_id']?.toString() == currentUserId,
-      username: json['username'], // Pre-filled if already available
+      friendId: friendId,
+      username: json['username']?.toString(),
+      isPending: json['is_pending'] == true,
+      isSender: json['sender_id']?.toString() != friendId,
     );
   }
 }

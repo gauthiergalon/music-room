@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/controllers/room_controller.dart';
-import '../controllers/auth_controller.dart';
+import '../controllers/room_controller.dart';
 import '../core/theme.dart';
+import '../models/track.dart';
 
 class PlayerWidget extends StatefulWidget {
   const PlayerWidget({super.key});
@@ -17,18 +17,13 @@ class _PlayerWidgetState extends State<PlayerWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final controller = context.watch<RoomController>();
-    final room = controller.currentRoom;
-    final track = room?.currentTrack;
-
-    final isPlaying = controller.isPlaying;
-    final auth = context.read<AuthController>();
-    final myId = auth.user?.id;
-    final delegateId = controller.currentRoom?.delegateUserId;
-    final ownerId = controller.currentRoom?.owner;
-    final canControl =
-        (delegateId != null && delegateId == myId) ||
-        (delegateId == null && ownerId == myId);
+    // Rebuild only when what is shown here changes; the position has its
+    // own stream below.
+    final (track, isPlaying, canControl) = context
+        .select<RoomController, (Track?, bool, bool)>(
+          (c) => (c.currentTrack, c.isPlaying, c.canControl),
+        );
+    final controller = context.read<RoomController>();
 
     final coverSize = MediaQuery.of(context).size.width * 0.65;
 
@@ -87,11 +82,10 @@ class _PlayerWidgetState extends State<PlayerWidget> {
           StreamBuilder<Duration>(
             stream: controller.positionStream,
             builder: (context, snapshot) {
-              final position = snapshot.data ?? controller.playbackPosition;
-              final duration =
-                  controller.playbackDuration ??
-                  track?.duration ??
-                  Duration.zero;
+              final duration = track?.duration ?? Duration.zero;
+              final position = track == null
+                  ? Duration.zero
+                  : snapshot.data ?? controller.playbackPosition;
               final sliderMax = duration.inMilliseconds > 0
                   ? duration.inMilliseconds.toDouble()
                   : 1.0;
@@ -119,29 +113,21 @@ class _PlayerWidgetState extends State<PlayerWidget> {
                       min: 0,
                       max: sliderMax,
                       value: _dragValue ?? sliderValue,
-                      onChangeStart: (v) {
-                        setState(() {
-                          _dragValue = v;
-                        });
-                      },
-                      onChanged: canControl
+                      onChanged: canControl && track != null
                           ? (v) {
                               setState(() {
                                 _dragValue = v;
                               });
                             }
                           : null,
-                      onChangeEnd: canControl
+                      onChangeEnd: canControl && track != null
                           ? (v) {
                               setState(() {
                                 _dragValue = null;
                               });
-                              if (room != null) {
-                                controller.seekTo(
-                                  room,
-                                  Duration(milliseconds: v.toInt()),
-                                );
-                              }
+                              controller.seekTo(
+                                Duration(milliseconds: v.toInt()),
+                              );
                             }
                           : null,
                     ),
@@ -171,13 +157,15 @@ class _PlayerWidgetState extends State<PlayerWidget> {
             children: [
               IconButton(
                 iconSize: 36,
-                onPressed: canControl ? () => controller.skipPrev() : null,
+                onPressed: canControl && track != null
+                    ? controller.skipPrev
+                    : null,
                 icon: const Icon(Icons.skip_previous_rounded),
               ),
               const SizedBox(width: 12),
               FilledButton(
-                onPressed: canControl && room != null && track != null
-                    ? () => controller.togglePlay(room)
+                onPressed: canControl && track != null
+                    ? controller.togglePlay
                     : null,
                 style: FilledButton.styleFrom(
                   shape: const CircleBorder(),
@@ -194,7 +182,7 @@ class _PlayerWidgetState extends State<PlayerWidget> {
               const SizedBox(width: 12),
               IconButton(
                 iconSize: 36,
-                onPressed: canControl ? () => controller.skipNext() : null,
+                onPressed: canControl ? controller.skipNext : null,
                 icon: const Icon(Icons.skip_next_rounded),
               ),
             ],

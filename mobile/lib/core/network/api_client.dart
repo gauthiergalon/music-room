@@ -1,87 +1,202 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../../core/logger/logger.dart';
 import '../exceptions/api_exception.dart';
+import '../logger/logger.dart';
 import '../storage/session_storage.dart';
 
-final _log = AppLogger();
+/// The refresh token was rejected: the user has to log in again.
+class SessionExpiredException implements Exception {
+  const SessionExpiredException();
 
-class ApiClient {
-  static String? _baseUrl;
-  static String _deviceName = 'Unknown device';
+  @override
+  String toString() => 'Session expired';
+}
 
-  static String get deviceName => _deviceName;
-
-  static String get baseUrl {
-    final value = _baseUrl;
-    if (value == null || value.isEmpty) {
-      throw StateError('BACKEND_URL must be provided in .env');
-    }
-
-    return value;
+/// Expiry of a JWT access token, or `null` when it cannot be read.
+DateTime? jwtExpiry(String token) {
+  final parts = token.split('.');
+  if (parts.length != 3) return null;
+  try {
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+    );
+    final exp = payload is Map ? payload['exp'] : null;
+    if (exp is! num) return null;
+    return DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000, isUtc: true);
+  } catch (_) {
+    return null;
   }
+}
 
-  /// Synchronous callback triggered on 401 after refresh failure.
-  /// Implementations must clear state synchronously (start any async
-  /// cleanup in the background).
-  static void Function()? onUnauthorized;
-
-  static final Dio _dio = Dio(
-    BaseOptions(
+/// HTTP access to the backend: attaches the access token, refreshes it once
+/// for all concurrent callers when it expires, and retries the failed request.
+class ApiHttp {
+  ApiHttp({
+    required this.baseUrl,
+    required this.tokenStore,
+    Map<String, String> deviceHeaders = const {},
+    HttpClientAdapter? adapter,
+    this.onUnauthorized,
+  }) {
+    BaseOptions options() => BaseOptions(
+      baseUrl: baseUrl,
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 10),
       contentType: Headers.jsonContentType,
-    ),
-  )..interceptors.add(_AuthInterceptor());
+      headers: deviceHeaders,
+    );
 
-  static Future<String?> getToken() => SessionStorage.getAccessToken();
+    dio = Dio(options())..interceptors.add(_AuthInterceptor(this));
+    // No auth interceptor here: this client sends the refresh request and
+    // replays requests after a refresh, so their failures go straight back to
+    // the caller instead of re-entering the interceptor.
+    _plain = Dio(options());
 
-  static Future<String?> getRefreshToken() => SessionStorage.getRefreshToken();
+    if (adapter != null) {
+      dio.httpClientAdapter = adapter;
+      _plain.httpClientAdapter = adapter;
+    }
+  }
 
-  static Future<dynamic> _sendRequest(
-    Future<Response<dynamic>> Function() request,
-  ) async {
+  final String baseUrl;
+  final TokenStore tokenStore;
+
+  /// Called when the session cannot be refreshed any more.
+  void Function()? onUnauthorized;
+
+  late final Dio dio;
+  late final Dio _plain;
+
+  Future<String>? _refreshInFlight;
+
+  /// Returns a valid access token, refreshing the session if needed.
+  ///
+  /// [staleToken] is the token the caller found to be expired. If the stored
+  /// token is already a different one, another caller refreshed in the
+  /// meantime and that token is returned as is. Concurrent calls share one
+  /// refresh request.
+  Future<String> refreshAccessToken({String? staleToken}) {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _refresh(staleToken);
+    _refreshInFlight = future;
+    return future.whenComplete(() {
+      if (identical(_refreshInFlight, future)) _refreshInFlight = null;
+    });
+  }
+
+  Future<String> _refresh(String? staleToken) async {
+    final current = await tokenStore.readAccessToken();
+    if (staleToken != null && current != null && current != staleToken) {
+      return current;
+    }
+
+    final refreshToken = await tokenStore.readRefreshToken();
+    if (refreshToken == null) throw const SessionExpiredException();
+
+    try {
+      final response = await _plain.post(
+        '/auth/refresh',
+        data: {'refresh_token': refreshToken},
+      );
+      final data = response.data;
+      final accessToken = data is Map ? data['access_token'] : null;
+      if (accessToken is! String || accessToken.isEmpty) {
+        throw const SessionExpiredException();
+      }
+      await tokenStore.save(
+        accessToken: accessToken,
+        refreshToken: data['refresh_token']?.toString(),
+      );
+      logger.debug('Token refreshed successfully');
+      return accessToken;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        throw const SessionExpiredException();
+      }
+      rethrow;
+    }
+  }
+
+  /// Access token that is valid for at least [minValidity], or `null` when
+  /// there is no usable session.
+  ///
+  /// Used before opening a WebSocket, which cannot go through the interceptor.
+  Future<String?> ensureFreshToken({
+    Duration minValidity = const Duration(seconds: 60),
+  }) async {
+    final token = await tokenStore.readAccessToken();
+    if (token == null) return null;
+
+    final expiry = jwtExpiry(token);
+    if (expiry == null ||
+        expiry.difference(DateTime.now().toUtc()) > minValidity) {
+      return token;
+    }
+
+    try {
+      return await refreshAccessToken(staleToken: token);
+    } on SessionExpiredException {
+      onUnauthorized?.call();
+      return null;
+    } catch (e) {
+      // Network problem: the current token may still work for a moment.
+      logger.warning('Could not refresh token before it expires');
+      return token;
+    }
+  }
+
+  Future<dynamic> get(String endpoint, {Map<String, dynamic>? query}) =>
+      _send(() => dio.get(endpoint, queryParameters: query));
+
+  Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) =>
+      _send(() => dio.post(endpoint, data: body));
+
+  Future<dynamic> delete(String endpoint, {Map<String, dynamic>? body}) =>
+      _send(() => dio.delete(endpoint, data: body));
+
+  Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) =>
+      _send(() => dio.patch(endpoint, data: body));
+
+  Future<dynamic> _send(Future<Response<dynamic>> Function() request) async {
     try {
       final response = await request();
       return response.data;
-    } on DioException catch (e) {
-      _log.error(
+    } on DioException catch (e, st) {
+      logger.error(
         'API Error: ${e.requestOptions.method} ${e.requestOptions.path}',
         error: e,
-        stackTrace: StackTrace.current,
+        stackTrace: st,
       );
       throw ApiException(_parseErrorResponse(e), e.response?.statusCode);
     } catch (e, st) {
-      _log.error('Unexpected error', error: e, stackTrace: st);
+      logger.error('Unexpected error', error: e, stackTrace: st);
       throw ApiException('An unexpected error occurred');
     }
   }
 
   static String _parseErrorResponse(DioException e) {
-    if (e.response?.data != null) {
-      final data = e.response!.data;
-      if (data is Map<String, dynamic>) {
-        if (data.containsKey('details') && data['details'] is List) {
-          final details = List<dynamic>.from(data['details']);
-          if (details.isNotEmpty && details.length > 1) {
-            return details.map((err) => '• $err').join('\n');
-          } else if (details.isNotEmpty) {
-            return details.first.toString();
-          }
-        }
-        if (data.containsKey('error')) {
-          return data['error'].toString();
-        }
-      } else if (data is String) {
-        return data;
+    final data = e.response?.data;
+    if (data is Map) {
+      final details = data['details'];
+      if (details is List && details.isNotEmpty) {
+        return details.length > 1
+            ? details.map((err) => '• $err').join('\n')
+            : details.first.toString();
       }
+      if (data['error'] != null) return data['error'].toString();
+    } else if (data is String && data.isNotEmpty) {
+      return data;
     }
 
     if (e.type == DioExceptionType.connectionError ||
@@ -90,28 +205,117 @@ class ApiClient {
       return 'Could not connect to the server, try again later';
     }
 
-    if (e.response?.statusCode != null) {
-      return 'Error ${e.response!.statusCode}: ${e.response!.statusMessage}';
+    final status = e.response?.statusCode;
+    if (status != null) {
+      return 'Error $status: ${e.response!.statusMessage}';
     }
 
     return e.message ?? 'An unknown error occurred';
   }
+}
 
-  static Future<dynamic> get(String endpoint) =>
-      _sendRequest(() => _dio.get(endpoint));
+class _AuthInterceptor extends Interceptor {
+  _AuthInterceptor(this._http);
 
-  static Future<dynamic> getUser(String userId) => get('/users/$userId');
+  final ApiHttp _http;
 
-  static Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) =>
-      _sendRequest(() => _dio.post(endpoint, data: body));
+  static const String _retriedKey = 'auth_retried';
 
-  static Future<dynamic> delete(
-    String endpoint, {
-    Map<String, dynamic>? body,
-  }) => _sendRequest(() => _dio.delete(endpoint, data: body));
+  /// Endpoints where a 401 is an answer, not an expired session.
+  static const List<String> _noRefreshPaths = [
+    '/auth/login',
+    '/auth/register',
+    '/auth/refresh',
+    '/auth/logout',
+    '/auth/google-login',
+    '/auth/forgot-password',
+    '/auth/reset-password',
+  ];
 
-  static Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) =>
-      _sendRequest(() => _dio.patch(endpoint, data: body));
+  @override
+  Future<void> onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    logger.debug('${options.method} ${options.path}');
+    final token = await _http.tokenStore.readAccessToken();
+    if (token != null) {
+      options.headers['Authorization'] = 'Bearer $token';
+    }
+    handler.next(options);
+  }
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final request = err.requestOptions;
+    final expired =
+        err.response?.statusCode == 401 &&
+        request.extra[_retriedKey] != true &&
+        !_noRefreshPaths.any(request.path.contains);
+
+    if (!expired) return handler.next(err);
+
+    final String token;
+    try {
+      token = await _http.refreshAccessToken(staleToken: _bearerOf(request));
+    } on SessionExpiredException {
+      logger.warning('Session expired');
+      _http.onUnauthorized?.call();
+      return handler.next(err);
+    } catch (e) {
+      // The refresh could not reach the server. Keep the session: the user
+      // is offline, not logged out.
+      logger.error('Token refresh failed', error: e);
+      return handler.next(err);
+    }
+
+    request.headers['Authorization'] = 'Bearer $token';
+    request.extra[_retriedKey] = true;
+
+    try {
+      handler.resolve(await _http._plain.fetch<dynamic>(request));
+    } on DioException catch (retryError) {
+      handler.next(retryError);
+    }
+  }
+
+  static String? _bearerOf(RequestOptions request) {
+    final header = request.headers['Authorization'];
+    if (header is! String || !header.startsWith('Bearer ')) return null;
+    return header.substring('Bearer '.length);
+  }
+}
+
+/// App-wide entry point to the backend.
+class ApiClient {
+  static ApiHttp? _http;
+  static String _deviceName = 'Unknown device';
+  static void Function()? _onUnauthorized;
+
+  static ApiHttp get _client {
+    final http = _http;
+    if (http == null) {
+      throw StateError('ApiClient.init() must be called before any request');
+    }
+    return http;
+  }
+
+  static String get deviceName => _deviceName;
+
+  static String get baseUrl => _client.baseUrl;
+
+  /// Synchronous callback triggered when the session cannot be refreshed.
+  /// Implementations must clear state synchronously (start any async
+  /// cleanup in the background).
+  static void Function()? get onUnauthorized => _onUnauthorized;
+
+  static set onUnauthorized(void Function()? callback) {
+    _onUnauthorized = callback;
+    _http?.onUnauthorized = callback;
+  }
 
   static Future<void> init() async {
     final backendUrl = dotenv.env['BACKEND_URL']?.trim();
@@ -119,120 +323,58 @@ class ApiClient {
       throw StateError('BACKEND_URL must be provided in .env');
     }
 
-    _baseUrl = backendUrl;
-    _dio.options.baseUrl = backendUrl;
-    final interceptor = await _DeviceInfoInterceptor.create();
-    _deviceName = interceptor.deviceName;
-    _dio.interceptors.add(interceptor);
-  }
-}
-
-class _AuthInterceptor extends QueuedInterceptorsWrapper {
-  Dio get _refreshDio => Dio(BaseOptions(baseUrl: ApiClient.baseUrl));
-
-  static const List<String> _excludedPaths = [
-    '/auth/login',
-    '/auth/register',
-    '/auth/refresh',
-    '/auth/logout',
-  ];
-
-  @override
-  void onRequest(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-  ) async {
-    _log.debug('${options.method} ${options.path}');
-    final token = await ApiClient.getToken();
-    if (token != null) {
-      options.headers['Authorization'] = 'Bearer $token';
-    }
-    return handler.next(options);
+    final deviceHeaders = await _deviceHeaders();
+    _deviceName = deviceHeaders['X-Device'] ?? 'Unknown device';
+    _http = ApiHttp(
+      baseUrl: backendUrl,
+      tokenStore: SessionStorage.store,
+      deviceHeaders: deviceHeaders,
+      onUnauthorized: _onUnauthorized,
+    );
   }
 
-  @override
-  void onError(DioException err, ErrorInterceptorHandler handler) async {
-    if (err.response?.statusCode == 401 &&
-        !_shouldSkipRefresh(err.requestOptions.path)) {
-      final refreshToken = await ApiClient.getRefreshToken();
-
-      if (refreshToken != null) {
-        try {
-          final response = await _refreshDio.post(
-            '/auth/refresh',
-            data: {'refresh_token': refreshToken},
-          );
-
-          final newAccessToken = response.data['access_token'];
-          final newRefreshToken = response.data['refresh_token'];
-
-          await SessionStorage.saveSession(
-            accessToken: newAccessToken,
-            refreshToken: newRefreshToken,
-          );
-
-          _log.debug('Token refreshed successfully');
-          err.requestOptions.headers['Authorization'] =
-              'Bearer $newAccessToken';
-
-          final retryResponse = await ApiClient._dio.fetch(err.requestOptions);
-          return handler.resolve(retryResponse);
-        } catch (e) {
-          _log.error('Token refresh failed', error: e);
-          ApiClient.onUnauthorized?.call();
-          return handler.reject(err);
-        }
-      } else {
-        _log.warning('No refresh token available');
-        ApiClient.onUnauthorized?.call();
-        return handler.reject(err);
-      }
-    }
-
-    return handler.next(err);
+  /// Replaces the HTTP layer (tests).
+  @visibleForTesting
+  static void useForTesting(ApiHttp http) {
+    _http = http..onUnauthorized = _onUnauthorized;
   }
 
-  bool _shouldSkipRefresh(String path) {
-    return _excludedPaths.any(path.contains);
-  }
-}
-
-class _DeviceInfoInterceptor extends Interceptor {
-  final Map<String, String> _headers;
-
-  _DeviceInfoInterceptor._(this._headers);
-
-  String get deviceName => _headers['X-Device'] ?? 'Unknown device';
-
-  static Future<_DeviceInfoInterceptor> create() async {
+  static Future<Map<String, String>> _deviceHeaders() async {
     final packageInfo = await PackageInfo.fromPlatform();
 
-    final Map<String, String> deviceHeaders;
-
+    final Map<String, String> headers;
     if (kIsWeb) {
-      deviceHeaders = {
-        'X-Platform': 'web',
-        'X-Device': 'Web',
-      };
+      headers = {'X-Platform': 'web', 'X-Device': 'Web'};
     } else if (Platform.isAndroid) {
       final info = await DeviceInfoPlugin().androidInfo;
-      deviceHeaders = {'X-Platform': 'android', 'X-Device': info.model};
+      headers = {'X-Platform': 'android', 'X-Device': info.model};
     } else if (Platform.isIOS) {
       final info = await DeviceInfoPlugin().iosInfo;
-      deviceHeaders = {'X-Platform': 'ios', 'X-Device': info.utsname.machine};
+      headers = {'X-Platform': 'ios', 'X-Device': info.utsname.machine};
     } else {
-      deviceHeaders = {'X-Platform': Platform.operatingSystem};
+      headers = {'X-Platform': Platform.operatingSystem};
     }
 
-    return _DeviceInfoInterceptor._({
-      ...deviceHeaders,
-      'X-App-Version': packageInfo.version,
-    });
+    return {...headers, 'X-App-Version': packageInfo.version};
   }
 
-  @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    options.headers.addAll(_headers);
-    handler.next(options);
-  }
+  static Future<String?> getToken() => SessionStorage.getAccessToken();
+
+  static Future<String?> getRefreshToken() => SessionStorage.getRefreshToken();
+
+  static Future<String?> ensureFreshToken() => _client.ensureFreshToken();
+
+  static Future<dynamic> get(String endpoint, {Map<String, dynamic>? query}) =>
+      _client.get(endpoint, query: query);
+
+  static Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) =>
+      _client.post(endpoint, body: body);
+
+  static Future<dynamic> delete(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) => _client.delete(endpoint, body: body);
+
+  static Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) =>
+      _client.patch(endpoint, body: body);
 }
