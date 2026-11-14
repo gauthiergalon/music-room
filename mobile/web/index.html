@@ -41,6 +41,14 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!--
+    Tracks are streamed as HLS, which only Safari plays reliably from an
+    <audio> element. These two scripts add that ability to the other browsers
+    (see hls_audio.js) and must be loaded before the app starts.
+  -->
+  <script src="vendor/hls.light.min.js"></script>
+  <script src="hls_audio.js"></script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

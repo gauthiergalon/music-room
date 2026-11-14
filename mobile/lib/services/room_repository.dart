@@ -71,7 +71,22 @@ class RoomRepository {
       throw ApiException('No stream URL found for track $trackId');
     }
 
-    return streamUrl;
+    return resolveStreamUrl(streamUrl, ApiClient.baseUrl);
+  }
+
+  /// The backend answers with either the provider's URL or, for streams it
+  /// has to relay (HLS in a browser), a path on its own API.
+  static String resolveStreamUrl(String streamUrl, String apiBaseUrl) {
+    final uri = Uri.parse(streamUrl);
+    if (uri.hasScheme) return streamUrl;
+
+    final base = Uri.parse(apiBaseUrl);
+    final basePath = base.path.endsWith('/')
+        ? base.path.substring(0, base.path.length - 1)
+        : base.path;
+    return base
+        .replace(path: '$basePath${uri.path}', query: uri.query)
+        .toString();
   }
 
   Future<void> delegateDevice(
