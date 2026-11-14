@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../controllers/room_controller.dart';
+import '../core/exceptions/api_exception.dart';
 import '../core/theme.dart';
 import '../core/utils/ui_utils.dart';
 import '../models/track.dart';
@@ -168,9 +169,14 @@ class _SearchPageState extends State<SearchPage> {
                 }
               } catch (e) {
                 if (context.mounted) {
+                  // A 4xx answer explains itself ("This track is not
+                  // available for streaming", missing permission...).
+                  final status = e is ApiException ? e.statusCode ?? 0 : 0;
                   UiUtils.showError(
                     context,
-                    'Failed to add the song to the queue.',
+                    e is ApiException && status >= 400 && status < 500
+                        ? e.message
+                        : 'Failed to add the song to the queue.',
                   );
                 }
               }

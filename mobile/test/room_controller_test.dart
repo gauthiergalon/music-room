@@ -129,6 +129,9 @@ class _FakeRepository extends RoomRepository {
   /// Stream URL requests wait for the gate of their track, if any.
   final Map<int, Completer<void>> urlGates = {};
   Object? removeError;
+
+  /// When set, resolving a stream URL fails with it.
+  Object? urlError;
   final List<(String, double)> reorders = [];
 
   @override
@@ -137,6 +140,8 @@ class _FakeRepository extends RoomRepository {
   @override
   Future<String> getStreamUrl(int trackId) async {
     await urlGates[trackId]?.future;
+    final error = urlError;
+    if (error != null) throw error;
     return 'url-$trackId';
   }
 
@@ -629,6 +634,49 @@ void main() {
         expect(position, lessThan(1));
       },
     );
+  });
+
+  group('a track that cannot be loaded', () {
+    test('shows the reason the server gives', () async {
+      repository.urlError = ApiException(
+        'This track is not available for streaming',
+        404,
+      );
+      await join();
+      socket.emit('RoomState', roomState());
+      await settle();
+
+      expect(
+        controller.takePlayerErrorMessage(),
+        'This track is not available for streaming',
+      );
+      expect(engine.calls.where((call) => call.startsWith('load')), isEmpty);
+    });
+
+    test('shows a generic message for a technical failure', () async {
+      repository.urlError = ApiException('Bad Gateway', 502);
+      await join();
+      socket.emit('RoomState', roomState());
+      await settle();
+
+      expect(
+        controller.takePlayerErrorMessage(),
+        'Player error: unable to load the track.',
+      );
+    });
+
+    test('the controller can still skip to the next track', () async {
+      repository.urlError = ApiException('not available', 404);
+      await join();
+      socket.emit('RoomState', roomState(trackId: 1));
+      await settle();
+
+      controller.skipNext();
+
+      expect(socket.sentOf('NextTrack'), [
+        {'track_id': 1},
+      ]);
+    });
   });
 
   group('leaving', () {

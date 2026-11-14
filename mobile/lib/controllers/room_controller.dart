@@ -482,11 +482,20 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
       if (generation != _loadGeneration) return;
       _loadingTrackId = null;
       logger.error('Error loading track', error: e);
-      _playerErrorMessage = e is ApiException && (e.statusCode ?? 0) >= 500
-          ? 'Player error: unable to load the track.'
-          : 'Error playing track.';
+      _playerErrorMessage = _loadErrorMessage(e);
       _notify();
     }
+  }
+
+  /// What to tell the user when the current track cannot be loaded.
+  static String _loadErrorMessage(Object error) {
+    if (error is! ApiException) return 'Error playing track.';
+    final status = error.statusCode ?? 0;
+    // A 4xx answer is the server explaining why (for instance "This track is
+    // not available for streaming"); anything else is a technical failure.
+    return status >= 400 && status < 500
+        ? error.message
+        : 'Player error: unable to load the track.';
   }
 
   void _onPlaybackCompleted() {
