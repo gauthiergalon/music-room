@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
@@ -84,9 +84,17 @@ class AudioService extends ChangeNotifier implements PlaybackEngine {
   }) async {
     logger.debug('Audio loading: ${track.title} at $initialPosition');
 
-    // A playing player would start the new source as soon as it is loaded;
-    // whether to play is decided by the caller once the load is done.
-    if (_audioPlayer.playing) await _audioPlayer.pause();
+    if (kIsWeb) {
+      // The web implementation of just_audio caches the playlist it was first
+      // given for as long as the player stays active, so a second
+      // `setAudioSource` would keep playing the previous track. Stopping
+      // releases that player; the load below starts a fresh one.
+      await _audioPlayer.stop();
+    } else if (_audioPlayer.playing) {
+      // A playing player would start the new source as soon as it is loaded;
+      // whether to play is decided by the caller once the load is done.
+      await _audioPlayer.pause();
+    }
 
     _setCurrentTrack(track);
 
