@@ -28,7 +28,7 @@ pub async fn send_request(
     let (user_id_1, user_id_2) = order_ids(sender_id, target_id);
     let friend = friends_repo::create(pool, user_id_1, user_id_2, sender_id).await?;
 
-    Ok(friend.into())
+    Ok(FriendResponseDto::new(friend, target.id, target.username))
 }
 
 pub async fn accept_request(
@@ -50,9 +50,16 @@ pub async fn accept_request(
         return Err(AppError::Conflict(ErrorMessage::FriendAlreadyExists));
     }
 
+    let requester = users_repo::find_by_id(pool, requester_id)
+        .await?
+        .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
     let friend = friends_repo::update_accept(pool, user_id_1, user_id_2).await?;
 
-    Ok(friend.into())
+    Ok(FriendResponseDto::new(
+        friend,
+        requester.id,
+        requester.username,
+    ))
 }
 
 pub async fn reject_request(pool: &PgPool, user_id: Uuid, target_id: Uuid) -> Result<(), AppError> {

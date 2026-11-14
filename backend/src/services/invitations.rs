@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use crate::{
     errors::{AppError, ErrorMessage},
-    models::invitation::Invitation,
-    repositories::invitations as invitation_repo,
+    models::invitation::{Invitation, InvitationWithDetails},
+    repositories::{invitations as invitation_repo, users as users_repo},
     services::rooms as room_service,
 };
 
@@ -33,6 +33,12 @@ pub async fn invite(
     if room.owner_id != inviter_id {
         return Err(AppError::Forbidden(ErrorMessage::NotRoomOwner));
     }
+    if invitee_id == inviter_id {
+        return Err(AppError::Validation(vec![ErrorMessage::CannotInviteSelf]));
+    }
+    if users_repo::find_by_id(pool, invitee_id).await?.is_none() {
+        return Err(AppError::NotFound(ErrorMessage::UserNotFound));
+    }
 
     invitation_repo::create(pool, room_id, inviter_id, invitee_id).await
 }
@@ -40,7 +46,7 @@ pub async fn invite(
 pub async fn get_my_pending_invitations(
     pool: &PgPool,
     user_id: Uuid,
-) -> Result<Vec<Invitation>, AppError> {
+) -> Result<Vec<InvitationWithDetails>, AppError> {
     invitation_repo::find_pending_by_user(pool, user_id).await
 }
 

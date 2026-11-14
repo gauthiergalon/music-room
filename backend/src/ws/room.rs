@@ -4,143 +4,109 @@ use uuid::Uuid;
 
 use crate::{
     dtos::{
-        music::{AlbumData, ArtistData, TrackItem},
+        music::TrackItem,
         ws::{QueuedTrack, WsEventServer},
     },
-    repositories::{queue as queue_repo, rooms as rooms_repo, tracks as tracks_repo},
+    errors::AppError,
+    repositories::{queue as queue_repo, rooms as rooms_repo},
     state::AppState,
 };
 
-pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsEventServer> {
-    let pool = &state.pool;
-
-    let room = match rooms_repo::get_room_playback_state(pool, room_id).await {
-        Ok(Some(r)) => r,
-        Ok(None) => return None,
-        Err(e) => {
-            tracing::error!(
-                "Failed to get room playback state for room {}: {}",
-                room_id,
-                e
-            );
-            return None;
-        }
+/// Reads the playback state and the queue of a room. Two queries, whatever the
+/// queue length: track metadata is joined from the `tracks` cache.
+async fn load_room_state(
+    pool: &PgPool,
+    room_id: Uuid,
+    version: u64,
+) -> Result<Option<WsEventServer>, AppError> {
+    let Some(room) = rooms_repo::get_room_playback_state(pool, room_id).await? else {
+        return Ok(None);
     };
 
-    let current_track_item = get_current_track_item(state, room.current_track).await;
-    let queue_items = get_queue_items(state, room_id).await;
+    let current_track = room.current_track.map(|track_id| {
+        TrackItem::from_cache(
+            track_id,
+            room.title,
+            room.artist,
+            room.album,
+            room.cover,
+            room.duration,
+        )
+    });
 
-    let timestamp = room.played_at.unwrap_or_else(Utc::now);
-    Some(WsEventServer::RoomState {
-        current_track: current_track_item,
-        message_id: timestamp.to_rfc3339(),
-        is_playing: room.is_playing,
-        current_position: room.current_position,
-        timestamp: timestamp,
-        queue: queue_items,
-    })
-}
-
-pub async fn send_room_state(state: &AppState, room_id: Uuid) {
-    let tx = {
-        let rooms = state.active_rooms.read().await;
-        if let Some(r) = rooms.get(&room_id) {
-            r.tx.clone()
-        } else {
-            return;
-        }
-    };
-
-    if let Some(event) = get_room_state_event(state, room_id).await {
-        let _ = tx.send(event);
-    }
-}
-
-async fn get_current_track_item(state: &AppState, track_id: Option<i64>) -> Option<TrackItem> {
-    if let Some(id) = track_id {
-        match state.music_provider.get_track_info(&state.pool, id).await {
-            Ok(item) => Some(item),
-            Err(e) => {
-                tracing::error!("Failed to get track info for track {}: {}", id, e);
-                None
-            }
-        }
-    } else {
-        None
-    }
-}
-
-async fn get_queue_items(state: &AppState, room_id: Uuid) -> Vec<QueuedTrack> {
-    let pool = &state.pool;
-    let queue_records = match queue_repo::get_queue(pool, room_id).await {
-        Ok(records) => records,
-        Err(e) => {
-            tracing::error!("Failed to get queue for room {}: {}", room_id, e);
-            vec![]
-        }
-    };
-
-    let provider = state.music_provider.clone();
-
-    let futures: Vec<_> = queue_records
+    let queue = queue_repo::get_queue_with_tracks(pool, room_id)
+        .await?
         .into_iter()
-        .map(|q| {
-            let pool = pool.clone();
-            let provider = provider.clone();
-            async move {
-                let track = match provider.get_track_info(&pool, q.track_id).await {
-                    Ok(track) => track,
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to get track info for queued track {}: {}",
-                            q.track_id,
-                            e
-                        );
-                        get_fallback_track_item(&pool, q.track_id).await
-                    }
-                };
-
-                QueuedTrack {
-                    id: q.id,
-                    position: q.position,
-                    track,
-                }
-            }
+        .map(|record| QueuedTrack {
+            id: record.id,
+            position: record.position,
+            track: TrackItem::from_cache(
+                record.track_id,
+                record.title,
+                record.artist,
+                record.album,
+                record.cover,
+                record.duration,
+            ),
         })
         .collect();
 
-    futures_util::future::join_all(futures).await
+    let now = Utc::now();
+    Ok(Some(WsEventServer::RoomState {
+        current_track,
+        version,
+        is_playing: room.is_playing,
+        current_position: room.current_position,
+        timestamp: room.played_at.unwrap_or(now),
+        server_time: now,
+        queue,
+    }))
 }
 
-async fn get_fallback_track_item(pool: &PgPool, track_id: i64) -> TrackItem {
-    let db_fallback = match tracks_repo::get_track(pool, track_id).await {
-        Ok(t) => t,
+/// Builds the next state of an active room, numbered after the previous one.
+///
+/// Reading the database and numbering the state happen under the room's state
+/// lock, so states are always published in the order they were read: a slow
+/// reader can never overwrite a newer state with an older one.
+async fn next_room_state(state: &AppState, room_id: Uuid) -> Option<(WsEventServer, StateSender)> {
+    let handle = state.rooms.state_handle(room_id).await?;
+    let mut version = handle.version.clone().lock_owned().await;
+
+    match load_room_state(&state.pool, room_id, *version + 1).await {
+        Ok(Some(event)) => {
+            *version += 1;
+            Some((
+                event,
+                StateSender {
+                    tx: handle.tx,
+                    _guard: version,
+                },
+            ))
+        }
+        Ok(None) => None,
         Err(e) => {
-            tracing::error!("Failed to get fallback track {} from db: {}", track_id, e);
+            tracing::error!("Failed to load the state of room {}: {:?}", room_id, e);
             None
         }
-    };
-
-    if let Some(t) = db_fallback {
-        TrackItem {
-            id: track_id,
-            title: t.title,
-            duration: t.duration,
-            audio_quality: None,
-            album: Some(AlbumData {
-                title: t.album,
-                cover: t.cover,
-            }),
-            artists: t.artist.map(|a| vec![ArtistData { name: Some(a) }]),
-        }
-    } else {
-        TrackItem {
-            id: track_id,
-            title: format!("Track {}", track_id),
-            duration: 0,
-            audio_quality: None,
-            album: None,
-            artists: None,
-        }
     }
+}
+
+/// Keeps the state lock until the event has been handed to its recipients.
+struct StateSender {
+    tx: tokio::sync::broadcast::Sender<WsEventServer>,
+    _guard: tokio::sync::OwnedMutexGuard<u64>,
+}
+
+/// Broadcasts the current state of the room to every connected client.
+pub async fn send_room_state(state: &AppState, room_id: Uuid) {
+    if let Some((event, sender)) = next_room_state(state, room_id).await {
+        let _ = sender.tx.send(event);
+    }
+}
+
+/// The current state of the room, for a single client (on connect or resync).
+pub async fn get_room_state_event(state: &AppState, room_id: Uuid) -> Option<WsEventServer> {
+    next_room_state(state, room_id)
+        .await
+        .map(|(event, _)| event)
 }

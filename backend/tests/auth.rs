@@ -1,26 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
-use chrono::{Duration, Utc};
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use backend::routes::app_router;
+use common::{TestApp, TestConfig, create_app, google};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
-
-fn create_app(pool: PgPool) -> axum::Router {
-    let state = backend::state::AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url: "http://localhost:8080".to_string(),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestAuthResponse {
@@ -207,7 +192,7 @@ async fn test_validation_errors(pool: PgPool) {
     assert_eq!(error_res.error, "Validation Error");
     assert_eq!(
         error_res.details.unwrap()[0],
-        "Username has invalid length (must be between 3 and 32 characters)".to_string()
+        "Username has invalid length (must be between 3 and 24 characters)".to_string()
     );
 }
 
@@ -230,7 +215,7 @@ async fn test_username_too_long(pool: PgPool) {
     assert_eq!(error_res.error, "Validation Error");
     assert_eq!(
         error_res.details.unwrap()[0],
-        "Username has invalid length (must be between 3 and 32 characters)"
+        "Username has invalid length (must be between 3 and 24 characters)"
     );
 }
 
@@ -312,24 +297,6 @@ async fn test_logout_success(pool: PgPool) {
         .await;
 
     res.assert_status(StatusCode::NO_CONTENT);
-}
-
-#[sqlx::test]
-async fn test_logout_no_auth_token(pool: PgPool) {
-    let app = create_app(pool.clone());
-    let server = TestServer::new(app);
-
-    let res = server
-        .post("/auth/logout")
-        .json(&json!({
-            "refresh_token": "somerefresh"
-        }))
-        .await;
-
-    res.assert_status(StatusCode::UNAUTHORIZED);
-    let error_res = res.json::<ErrorResponse>();
-    assert_eq!(error_res.error, "Unauthorized");
-    assert_eq!(error_res.details.unwrap()[0], "Invalid token");
 }
 
 #[sqlx::test]
@@ -422,139 +389,376 @@ async fn test_login_missing_fields(pool: PgPool) {
 }
 
 #[sqlx::test]
-async fn test_logout_invalid_auth_token(pool: PgPool) {
-    let app = create_app(pool.clone());
-    let server = TestServer::new(app);
+async fn test_logout_works_without_an_access_token(pool: PgPool) {
+    // A client whose access token expired must still be able to end its session.
+    let server = TestServer::new(create_app(pool));
+    let user = common::register(&server, "logout").await;
+
+    server
+        .post("/auth/logout")
+        .json(&json!({ "refresh_token": user.refresh_token }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    server
+        .post("/auth/refresh")
+        .json(&json!({ "refresh_token": user.refresh_token }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+async fn test_register_trims_and_rejects_blank_usernames(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
 
     let res = server
-        .post("/auth/logout")
+        .post("/auth/register")
+        .json(&json!({ "username": "      ", "email": "blank@example.com", "password": "password123" }))
+        .await;
+    res.assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+
+    let res = server
+        .post("/auth/register")
+        .json(&json!({ "username": "  padded  ", "email": "padded@example.com", "password": "password123" }))
+        .await;
+    res.assert_status(StatusCode::CREATED);
+    let token = res.json::<TestAuthResponse>().access_token;
+
+    let me = server
+        .get("/users/me")
+        .add_header(axum::http::header::AUTHORIZATION, common::bearer(&token))
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(me["username"], "padded");
+}
+
+#[sqlx::test]
+async fn test_login_is_case_insensitive_on_email(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+
+    server
+        .post("/auth/register")
+        .json(&json!({ "username": "casey", "email": "Casey@Example.com", "password": "password123" }))
+        .await
+        .assert_status(StatusCode::CREATED);
+
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": "  CASEY@example.COM ", "password": "password123" }))
+        .await
+        .assert_status(StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn test_password_reset_flow_revokes_existing_sessions(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "reset").await;
+
+    server
+        .post("/auth/forgot-password")
+        .json(&json!({ "email": user.email }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    let reset_token = app
+        .last_email_token(&user.email)
+        .expect("a reset email was sent");
+
+    server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": reset_token, "new_password": "brand-new-password" }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    // The session opened before the reset is gone...
+    server
+        .post("/auth/refresh")
+        .json(&json!({ "refresh_token": user.refresh_token }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+
+    // ...the old password no longer works and the new one does.
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": user.email, "password": common::PASSWORD }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": user.email, "password": "brand-new-password" }))
+        .await
+        .assert_status(StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn test_forgot_password_sends_one_email_at_a_time(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "forgot").await;
+
+    for _ in 0..2 {
+        server
+            .post("/auth/forgot-password")
+            .json(&json!({ "email": user.email }))
+            .await
+            .assert_status(StatusCode::NO_CONTENT);
+    }
+
+    assert_eq!(app.mailer.sent().len(), 1);
+}
+
+#[sqlx::test]
+async fn test_reset_password_rejects_too_long_password(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+
+    server
+        .post("/auth/reset-password")
+        .json(&json!({ "token": "whatever", "new_password": "a".repeat(129) }))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test]
+async fn test_auth_routes_are_rate_limited(pool: PgPool) {
+    let app = TestApp::with_config(
+        pool,
+        TestConfig {
+            auth_rate_limit: Some(3),
+            ..TestConfig::default()
+        },
+    );
+    let server = app.server();
+    let attempt = || {
+        server
+            .post("/auth/login")
+            .add_header("x-forwarded-for", "203.0.113.7")
+            .json(&json!({ "email": "nobody@example.com", "password": "wrong-password" }))
+    };
+
+    for _ in 0..3 {
+        attempt().await.assert_status(StatusCode::UNAUTHORIZED);
+    }
+    attempt().await.assert_status(StatusCode::TOO_MANY_REQUESTS);
+
+    // Another client is not affected.
+    server
+        .post("/auth/login")
+        .add_header("x-forwarded-for", "203.0.113.8")
+        .json(&json!({ "email": "nobody@example.com", "password": "wrong-password" }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
+
+// ------------------------------------------------------------------ Google
+
+async fn google_app(pool: PgPool) -> (TestApp, wiremock::MockServer) {
+    let (jwks_server, google_jwks_url) = google::mock_jwks().await;
+    let app = TestApp::with_config(
+        pool,
+        TestConfig {
+            google_jwks_url,
+            ..TestConfig::default()
+        },
+    );
+    (app, jwks_server)
+}
+
+async fn me(server: &TestServer, access_token: &str) -> serde_json::Value {
+    server
+        .get("/users/me")
         .add_header(
             axum::http::header::AUTHORIZATION,
-            "Bearer invalid-token"
-                .parse::<axum::http::HeaderValue>()
-                .unwrap(),
+            common::bearer(access_token),
         )
-        .json(&json!({
-            "refresh_token": "somerefresh"
-        }))
-        .await;
-
-    res.assert_status(StatusCode::UNAUTHORIZED);
-    let error_res = res.json::<ErrorResponse>();
-    assert_eq!(error_res.error, "Unauthorized");
-    assert_eq!(error_res.details.unwrap()[0], "Invalid token");
-}
-
-use backend::dtos::auth::GoogleLoginRequest;
-use wiremock::{
-    Mock, MockServer, ResponseTemplate,
-    matchers::{method, path},
-};
-
-fn create_app_with_google_url(pool: PgPool, google_auth_url: String) -> axum::Router {
-    let state = backend::state::AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url,
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
+        .await
+        .json::<serde_json::Value>()
 }
 
 #[sqlx::test]
-async fn test_google_login_success(pool: PgPool) {
-    let mock_server = MockServer::start().await;
-    let google_auth_url = mock_server.uri();
+async fn test_google_login_creates_a_confirmed_public_account(pool: PgPool) {
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
 
-    let expected_token_info = json!({
-        "iss": "https://accounts.google.com",
-        "aud": "test_client_id",
-        "sub": "1234567890",
-        "email": "test.google@example.com",
-        "email_verified": true,
-        "exp": (Utc::now() + Duration::minutes(15)).timestamp() as usize,
-        "name": "Test Google",
-        "given_name": "Test",
-        "family_name": "Google"
-    });
-
-    Mock::given(method("GET"))
-        .and(path("/tokeninfo"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(expected_token_info))
-        .mount(&mock_server)
+    let id_token = google::sign(&google::claims("google-1", "Test.Google@example.com"));
+    let res = server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": id_token }))
         .await;
-
-    let app = create_app_with_google_url(pool, google_auth_url);
-    let server = TestServer::new(app);
-
-    let payload = GoogleLoginRequest {
-        id_token: "fake_valid_google_token".to_string(),
-    };
-
-    let res = server.post("/auth/google-login").json(&payload).await;
-
     res.assert_status(StatusCode::OK);
 
-    let json = res.json::<TestAuthResponse>();
-    assert!(!json.access_token.is_empty());
-    assert!(!json.refresh_token.is_empty());
+    let user = me(&server, &res.json::<TestAuthResponse>().access_token).await;
+    assert_eq!(user["email"], "test.google@example.com");
+    assert_eq!(user["email_confirmed"], true);
+    assert_eq!(user["privacy_level"], "Public");
+    assert_eq!(user["google_linked"], true);
+    assert_eq!(user["has_password"], false);
 }
 
 #[sqlx::test]
-async fn test_google_login_existing_user(pool: PgPool) {
-    // 1. On crée d'abord un utilisateur classique (sans identifiant Google)
-    sqlx::query!(
-        "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3)",
-        "existing_user",
-        "test.existing@example.com",
-        "dummy_hash"
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
+async fn test_google_login_rejects_forged_tokens(pool: PgPool) {
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
 
-    let mock_server = MockServer::start().await;
-    let google_auth_url = mock_server.uri();
+    // Not a JWT at all.
+    server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": "fake_valid_google_token" }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
 
-    let expected_token_info = json!({
-        "iss": "https://accounts.google.com",
-        "aud": "test_client_id",
-        "sub": "new_google_id_987",
-        "email": "test.existing@example.com", // Correspond à l'utilisateur en base
-        "email_verified": true,
-        "exp": (Utc::now() + Duration::minutes(15)).timestamp() as usize,
-        "name": "Existing User",
-        "given_name": "Existing",
-        "family_name": "User"
-    });
+    // Properly signed, but issued for another application.
+    let mut claims = google::claims("google-2", "other@example.com");
+    claims["aud"] = json!("another_client_id");
+    server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": google::sign(&claims) }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
 
-    Mock::given(method("GET"))
-        .and(path("/tokeninfo"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(expected_token_info))
-        .mount(&mock_server)
+#[sqlx::test]
+async fn test_google_login_requires_a_verified_google_email(pool: PgPool) {
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
+
+    let mut claims = google::claims("google-3", "unverified@example.com");
+    claims["email_verified"] = json!(false);
+
+    server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": google::sign(&claims) }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
+async fn test_google_login_links_an_account_whose_email_is_confirmed(pool: PgPool) {
+    let (app, _jwks) = google_app(pool.clone()).await;
+    let server = app.server();
+    let user = common::register(&server, "existing").await;
+    sqlx::query("UPDATE users SET email_confirmed = TRUE WHERE id = $1")
+        .bind(user.id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let id_token = google::sign(&google::claims("google-4", &user.email));
+    let res = server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": id_token }))
         .await;
-
-    let app = create_app_with_google_url(pool.clone(), google_auth_url);
-    let server = TestServer::new(app);
-
-    let payload = GoogleLoginRequest {
-        id_token: "fake_valid_google_token".to_string(),
-    };
-
-    // 2. On tente de se connecter avec Google
-    let res = server.post("/auth/google-login").json(&payload).await;
-
     res.assert_status(StatusCode::OK);
 
-    // 3. On vérifie que son google_id a bien été rattaché
-    let db_user =
-        sqlx::query!("SELECT google_id FROM users WHERE email = 'test.existing@example.com'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let linked = me(&server, &res.json::<TestAuthResponse>().access_token).await;
+    assert_eq!(linked["id"], user.id.to_string());
+    assert_eq!(linked["google_linked"], true);
+}
 
-    assert_eq!(db_user.google_id, Some("new_google_id_987".to_string()));
+#[sqlx::test]
+async fn test_google_login_does_not_take_over_an_unconfirmed_account(pool: PgPool) {
+    // Someone registered with this address without proving they own it. The
+    // real owner logging in with Google must not land in that account.
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
+    let squatter = common::register(&server, "squatter").await;
+
+    let id_token = google::sign(&google::claims("google-5", &squatter.email));
+    server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": id_token }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
+
+    let unchanged = me(&server, &squatter.access_token).await;
+    assert_eq!(unchanged["google_linked"], false);
+}
+
+#[sqlx::test]
+async fn test_google_login_finds_the_account_by_google_id_after_an_email_change(pool: PgPool) {
+    let (app, _jwks) = google_app(pool.clone()).await;
+    let server = app.server();
+
+    let first = server
+        .post("/auth/google-login")
+        .json(
+            &json!({ "id_token": google::sign(&google::claims("google-6", "before@example.com")) }),
+        )
+        .await;
+    first.assert_status(StatusCode::OK);
+    let account = me(&server, &first.json::<TestAuthResponse>().access_token).await;
+
+    sqlx::query("UPDATE users SET email = 'after@example.com' WHERE google_id = 'google-6'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    // Google still reports the old address; the account is the same one.
+    let second = server
+        .post("/auth/google-login")
+        .json(
+            &json!({ "id_token": google::sign(&google::claims("google-6", "before@example.com")) }),
+        )
+        .await;
+    second.assert_status(StatusCode::OK);
+    let same = me(&server, &second.json::<TestAuthResponse>().access_token).await;
+    assert_eq!(same["id"], account["id"]);
+}
+
+#[sqlx::test]
+async fn test_google_login_with_a_very_long_name(pool: PgPool) {
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
+
+    let mut claims = google::claims("google-7", "longname@example.com");
+    claims["given_name"] = json!("Maximilian-Alexander von Hohenzollern");
+
+    let res = server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": google::sign(&claims) }))
+        .await;
+    res.assert_status(StatusCode::OK);
+
+    let user = me(&server, &res.json::<TestAuthResponse>().access_token).await;
+    assert!(user["username"].as_str().unwrap().chars().count() <= 24);
+}
+
+#[sqlx::test]
+async fn test_link_google_to_the_current_account(pool: PgPool) {
+    let (app, _jwks) = google_app(pool).await;
+    let server = app.server();
+    let user = common::register(&server, "linker").await;
+    let other = common::register(&server, "other").await;
+
+    // The Google address does not have to match the account's address.
+    let id_token = google::sign(&google::claims("google-8", "someone.else@example.com"));
+    let res = server
+        .post("/users/me/google")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&user.access_token),
+        )
+        .json(&json!({ "id_token": id_token }))
+        .await;
+    res.assert_status(StatusCode::OK);
+    assert_eq!(res.json::<serde_json::Value>()["google_linked"], true);
+
+    // The same Google account cannot be linked to a second user.
+    server
+        .post("/users/me/google")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&other.access_token),
+        )
+        .json(&json!({ "id_token": id_token }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
+
+    // Logging in with Google now opens the linked account.
+    let login = server
+        .post("/auth/google-login")
+        .json(&json!({ "id_token": id_token }))
+        .await;
+    login.assert_status(StatusCode::OK);
+    let logged_in = me(&server, &login.json::<TestAuthResponse>().access_token).await;
+    assert_eq!(logged_in["id"], user.id.to_string());
 }

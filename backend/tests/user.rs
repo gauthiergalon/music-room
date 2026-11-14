@@ -1,13 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use backend::{routes::app_router, state::AppState};
 use chrono::{Duration, Utc};
+use common::{TestApp, create_app};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestAuthResponse {
@@ -25,19 +24,6 @@ struct TestUserResponse {
 #[derive(Serialize, Deserialize, Debug)]
 struct TestSubscriptionResponse {
     is_subscribed: bool,
-}
-
-fn create_app(pool: PgPool) -> axum::Router {
-    let state = AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url: "http://localhost:8080".to_string(),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
 }
 
 async fn register_and_login(server: &TestServer, username: &str, email: &str) -> String {
@@ -174,71 +160,6 @@ async fn test_update_username(pool: PgPool) {
 
     let user = res.json::<TestUserResponse>();
     assert_eq!(user.username, "new_username");
-}
-
-#[sqlx::test]
-async fn test_update_email(pool: PgPool) {
-    let app = create_app(pool);
-    let server = TestServer::new(app);
-    let token = register_and_login(&server, "test_update_e", "updatee@example.com").await;
-
-    let res = server
-        .patch("/users/me/email")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .json(&json!({
-            "new_email": "newemail@example.com"
-        }))
-        .await;
-
-    res.assert_status(StatusCode::OK);
-
-    let res = server
-        .get("/users/me")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .await;
-
-    let user = res.json::<TestUserResponse>();
-    assert_eq!(user.email, "newemail@example.com");
-}
-
-#[sqlx::test]
-async fn test_update_password(pool: PgPool) {
-    let app = create_app(pool);
-    let server = TestServer::new(app);
-    let token = register_and_login(&server, "test_update_p", "updatepwd@example.com").await;
-
-    let res = server
-        .patch("/users/me/password")
-        .add_header(
-            axum::http::header::AUTHORIZATION,
-            format!("Bearer {}", token),
-        )
-        .json(&json!({
-            "current_password": "password123",
-            "new_password": "newpassword456"
-        }))
-        .await;
-
-    println!("Expected 204, got {:?}", res.status_code());
-    println!("Body: {:?}", res.text());
-    res.assert_status(StatusCode::NO_CONTENT);
-
-    // Try to login with new password
-    let res = server
-        .post("/auth/login")
-        .json(&json!({
-            "email": "updatepwd@example.com",
-            "password": "newpassword456"
-        }))
-        .await;
-
-    res.assert_status(StatusCode::OK);
 }
 
 #[sqlx::test]
@@ -506,4 +427,192 @@ async fn test_get_user_privacy_control(pool: PgPool) {
         Some(vec!["Jazz".to_string()]),
         "Bob should see Alice's genres now"
     );
+}
+
+#[sqlx::test]
+async fn test_email_change_only_applies_after_confirmation(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "mailchange").await;
+    let auth = common::bearer(&user.access_token);
+
+    // Mixed case and spaces are normalised before anything else.
+    let res = server
+        .patch("/users/me/email")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "new_email": "  New.Address@Example.com " }))
+        .await;
+    res.assert_status(StatusCode::OK);
+
+    // Nothing changed yet: the old address still identifies the account.
+    assert_eq!(res.json::<serde_json::Value>()["email"], user.email);
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": user.email, "password": common::PASSWORD }))
+        .await
+        .assert_status(StatusCode::OK);
+
+    // The link went to the new address, not the current one.
+    let token = app
+        .last_email_token("new.address@example.com")
+        .expect("a confirmation email was sent to the new address");
+    assert!(app.last_email_token(&user.email).is_none());
+
+    server
+        .patch("/users/me/confirm-email")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "token": token }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    let me = server
+        .get("/users/me")
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(me["email"], "new.address@example.com");
+    assert_eq!(me["email_confirmed"], true);
+
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": "new.address@example.com", "password": common::PASSWORD }))
+        .await
+        .assert_status(StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn test_email_change_to_a_taken_address_is_refused(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "taker").await;
+    let other = common::register(&server, "owner").await;
+
+    server
+        .patch("/users/me/email")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&user.access_token),
+        )
+        .json(&json!({ "new_email": other.email.to_uppercase() }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
+
+    assert!(app.mailer.sent().is_empty());
+}
+
+#[sqlx::test]
+async fn test_send_confirmation_email_then_confirm(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "confirm").await;
+    let auth = common::bearer(&user.access_token);
+
+    server
+        .post("/users/me/send-confirmation-email")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    // A second request while the first link is valid is refused.
+    server
+        .post("/users/me/send-confirmation-email")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .assert_status(StatusCode::TOO_MANY_REQUESTS);
+
+    let token = app.last_email_token(&user.email).unwrap();
+    server
+        .patch("/users/me/confirm-email")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "token": token }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    let me = server
+        .get("/users/me")
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(me["email"], user.email);
+    assert_eq!(me["email_confirmed"], true);
+}
+
+#[sqlx::test]
+async fn test_update_password_revokes_other_sessions_and_returns_a_new_one(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let user = common::register(&server, "pwd").await;
+
+    let res = server
+        .patch("/users/me/password")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&user.access_token),
+        )
+        .json(&json!({ "current_password": common::PASSWORD, "new_password": "newpassword456" }))
+        .await;
+    res.assert_status(StatusCode::OK);
+    let new_session = res.json::<serde_json::Value>();
+
+    // The session that existed before the change is revoked...
+    server
+        .post("/auth/refresh")
+        .json(&json!({ "refresh_token": user.refresh_token }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+
+    // ...and the caller got a working replacement.
+    server
+        .post("/auth/refresh")
+        .json(&json!({ "refresh_token": new_session["refresh_token"] }))
+        .await
+        .assert_status(StatusCode::OK);
+
+    server
+        .post("/auth/login")
+        .json(&json!({ "email": user.email, "password": "newpassword456" }))
+        .await
+        .assert_status(StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn test_update_password_rejects_wrong_or_identical_password(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let user = common::register(&server, "pwdcheck").await;
+    let auth = common::bearer(&user.access_token);
+
+    server
+        .patch("/users/me/password")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "current_password": "not-my-password", "new_password": "newpassword456" }))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+
+    server
+        .patch("/users/me/password")
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .json(&json!({ "current_password": common::PASSWORD, "new_password": common::PASSWORD }))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[sqlx::test]
+async fn test_update_username_is_trimmed_and_validated(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let user = common::register(&server, "rename").await;
+    let auth = common::bearer(&user.access_token);
+
+    let res = server
+        .patch("/users/me/username")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "username": "  renamed  " }))
+        .await;
+    res.assert_status(StatusCode::OK);
+    assert_eq!(res.json::<serde_json::Value>()["username"], "renamed");
+
+    server
+        .patch("/users/me/username")
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .json(&json!({ "username": "    " }))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }

@@ -4,8 +4,9 @@ use uuid::Uuid;
 use crate::{
     errors::AppError,
     models::{queue::Queue, room::Room},
-    repositories::queue as queue_repo,
-    services::rooms as room_service,
+    repositories::{queue as queue_repo, rooms as rooms_repo},
+    services::{rooms as room_service, tracks as track_service},
+    state::AppState,
 };
 
 pub async fn verify_queue_edit_access(
@@ -24,22 +25,26 @@ pub async fn find_all_by_room_id(
     user_id: Uuid,
 ) -> Result<Vec<Queue>, AppError> {
     let _room = room_service::get(pool, room_id, user_id).await?;
-
-    queue_repo::find_all_by_room_id(pool, room_id)
-        .await
-        .map_err(AppError::Database)
+    queue_repo::find_all_by_room_id(pool, room_id).await
 }
 
+/// Appends a track to the queue. If nothing is playing in the room, the track
+/// starts right away.
 pub async fn create(
-    pool: &PgPool,
+    state: &AppState,
     room_id: Uuid,
     user_id: Uuid,
     track_id: i64,
 ) -> Result<(), AppError> {
-    let _ = verify_queue_edit_access(pool, room_id, user_id).await?;
-    queue_repo::create(pool, room_id, track_id)
-        .await
-        .map_err(AppError::Database)
+    let _ = verify_queue_edit_access(&state.pool, room_id, user_id).await?;
+
+    // Permissions first: only someone allowed to edit may trigger a provider call.
+    track_service::ensure_cached(state, track_id).await?;
+    queue_repo::create(&state.pool, room_id, track_id).await?;
+
+    // No-op unless the room has no current track.
+    rooms_repo::advance_track(&state.pool, room_id, None).await?;
+    Ok(())
 }
 
 pub async fn remove(
@@ -49,9 +54,7 @@ pub async fn remove(
     queue_id: Uuid,
 ) -> Result<(), AppError> {
     let _ = verify_queue_edit_access(pool, room_id, user_id).await?;
-    queue_repo::remove(pool, room_id, queue_id)
-        .await
-        .map_err(AppError::Database)
+    queue_repo::remove(pool, room_id, queue_id).await
 }
 
 pub async fn reorder(
@@ -62,7 +65,5 @@ pub async fn reorder(
     new_position: f64,
 ) -> Result<(), AppError> {
     let _ = verify_queue_edit_access(pool, room_id, user_id).await?;
-    queue_repo::reorder(pool, room_id, queue_id, new_position)
-        .await
-        .map_err(AppError::Database)
+    queue_repo::reorder(pool, room_id, queue_id, new_position).await
 }

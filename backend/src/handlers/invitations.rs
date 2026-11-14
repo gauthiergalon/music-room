@@ -19,16 +19,7 @@ pub async fn invite(
     let invitation =
         invitation_service::invite(&state.pool, room_id, claims.user_id, invitee_id).await?;
 
-    let response = InvitationResponse {
-        id: invitation.id,
-        room_id: invitation.room_id,
-        inviter_id: invitation.inviter_id,
-        invitee_id: invitation.invitee_id,
-        is_pending: invitation.is_pending,
-        created_at: invitation.created_at,
-    };
-
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok((StatusCode::CREATED, Json(invitation.into())))
 }
 
 #[utoipa::path(get, path = "/me/invitations", responses((status = 200, body = [InvitationResponse])), tag = "Invitations")]
@@ -39,19 +30,7 @@ pub async fn list_pending(
     let invitations =
         invitation_service::get_my_pending_invitations(&state.pool, claims.user_id).await?;
 
-    let responses: Vec<InvitationResponse> = invitations
-        .into_iter()
-        .map(|i| InvitationResponse {
-            id: i.id,
-            room_id: i.room_id,
-            inviter_id: i.inviter_id,
-            invitee_id: i.invitee_id,
-            is_pending: i.is_pending,
-            created_at: i.created_at,
-        })
-        .collect();
-
-    Ok(Json(responses))
+    Ok(Json(invitations.into_iter().map(Into::into).collect()))
 }
 
 #[utoipa::path(post, path = "/me/invitations/{id}/accept", responses((status = 204)), tag = "Invitations")]

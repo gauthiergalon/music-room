@@ -1,12 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use backend::{dtos::friend::FriendResponseDto, routes::app_router, state::AppState};
+use backend::dtos::friend::FriendResponseDto;
+use common::create_app;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -17,19 +17,6 @@ struct TestAuthResponse {
 #[derive(Serialize, Deserialize, Debug)]
 struct TestUserResponse {
     id: Uuid,
-}
-
-fn create_app(pool: PgPool) -> axum::Router {
-    let state = AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url: "http://localhost:8080".to_string(),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
 }
 
 async fn register_login_and_get_user(
@@ -338,4 +325,50 @@ async fn test_mutual_request_auto_accepts(pool: PgPool) {
     auto_accept_res.assert_status(StatusCode::CREATED);
     let friend: FriendResponseDto = auto_accept_res.json();
     assert!(!friend.is_pending);
+}
+
+#[sqlx::test]
+async fn test_friend_list_carries_the_other_users_name(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let alice = common::register(&server, "alice").await;
+    let bob = common::register(&server, "bob").await;
+
+    let sent = server
+        .post("/friends")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&alice.access_token),
+        )
+        .json(&json!({ "username": bob.username }))
+        .await;
+    sent.assert_status(StatusCode::CREATED);
+    let sent: FriendResponseDto = sent.json();
+    assert_eq!(sent.friend_id, bob.id);
+    assert_eq!(sent.username, bob.username);
+
+    // Each side sees the other one.
+    for (viewer, other) in [(&alice, &bob), (&bob, &alice)] {
+        let friends: Vec<FriendResponseDto> = server
+            .get("/friends")
+            .add_header(
+                axum::http::header::AUTHORIZATION,
+                common::bearer(&viewer.access_token),
+            )
+            .await
+            .json();
+        assert_eq!(friends.len(), 1);
+        assert_eq!(friends[0].friend_id, other.id);
+        assert_eq!(friends[0].username, other.username);
+    }
+
+    let accepted: FriendResponseDto = server
+        .post(&format!("/friends/{}/accept", alice.id))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&bob.access_token),
+        )
+        .await
+        .json();
+    assert!(!accepted.is_pending);
+    assert_eq!(accepted.username, alice.username);
 }

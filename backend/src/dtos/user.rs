@@ -14,6 +14,8 @@ impl From<User> for UserResponse {
             privacy_level: user.privacy_level,
             is_subscribed: user.is_subscribed,
             end_subscription_date: user.end_subscription_date,
+            google_linked: user.google_id.is_some(),
+            has_password: user.password_hash.is_some(),
         }
     }
 }
@@ -28,6 +30,8 @@ pub struct UserResponse {
     pub privacy_level: PrivacyLevel,
     pub is_subscribed: bool,
     pub end_subscription_date: Option<chrono::DateTime<chrono::Utc>>,
+    pub google_linked: bool,
+    pub has_password: bool,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -70,7 +74,6 @@ pub struct ConfirmEmailRequest {
 }
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct ResetPasswordRequest {
-    pub token: String,
-    pub new_password: String,
+pub struct LinkGoogleRequest {
+    pub id_token: String,
 }

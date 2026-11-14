@@ -29,6 +29,31 @@ pub struct TrackItem {
     pub artists: Option<Vec<ArtistData>>,
 }
 
+impl TrackItem {
+    /// Builds a track from the metadata cached in the `tracks` table. A track
+    /// that is not cached still gets a displayable placeholder.
+    pub fn from_cache(
+        id: i64,
+        title: Option<String>,
+        artist: Option<String>,
+        album: Option<String>,
+        cover: Option<String>,
+        duration: Option<i32>,
+    ) -> Self {
+        Self {
+            id,
+            title: title.unwrap_or_else(|| format!("Track {id}")),
+            duration: duration.unwrap_or(0),
+            audio_quality: None,
+            album: (album.is_some() || cover.is_some()).then_some(AlbumData {
+                title: album,
+                cover,
+            }),
+            artists: artist.map(|name| vec![ArtistData { name: Some(name) }]),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[derive(utoipa::ToSchema)]

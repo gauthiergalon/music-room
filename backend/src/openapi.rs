@@ -15,6 +15,12 @@ use utoipa::OpenApi;
         // Rooms endpoints
         crate::handlers::rooms::list,
         crate::handlers::rooms::create,
+        crate::handlers::rooms::get,
+        crate::handlers::rooms::delete,
+        crate::handlers::rooms::publish,
+        crate::handlers::rooms::privatize,
+        crate::handlers::rooms::enable_license,
+        crate::handlers::rooms::disable_license,
         crate::handlers::rooms::delegate_room,
         crate::handlers::rooms::revoke_delegate,
 
@@ -24,6 +30,7 @@ use utoipa::OpenApi;
         crate::handlers::user::update_username,
         crate::handlers::user::update_email,
         crate::handlers::user::update_password,
+        crate::handlers::user::link_google,
         crate::handlers::user::confirm_email,
         crate::handlers::user::send_email_confirmation_email,
         crate::handlers::user::update_favorite_genres,
@@ -80,7 +87,7 @@ use utoipa::OpenApi;
             crate::dtos::user::UpdateEmailRequest,
             crate::dtos::user::UpdatePasswordRequest,
             crate::dtos::user::ConfirmEmailRequest,
-            crate::dtos::user::ResetPasswordRequest,
+            crate::dtos::user::LinkGoogleRequest,
 
             // Friend DTOs
             crate::dtos::friend::FriendRequestDto,

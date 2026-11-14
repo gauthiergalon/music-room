@@ -1,16 +1,15 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE rooms SET current_position = $1, played_at = $2 WHERE id = $3",
+  "query": "UPDATE users SET is_subscribed = TRUE, end_subscription_date = $1 WHERE id = $2",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
-        "Int4",
         "Timestamptz",
         "Uuid"
       ]
     },
     "nullable": []
   },
-  "hash": "93e6231a66cb6984edc5068986a07e90fa39d298d980c9eb5ec22ac355481ce6"
+  "hash": "7e1d1832ab47b3197949358d8edf2be7bf19d0938f3f43306240cc4191fab2f6"
 }

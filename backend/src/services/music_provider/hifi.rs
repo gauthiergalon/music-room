@@ -1,147 +1,119 @@
-use std::sync::OnceLock;
-use async_trait::async_trait;
+use std::{
+    collections::HashMap,
+    sync::Mutex,
+    time::{Duration as StdDuration, Instant},
+};
 
+use async_trait::async_trait;
 use base64::{Engine, engine::general_purpose::STANDARD};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use serde_json::Value;
 use tokio::time::{Duration, sleep};
-use urlencoding;
 
-use crate::{
-    dtos::music::{AlbumData, ArtistData, SearchResponse, TrackItem, TrackResponse},
-    errors::AppError,
-};
 use super::MusicProvider;
-
-static HTTP_CLIENT: OnceLock<Client> = OnceLock::new();
-static HIFI_HOST: OnceLock<String> = OnceLock::new();
+use crate::{
+    dtos::music::{SearchResponse, TrackItem, TrackResponse},
+    errors::{AppError, ErrorMessage},
+};
 
 const TRACK_MANIFEST_MIME_TYPE_DASH: &str = "application/dash+xml";
 const TRACK_MANIFEST_MIME_TYPE_JSON: &str = "application/vnd.tidal.bts";
 const TRACK_MANIFEST_TYPE_HLS: &str = "HLS";
 const TRACK_MANIFEST_FORMAT: &str = "AACLC";
 
-fn get_http_client() -> &'static Client {
-    HTTP_CLIENT.get_or_init(|| {
-        Client::builder()
-            .pool_max_idle_per_host(5)
-            .build()
-            .unwrap_or_else(|e| {
-                tracing::error!(
-                    "Failed to create optimized HTTP client, using default: {}",
-                    e
-                );
-                Client::new()
-            })
-    })
-}
+const CONNECT_TIMEOUT: StdDuration = StdDuration::from_secs(5);
+const REQUEST_TIMEOUT: StdDuration = StdDuration::from_secs(15);
+/// Every listener of a room asks for the same stream URL when a track starts;
+/// a short cache turns that burst into one upstream resolution.
+const STREAM_URL_TTL: StdDuration = StdDuration::from_secs(60);
+const STREAM_CACHE_MAX_ENTRIES: usize = 1000;
 
-fn get_hifi_host() -> &'static str {
-    HIFI_HOST
-        .get_or_init(|| std::env::var("HIFI_API_HOST").unwrap_or_else(|_| "localhost".to_string()))
+pub struct HifiProvider {
+    client: Client,
+    host: String,
+    /// Resolved stream URLs keyed by (track id, direct-URL preference).
+    stream_urls: Mutex<HashMap<(i64, bool), (Instant, String)>>,
 }
-
-pub struct HifiProvider;
 
 impl HifiProvider {
-    pub fn new() -> Self {
-        Self
+    /// `host` is the `host[:port]` of the HiFi API, without scheme.
+    pub fn new(host: impl Into<String>) -> Self {
+        let client = Client::builder()
+            .pool_max_idle_per_host(5)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
+            .build()
+            .expect("the HTTP client configuration is valid");
+
+        Self {
+            client,
+            host: host.into(),
+            stream_urls: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn from_env() -> Self {
+        Self::new(std::env::var("HIFI_API_HOST").unwrap_or_else(|_| "localhost:8000".to_string()))
+    }
+
+    fn cached_stream_url(&self, key: (i64, bool)) -> Option<String> {
+        let cache = self.stream_urls.lock().ok()?;
+        cache
+            .get(&key)
+            .filter(|(stored_at, _)| stored_at.elapsed() < STREAM_URL_TTL)
+            .map(|(_, url)| url.clone())
+    }
+
+    fn cache_stream_url(&self, key: (i64, bool), url: &str) {
+        if let Ok(mut cache) = self.stream_urls.lock() {
+            if cache.len() >= STREAM_CACHE_MAX_ENTRIES {
+                cache.retain(|_, (stored_at, _)| stored_at.elapsed() < STREAM_URL_TTL);
+            }
+            cache.insert(key, (Instant::now(), url.to_string()));
+        }
+    }
+
+    /// GET a HiFi endpoint and turn HTTP failures into the right API error.
+    async fn get(&self, url: &str) -> Result<reqwest::Response, AppError> {
+        let response = self.client.get(url).send().await?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Err(AppError::NotFound(ErrorMessage::TrackNotFound));
+        }
+        Ok(response.error_for_status()?)
     }
 }
 
 #[async_trait]
 impl MusicProvider for HifiProvider {
     async fn search_tracks(&self, query: &str) -> Result<SearchResponse, AppError> {
-        let client = get_http_client();
-        let host = get_hifi_host();
-
         let url = format!(
             "http://{}/search/?s={}",
-            host,
+            self.host,
             urlencoding::encode(query)
         );
 
-        let response = client
-            .get(&url)
-            .send()
-            .await?
-            .json::<SearchResponse>()
-            .await?;
-
-        Ok(response)
+        Ok(self.get(&url).await?.json::<SearchResponse>().await?)
     }
 
     async fn get_track_details(&self, track_id: i64) -> Result<TrackResponse, AppError> {
-        let client = get_http_client();
-        let host = get_hifi_host();
+        let url = format!("http://{}/track/?id={}&quality=LOW", self.host, track_id);
 
-        let url = format!("http://{}/track/?id={}&quality=LOW", host, track_id);
-
-        let response = fetch_hifi_json(client, &url, host).await?;
-        let response: TrackResponse = serde_json::from_value(response)
-            .map_err(|error| AppError::InternalError(error.to_string()))?;
-
-        Ok(response)
+        let response = self.get(&url).await?;
+        let response = resolve_pending_response(&self.client, response, &self.host).await?;
+        serde_json::from_value(response).map_err(|error| invalid_upstream(error.to_string()))
     }
 
-    async fn get_track_info(&self, pool: &sqlx::PgPool, track_id: i64) -> Result<TrackItem, AppError> {
-        let track_record = sqlx::query!(
-            "SELECT id, title, artist, album, duration, cover FROM tracks WHERE id = $1",
-            track_id
-        )
-        .fetch_optional(pool)
-        .await?;
+    async fn get_track_info(&self, track_id: i64) -> Result<TrackItem, AppError> {
+        let url = format!("http://{}/info/?id={}", self.host, track_id);
+        let payload = self.get(&url).await?.json::<Value>().await?;
 
-        if let Some(t) = track_record {
-            return Ok(TrackItem {
-                id: t.id,
-                title: t.title,
-                duration: t.duration,
-                audio_quality: None,
-                album: Some(AlbumData {
-                    title: t.album,
-                    cover: t.cover,
-                }),
-                artists: Some(vec![ArtistData {
-                    name: Some(t.artist),
-                }]),
-            });
-        }
+        let track_data = payload
+            .get("data")
+            .cloned()
+            .ok_or_else(|| invalid_upstream("Missing track data in info response"))?;
 
-        let client = get_http_client();
-        let host = get_hifi_host();
-        let url = format!("http://{}/info/?id={}", host, track_id);
-        let info_payload = client.get(&url).send().await?.json::<Value>().await?;
-        let track_data = info_payload.get("data").cloned().ok_or_else(|| {
-            AppError::InternalError("Missing track data in info response".to_string())
-        })?;
-        let track_resp: TrackItem = serde_json::from_value(track_data)
-            .map_err(|_| AppError::InternalError("Invalid track data in info response".to_string()))?;
-
-        let title = track_resp.title.clone();
-        let artist = track_resp
-            .artists
-            .as_ref()
-            .and_then(|a| a.first())
-            .and_then(|a| a.name.clone())
-            .unwrap_or_else(|| "Unknown".to_string());
-        let album_title = track_resp.album.as_ref().and_then(|a| a.title.clone());
-        let cover_url = track_resp.album.as_ref().and_then(|a| a.cover.clone());
-        let duration = track_resp.duration;
-
-        sqlx::query!(
-            "INSERT INTO tracks (id, title, artist, album, duration, cover) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING",
-            track_id,
-            title,
-            artist,
-            album_title,
-            duration,
-            cover_url
-        )
-        .execute(pool)
-        .await?;
-
-        Ok(track_resp)
+        serde_json::from_value(track_data)
+            .map_err(|_| invalid_upstream("Invalid track data in info response"))
     }
 
     async fn get_stream_url(
@@ -149,15 +121,29 @@ impl MusicProvider for HifiProvider {
         track_id: i64,
         platform: Option<&str>,
     ) -> Result<String, AppError> {
-        let track_response = self.get_track_details(track_id).await?;
-
         let prefer_direct = matches!(platform, Some(value) if value.eq_ignore_ascii_case("web"));
+        let cache_key = (track_id, prefer_direct);
+        if let Some(url) = self.cached_stream_url(cache_key) {
+            return Ok(url);
+        }
+
+        let url = self.resolve_stream_url(track_id, prefer_direct).await?;
+        self.cache_stream_url(cache_key, &url);
+        Ok(url)
+    }
+}
+
+impl HifiProvider {
+    async fn resolve_stream_url(
+        &self,
+        track_id: i64,
+        prefer_direct: bool,
+    ) -> Result<String, AppError> {
+        let track_response = self.get_track_details(track_id).await?;
         let direct_url = Self::extract_direct_stream_url(&track_response.data)?;
 
-        if prefer_direct {
-            if let Some(url) = direct_url.clone() {
-                return Ok(url);
-            }
+        if prefer_direct && let Some(url) = direct_url.clone() {
+            return Ok(url);
         }
 
         if track_response
@@ -165,10 +151,9 @@ impl MusicProvider for HifiProvider {
             .get("manifestMimeType")
             .and_then(Value::as_str)
             == Some(TRACK_MANIFEST_MIME_TYPE_DASH)
+            && let Some(url) = self.get_track_manifest_url(track_id).await?
         {
-            if let Some(url) = self.get_track_manifest_url(track_id).await? {
-                return Ok(url);
-            }
+            return Ok(url);
         }
 
         if let Some(url) = direct_url {
@@ -179,13 +164,9 @@ impl MusicProvider for HifiProvider {
             return Ok(url);
         }
 
-        Err(AppError::InternalError(
-            "No playable stream URL could be resolved".to_string(),
-        ))
+        Err(invalid_upstream("No playable stream URL could be resolved"))
     }
-}
 
-impl HifiProvider {
     fn extract_direct_stream_url(track_data: &Value) -> Result<Option<String>, AppError> {
         let manifest_mime_type = track_data
             .get("manifestMimeType")
@@ -199,50 +180,36 @@ impl HifiProvider {
         let manifest_b64 = track_data
             .get("manifest")
             .and_then(Value::as_str)
-            .ok_or_else(|| {
-                AppError::InternalError("Missing or invalid manifest field".to_string())
-            })?;
+            .ok_or_else(|| invalid_upstream("Missing or invalid manifest field"))?;
 
         let manifest_bytes = STANDARD
             .decode(manifest_b64)
-            .map_err(|_| AppError::InternalError("Failed to decode manifest base64".to_string()))?;
+            .map_err(|_| invalid_upstream("Failed to decode manifest base64"))?;
 
         let manifest_json: Value = serde_json::from_slice(&manifest_bytes)
-            .map_err(|_| AppError::InternalError("Failed to parse manifest JSON".to_string()))?;
+            .map_err(|_| invalid_upstream("Failed to parse manifest JSON"))?;
 
         let urls = manifest_json
             .get("urls")
             .and_then(Value::as_array)
-            .ok_or_else(|| AppError::InternalError("No URLs found in manifest".to_string()))?;
+            .ok_or_else(|| invalid_upstream("No URLs found in manifest"))?;
 
         let stream_url = urls
             .first()
             .and_then(Value::as_str)
-            .ok_or_else(|| {
-                AppError::InternalError("No playable URL found in manifest".to_string())
-            })?
+            .ok_or_else(|| invalid_upstream("No playable URL found in manifest"))?
             .to_string();
 
         Ok(Some(stream_url))
     }
 
     async fn get_track_manifest_url(&self, track_id: i64) -> Result<Option<String>, AppError> {
-        let client = get_http_client();
-        let host = get_hifi_host();
-
         let url = format!(
             "http://{}/trackManifests/?id={}&adaptive=true&manifestType={}&uriScheme=HTTPS&usage=PLAYBACK&formats={}",
-            host,
-            track_id,
-            TRACK_MANIFEST_TYPE_HLS,
-            TRACK_MANIFEST_FORMAT,
+            self.host, track_id, TRACK_MANIFEST_TYPE_HLS, TRACK_MANIFEST_FORMAT,
         );
-        let response = client
-            .get(&url)
-            .send()
-            .await?;
-
-        let response = resolve_pending_response(client, response, host).await?;
+        let response = self.get(&url).await?;
+        let response = resolve_pending_response(&self.client, response, &self.host).await?;
 
         let manifest_url = response
             .get("data")
@@ -256,13 +223,10 @@ impl HifiProvider {
     }
 }
 
-async fn fetch_hifi_json(
-    client: &Client,
-    url: &str,
-    host: &str,
-) -> Result<Value, AppError> {
-    let response = client.get(url).send().await?;
-    resolve_pending_response(client, response, host).await
+/// The provider answered, but not with something usable.
+fn invalid_upstream(reason: impl Into<String>) -> AppError {
+    tracing::error!("HiFi API error: {}", reason.into());
+    AppError::BadGateway(ErrorMessage::UpstreamUnavailable)
 }
 
 async fn resolve_pending_response(
@@ -279,7 +243,7 @@ async fn resolve_pending_response(
         .get("statusUrl")
         .or_else(|| pending.get("status_url"))
         .and_then(Value::as_str)
-        .ok_or_else(|| AppError::InternalError("HiFi playback request is pending without a status URL".to_string()))?;
+        .ok_or_else(|| invalid_upstream("HiFi playback request is pending without a status URL"))?;
     let status_url = if status_path.starts_with("http://") || status_path.starts_with("https://") {
         status_path.to_string()
     } else {
@@ -293,7 +257,7 @@ async fn resolve_pending_response(
             continue;
         }
         if !poll.status().is_success() {
-            return Err(AppError::InternalError(format!(
+            return Err(invalid_upstream(format!(
                 "HiFi playback request failed with status {}",
                 poll.status()
             )));
@@ -301,16 +265,15 @@ async fn resolve_pending_response(
         return Ok(poll.json::<Value>().await?);
     }
 
-    Err(AppError::InternalError(
-        "HiFi playback request timed out".to_string(),
-    ))
+    Err(invalid_upstream("HiFi playback request timed out"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::HifiProvider;
     use base64::{Engine, engine::general_purpose::STANDARD};
     use serde_json::json;
+
+    use super::HifiProvider;
 
     #[test]
     fn extracts_direct_stream_url_from_bts_manifest() {

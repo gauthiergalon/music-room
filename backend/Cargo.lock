@@ -181,10 +181,12 @@ checksum = "43c6a2f1d97ee33c39f13dacc0f84ae781a9c2ed373a75bad1129094f5a7c4bd"
 dependencies = [
  "anyhow",
  "axum",
+ "base64 0.22.1",
  "bytes",
  "bytesize",
  "cookie",
  "expect-json",
+ "futures-util",
  "http",
  "http-body-util",
  "hyper",
@@ -197,8 +199,10 @@ dependencies = [
  "serde_json",
  "serde_urlencoded",
  "tokio",
+ "tokio-tungstenite",
  "tower",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -1582,10 +1586,12 @@ version = "0.11.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2c646bd5cc763b1087b15493e29a64be6147ba8f19342004fa52048ee596eae"
 dependencies = [
+ "async-trait",
  "base64 0.23.1",
  "email-encoding",
  "email_address",
  "fastrand",
+ "futures-io",
  "futures-util",
  "hostname",
  "httpdate",
@@ -1597,6 +1603,7 @@ dependencies = [
  "quoted_printable",
  "socket2",
  "tokio",
+ "tokio-native-tls",
  "url",
 ]
 
@@ -3252,6 +3259,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "tokio-native-tls"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbae76ab933c85776efabc971569dd6119c580d8f5d448769dec1764bf796ef2"
+dependencies = [
+ "native-tls",
+ "tokio",
 ]
 
 [[package]]

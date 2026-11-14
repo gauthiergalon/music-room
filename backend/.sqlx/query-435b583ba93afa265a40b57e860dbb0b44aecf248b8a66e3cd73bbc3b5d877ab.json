@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing FROM rooms",
+  "query": "\n        SELECT r.id, r.owner_id, r.name, r.is_public, r.is_licensed, r.current_track, r.current_position, r.is_playing\n        FROM rooms r\n        WHERE r.is_public\n           OR r.owner_id = $1\n           OR EXISTS (\n               SELECT 1 FROM invitations i\n               WHERE i.room_id = r.id AND i.invitee_id = $1 AND i.is_pending = false\n           )\n        ORDER BY r.last_active_at DESC, r.id\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -45,7 +45,11 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
     },
     "nullable": [
       false,
@@ -58,5 +62,5 @@
       false
     ]
   },
-  "hash": "81361e1c655d574d62a0acfa0e6a7c89325a2f7da9c9fc852bc2d47c438b59b5"
+  "hash": "435b583ba93afa265a40b57e860dbb0b44aecf248b8a66e3cd73bbc3b5d877ab"
 }

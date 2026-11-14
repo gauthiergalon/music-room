@@ -6,15 +6,20 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    dtos::user::{
-        ConfirmEmailRequest, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest,
-        UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
+    dtos::{
+        auth::AuthResponse,
+        user::{
+            ConfirmEmailRequest, LinkGoogleRequest, PublicUserResponse, UpdateEmailRequest,
+            UpdateFavoriteGenresRequest, UpdatePasswordRequest, UpdatePrivacyLevelRequest,
+            UpdateUsernameRequest, UserResponse,
+        },
     },
-    errors::{AppError, ErrorMessage},
+    errors::AppError,
     middleware::auth::Claims,
     models::user::PrivacyLevel,
     services::{friends as friends_service, user as user_service},
     state::AppState,
+    validation,
 };
 
 #[utoipa::path(get, path = "/users/me", responses((status = 200, body = UserResponse)), tag = "Users")]
@@ -55,58 +60,75 @@ pub async fn get_user(
     }))
 }
 
-#[utoipa::path(patch, path = "/users/me/username", request_body = UpdateUsernameRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
+#[utoipa::path(patch, path = "/users/me/username", request_body = UpdateUsernameRequest, responses((status = 200, body = UserResponse), (status = 409), (status = 422)), tag = "Users")]
 pub async fn update_username(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<UpdateUsernameRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
-    if payload.username.len() < 3 || payload.username.len() > 24 {
-        return Err(AppError::Validation(vec![
-            ErrorMessage::UsernameInvalidLength,
-        ]));
-    }
+    let username = validation::username(&payload.username).map_err(validation::invalid)?;
 
-    let user =
-        user_service::update_username(&state.pool, claims.user_id, &payload.username).await?;
+    let user = user_service::update_username(&state.pool, claims.user_id, &username).await?;
     Ok(Json(user.into()))
 }
 
-#[utoipa::path(patch, path = "/users/me/email", request_body = UpdateEmailRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
+/// Starts an email change: a confirmation link is sent to the new address and
+/// the account keeps its current email until that link is used.
+#[utoipa::path(patch, path = "/users/me/email", request_body = UpdateEmailRequest, responses((status = 200, body = UserResponse), (status = 409), (status = 422), (status = 429)), tag = "Users")]
 pub async fn update_email(
     Extension(claims): Extension<Claims>,
     State(state): State<AppState>,
     Json(payload): Json<UpdateEmailRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
-    if !validator::ValidateEmail::validate_email(&payload.new_email) {
-        return Err(AppError::Validation(vec![ErrorMessage::EmailInvalidFormat]));
-    }
+    let new_email = validation::email(&payload.new_email).map_err(validation::invalid)?;
 
-    let user = user_service::update_email(&state.pool, claims.user_id, &payload.new_email).await?;
+    let user = user_service::request_email_change(
+        &state.pool,
+        state.mailer.as_ref(),
+        claims.user_id,
+        &new_email,
+    )
+    .await?;
     Ok(Json(user.into()))
 }
 
-#[utoipa::path(patch, path = "/users/me/password", request_body = UpdatePasswordRequest, responses((status = 204)), tag = "Users")]
+/// Changes the password. Every session is revoked; the response carries the
+/// tokens of a new session for the caller.
+#[utoipa::path(patch, path = "/users/me/password", request_body = UpdatePasswordRequest, responses((status = 200, body = AuthResponse), (status = 401), (status = 422)), tag = "Users")]
 pub async fn update_password(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<UpdatePasswordRequest>,
-) -> Result<StatusCode, AppError> {
-    if payload.new_password.len() < 8 {
-        return Err(AppError::Validation(vec![
-            ErrorMessage::PasswordInvalidPolicy,
-        ]));
-    }
+) -> Result<Json<AuthResponse>, AppError> {
+    validation::password(&payload.new_password).map_err(validation::invalid)?;
 
-    user_service::update_password(
+    let tokens = user_service::update_password(
         &state.pool,
+        &state.jwt_secret,
         claims.user_id,
         &payload.current_password,
         &payload.new_password,
     )
     .await?;
 
-    Ok(StatusCode::NO_CONTENT)
+    Ok(Json(tokens.into()))
+}
+
+/// Links a Google account to the logged-in user.
+#[utoipa::path(post, path = "/users/me/google", request_body = LinkGoogleRequest, responses((status = 200, body = UserResponse), (status = 401), (status = 409)), tag = "Users")]
+pub async fn link_google(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Json(payload): Json<LinkGoogleRequest>,
+) -> Result<Json<UserResponse>, AppError> {
+    let user = user_service::link_google(
+        &state.pool,
+        &state.google,
+        claims.user_id,
+        &payload.id_token,
+    )
+    .await?;
+    Ok(Json(user.into()))
 }
 
 #[utoipa::path(patch, path = "/users/me/confirm-email", request_body = ConfirmEmailRequest, responses((status = 204)), tag = "Users")]
@@ -124,7 +146,8 @@ pub async fn send_email_confirmation_email(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<StatusCode, AppError> {
-    user_service::send_email_confirmation_email(&state.pool, claims.user_id).await?;
+    user_service::send_email_confirmation_email(&state.pool, state.mailer.as_ref(), claims.user_id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -158,8 +181,6 @@ pub async fn enable_subscription(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<Json<UserResponse>, AppError> {
-    tracing::info!("User ID: {:?}", claims.user_id);
-
     let user = user_service::enable_subscription(&state.pool, claims.user_id).await?;
     Ok(Json(user.into()))
 }

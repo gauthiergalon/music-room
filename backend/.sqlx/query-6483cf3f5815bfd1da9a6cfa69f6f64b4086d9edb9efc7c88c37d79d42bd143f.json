@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM rooms WHERE owner_id = $1",
+  "query": "DELETE FROM rooms WHERE owner_id = $1 RETURNING id",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "ee403ab7fdfbf77ac09ad4a071bb2c6b68ff7b38250774ce584b0a4f3fedfddf"
+  "hash": "6483cf3f5815bfd1da9a6cfa69f6f64b4086d9edb9efc7c88c37d79d42bd143f"
 }

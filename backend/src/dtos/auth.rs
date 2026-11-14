@@ -24,6 +24,15 @@ pub struct AuthResponse {
     pub refresh_token: String,
 }
 
+impl From<(String, String)> for AuthResponse {
+    fn from((access_token, refresh_token): (String, String)) -> Self {
+        Self {
+            access_token,
+            refresh_token,
+        }
+    }
+}
+
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct RefreshRequest {
     pub refresh_token: String,

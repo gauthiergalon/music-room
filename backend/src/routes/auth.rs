@@ -4,26 +4,24 @@ use crate::{
     handlers::auth::{
         forgot_password, google_login, login, logout, refresh, register, reset_password,
     },
-    middleware::auth::auth_middleware,
+    middleware::rate_limit::auth_rate_limit,
     state::AppState,
 };
 
 pub fn router(state: AppState) -> Router<AppState> {
-    let public = Router::new()
+    // Everything that lets an anonymous caller guess credentials or trigger
+    // an email is rate limited per client.
+    let rate_limited = Router::new()
         .route("/register", post(register))
         .route("/login", post(login))
         .route("/google-login", post(google_login))
-        .route("/refresh", post(refresh))
         .route("/forgot-password", post(forgot_password))
-        .route("/reset-password", post(reset_password));
+        .route("/reset-password", post(reset_password))
+        .route_layer(middleware::from_fn_with_state(state, auth_rate_limit));
 
-    let protected =
-        Router::new()
-            .route("/logout", post(logout))
-            .layer(middleware::from_fn_with_state(
-                state.clone(),
-                auth_middleware,
-            ));
+    let session = Router::new()
+        .route("/refresh", post(refresh))
+        .route("/logout", post(logout));
 
-    Router::new().merge(public).merge(protected)
+    Router::new().merge(rate_limited).merge(session)
 }

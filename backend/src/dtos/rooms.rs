@@ -3,6 +3,14 @@ use uuid::Uuid;
 
 use crate::models::room::Room;
 
+/// Pagination of the room list.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct ListRoomsQuery {
+    /// Maximum number of rooms to return (1 to 100, default 50).
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct DelegateRoomRequest {
     pub user_id: Uuid,

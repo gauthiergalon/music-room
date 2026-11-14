@@ -10,27 +10,51 @@ use uuid::Uuid;
 use crate::{
     errors::{AppError, ErrorMessage},
     middleware::auth::Claims,
-    models::{refresh_token::NewRefreshToken, reset_token::NewResetToken, user::NewUser},
+    models::{
+        refresh_token::NewRefreshToken,
+        reset_token::NewResetToken,
+        user::{NewUser, PrivacyLevel},
+    },
     repositories::{
         refresh_tokens as refresh_tokens_repo, reset_tokens as reset_tokens_repo,
         users as users_repo,
     },
-    services::tokens::TokenPair,
+    services::{
+        email::{Email, Mailer},
+        google::GoogleAuth,
+        tokens::TokenPair,
+    },
+    validation::USERNAME_MAX_CHARS,
 };
 
-pub fn hash_password(password: &str) -> Result<String, AppError> {
-    let salt = SaltString::generate(&mut OsRng);
-    Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
-        .map_err(|_| AppError::Internal)
+/// Access and refresh token of a session.
+pub type Tokens = (String, String);
+
+/// Argon2 is deliberately slow; run it off the async workers so one login
+/// cannot stall every other request.
+pub async fn hash_password(password: &str) -> Result<String, AppError> {
+    let password = password.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map(|hash| hash.to_string())
+            .map_err(|_| AppError::Internal)
+    })
+    .await
+    .map_err(|_| AppError::Internal)?
 }
 
-pub fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
-    let parsed = PasswordHash::new(hash).map_err(|_| AppError::Internal)?;
-    Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))
+pub async fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
+    let (password, hash) = (password.to_owned(), hash.to_owned());
+    tokio::task::spawn_blocking(move || {
+        let parsed = PasswordHash::new(&hash).map_err(|_| AppError::Internal)?;
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed)
+            .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))
+    })
+    .await
+    .map_err(|_| AppError::Internal)?
 }
 
 fn generate_access_token(
@@ -70,37 +94,42 @@ async fn store_refresh_token(pool: &PgPool, user_id: Uuid) -> Result<String, App
     Ok(token_pair.plain)
 }
 
+/// Opens a new session for the user.
+pub async fn issue_tokens(
+    pool: &PgPool,
+    jwt_secret: &str,
+    user_id: Uuid,
+    username: String,
+) -> Result<Tokens, AppError> {
+    let access_token = generate_access_token(user_id, username, jwt_secret)?;
+    let refresh_token = store_refresh_token(pool, user_id).await?;
+    Ok((access_token, refresh_token))
+}
+
+/// `username` and `email` must already be validated and normalised.
 pub async fn register(
     pool: &PgPool,
     jwt_secret: &str,
     username: &str,
     email: &str,
     password: &str,
-) -> Result<(String, String), AppError> {
-    let username = username.trim();
-    let email = email.trim().to_lowercase();
-    let password_hash = hash_password(password)?;
+) -> Result<Tokens, AppError> {
+    let password_hash = hash_password(password).await?;
 
     let user_id = users_repo::create(
         pool,
         NewUser {
             username,
-            email: &email,
+            email,
             password_hash: Some(password_hash),
             email_confirmed: false,
             google_id: None,
-            favorite_genres: None,
-            privacy_level: crate::models::user::PrivacyLevel::Friends,
-            is_subscribed: false,
-            end_subscription_date: None,
+            privacy_level: PrivacyLevel::Friends,
         },
     )
     .await?;
 
-    let access_token = generate_access_token(user_id, username.to_string(), jwt_secret)?;
-    let refresh_token = store_refresh_token(pool, user_id).await?;
-
-    Ok((access_token, refresh_token))
+    issue_tokens(pool, jwt_secret, user_id, username.to_string()).await
 }
 
 pub async fn login(
@@ -108,34 +137,26 @@ pub async fn login(
     jwt_secret: &str,
     email: &str,
     password: &str,
-) -> Result<(String, String), AppError> {
-    let email = email.trim().to_lowercase();
-    let user = users_repo::find_by_email(pool, &email)
+) -> Result<Tokens, AppError> {
+    let user = users_repo::find_by_email(pool, email)
         .await?
         .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
 
     let password_hash = user
         .password_hash
         .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
-    verify_password(password, &password_hash)?;
+    verify_password(password, &password_hash).await?;
 
-    let access_token = generate_access_token(user.id, user.username.clone(), jwt_secret)?;
-    let refresh_token = store_refresh_token(pool, user.id).await?;
-
-    Ok((access_token, refresh_token))
+    issue_tokens(pool, jwt_secret, user.id, user.username).await
 }
 
-pub async fn logout(pool: &PgPool, token: &str, user_id: &Uuid) -> Result<(), AppError> {
-    let token_hash = TokenPair::hash(token);
-    refresh_tokens_repo::delete(pool, token_hash, user_id).await?;
-    Ok(())
+/// Possession of the refresh token is what authorises ending its session, so
+/// this works even when the access token has already expired.
+pub async fn logout(pool: &PgPool, token: &str) -> Result<(), AppError> {
+    refresh_tokens_repo::delete(pool, TokenPair::hash(token)).await
 }
 
-pub async fn refresh(
-    pool: &PgPool,
-    jwt_secret: &str,
-    token: &str,
-) -> Result<(String, String), AppError> {
+pub async fn refresh(pool: &PgPool, jwt_secret: &str, token: &str) -> Result<Tokens, AppError> {
     let token_hash = TokenPair::hash(token);
     let stored = refresh_tokens_repo::delete_and_return(pool, token_hash)
         .await?
@@ -148,20 +169,20 @@ pub async fn refresh(
     let user = users_repo::find_by_id(pool, stored.user_id)
         .await?
         .ok_or(AppError::Unauthorized(ErrorMessage::TokenInvalid))?;
-    let access_token = generate_access_token(stored.user_id, user.username, jwt_secret)?;
-    let refresh_token = store_refresh_token(pool, stored.user_id).await?;
 
-    Ok((access_token, refresh_token))
+    issue_tokens(pool, jwt_secret, user.id, user.username).await
 }
 
-pub async fn forgot_password(pool: &PgPool, email: &str) -> Result<(), AppError> {
-    let email_address = email.trim().to_lowercase();
-
-    let user_model = users_repo::find_by_email(pool, &email_address)
+pub async fn forgot_password(
+    pool: &PgPool,
+    mailer: &dyn Mailer,
+    email_address: &str,
+) -> Result<(), AppError> {
+    let user = users_repo::find_by_email(pool, email_address)
         .await?
         .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
 
-    if reset_tokens_repo::find_valid_by_user_id(pool, user_model.id)
+    if reset_tokens_repo::find_valid_by_user_id(pool, user.id)
         .await?
         .is_some()
     {
@@ -169,19 +190,22 @@ pub async fn forgot_password(pool: &PgPool, email: &str) -> Result<(), AppError>
     }
 
     let token_pair = TokenPair::generate();
-    let expires_at = Utc::now() + TimeDelta::minutes(15);
-    let email = crate::services::email::Email::for_password_reset(&token_pair.plain);
-
-    email.send(&email_address)?;
     reset_tokens_repo::create(
         pool,
         NewResetToken {
             token_hash: token_pair.hash,
-            user_id: user_model.id,
-            expires_at,
+            user_id: user.id,
+            expires_at: Utc::now() + TimeDelta::minutes(15),
         },
     )
     .await?;
+
+    let email = Email::for_password_reset(&token_pair.plain);
+    if let Err(e) = mailer.send(email_address, &email).await {
+        // Without the email the token is useless and would block a retry for 15 minutes.
+        let _ = reset_tokens_repo::delete_by_user_id(pool, user.id).await;
+        return Err(e);
+    }
 
     Ok(())
 }
@@ -192,9 +216,9 @@ pub async fn reset_password(
     new_password: &str,
 ) -> Result<(), AppError> {
     let token_hash = TokenPair::hash(token);
-    let password_hash = hash_password(new_password)?;
+    let password_hash = hash_password(new_password).await?;
 
-    let mut tx = pool.begin().await.map_err(AppError::Database)?;
+    let mut tx = pool.begin().await?;
 
     let stored = reset_tokens_repo::delete_and_return(&mut *tx, token_hash)
         .await?
@@ -205,119 +229,98 @@ pub async fn reset_password(
     }
 
     users_repo::update_password(&mut *tx, stored.user_id, password_hash).await?;
+    // Whoever knew the old password must not keep a session.
+    refresh_tokens_repo::delete_all_for_user(&mut *tx, stored.user_id).await?;
 
-    tx.commit().await.map_err(AppError::Database)?;
+    tx.commit().await?;
 
     Ok(())
 }
 
-#[derive(serde::Deserialize, Debug)]
-pub struct GoogleTokenInfo {
-    pub iss: String,
-    pub aud: String,
-    pub sub: String,
-    pub email: String,
-    pub email_verified: bool,
-    pub name: Option<String>,
-    pub given_name: Option<String>,
-    pub family_name: Option<String>,
-    pub exp: usize,
-}
+/// Builds a valid, almost certainly unique username from a Google given name.
+fn username_from_google(given_name: Option<&str>) -> String {
+    const SUFFIX_CHARS: usize = 6;
 
-#[derive(serde::Deserialize)]
-struct JwkKey {
-    kid: String,
-    n: String,
-    e: String,
-}
+    let base: String = given_name
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .take(USERNAME_MAX_CHARS - SUFFIX_CHARS - 1)
+        .collect();
+    let base = if base.is_empty() {
+        "User".to_string()
+    } else {
+        base
+    };
 
-#[derive(serde::Deserialize)]
-struct JwksResponse {
-    keys: Vec<JwkKey>,
+    let suffix: String = Uuid::new_v4()
+        .simple()
+        .to_string()
+        .chars()
+        .take(SUFFIX_CHARS)
+        .collect();
+
+    format!("{base}_{suffix}")
 }
 
 pub async fn google_login(
     pool: &PgPool,
     jwt_secret: &str,
-    google_client_id: &str,
-    _google_auth_url: &str, // Not strictly needed for verification if we fetch JWKS, but keeping signature
+    google: &GoogleAuth,
     id_token: &str,
-) -> Result<(String, String), AppError> {
-    let header = jsonwebtoken::decode_header(id_token)
-        .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
-    let kid = header
-        .kid
-        .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+) -> Result<Tokens, AppError> {
+    let token_info = google.verify(id_token).await?;
 
-    let jwks_url = "https://www.googleapis.com/oauth2/v3/certs";
-    let resp = reqwest::get(jwks_url)
-        .await
-        .map_err(|_| AppError::Internal)?;
-    let jwks: JwksResponse = resp.json().await.map_err(|_| AppError::Internal)?;
+    // The Google account id is the stable identity: the email of either side may change.
+    if let Some(user) = users_repo::find_by_google_id(pool, &token_info.sub).await? {
+        return issue_tokens(pool, jwt_secret, user.id, user.username).await;
+    }
 
-    let key = jwks
-        .keys
-        .into_iter()
-        .find(|k| k.kid == kid)
-        .ok_or(AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
+    // Past this point the email decides which account is used, so it must be proven.
+    if !token_info.email_verified {
+        return Err(AppError::Unauthorized(ErrorMessage::GoogleEmailNotVerified));
+    }
+    let email = token_info.email.trim().to_lowercase();
 
-    let decoding_key = jsonwebtoken::DecodingKey::from_rsa_components(&key.n, &key.e)
-        .map_err(|_| AppError::Internal)?;
-
-    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
-    validation.set_audience(&[google_client_id]);
-    validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
-
-    let token_data = jsonwebtoken::decode::<GoogleTokenInfo>(id_token, &decoding_key, &validation)
-        .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))?;
-
-    let token_info = token_data.claims;
-
-    let email = token_info.email.to_lowercase();
-    let google_id = token_info.sub;
-
-    let user_opt = users_repo::find_by_email(pool, &email).await?;
-
-    let user_id = match user_opt {
-        Some(user) => {
-            if user.google_id != Some(google_id.clone()) {
-                users_repo::link_google_id(pool, user.id, &google_id).await?;
-            }
-            user.id
+    if let Some(user) = users_repo::find_by_email(pool, &email).await? {
+        // An unverified account may have been created by someone who does not
+        // own this address; linking to it would let them into the victim's account.
+        if !user.email_confirmed {
+            return Err(AppError::Conflict(ErrorMessage::AccountEmailNotVerified));
         }
-        None => {
-            let base_username = token_info.given_name.unwrap_or_else(|| "User".to_string());
-            let random_suffix = uuid::Uuid::new_v4()
-                .to_string()
-                .chars()
-                .take(6)
-                .collect::<String>();
-            let username = format!("{}_{}", base_username, random_suffix);
+        users_repo::link_google_id(pool, user.id, &token_info.sub).await?;
+        return issue_tokens(pool, jwt_secret, user.id, user.username).await;
+    }
 
-            users_repo::create(
-                pool,
-                NewUser {
-                    username: &username,
-                    email: &email,
-                    password_hash: None, // No password for Google users
-                    email_confirmed: token_info.email_verified,
-                    google_id: Some(google_id),
-                    favorite_genres: None,
-                    privacy_level: crate::models::user::PrivacyLevel::Public,
-                    is_subscribed: false,
-                    end_subscription_date: None,
-                },
-            )
-            .await?
-        }
-    };
+    let username = username_from_google(token_info.given_name.as_deref());
+    let user_id = users_repo::create(
+        pool,
+        NewUser {
+            username: &username,
+            email: &email,
+            password_hash: None,
+            email_confirmed: true,
+            google_id: Some(token_info.sub),
+            privacy_level: PrivacyLevel::Public,
+        },
+    )
+    .await?;
 
-    let user_model = users_repo::find_by_id(pool, user_id)
-        .await?
-        .ok_or(AppError::Internal)?;
+    issue_tokens(pool, jwt_secret, user_id, username).await
+}
 
-    let access_token = generate_access_token(user_id, user_model.username, jwt_secret)?;
-    let refresh_token = store_refresh_token(pool, user_id).await?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Ok((access_token, refresh_token))
+    #[test]
+    fn google_usernames_always_fit_the_column() {
+        let long = username_from_google(Some("Maximilian-Alexander von Hohenzollern"));
+        assert_eq!(long.chars().count(), USERNAME_MAX_CHARS);
+        assert!(long.starts_with("MaximilianAlexand_"));
+
+        assert!(username_from_google(None).starts_with("User_"));
+        assert!(username_from_google(Some("  ")).starts_with("User_"));
+        assert!(username_from_google(Some("Zoé")).starts_with("Zoé_"));
+    }
 }

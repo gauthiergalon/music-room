@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE users SET email = $1, email_confirmed = FALSE WHERE id = $2 RETURNING id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date",
+  "query": "SELECT id, username, email, password_hash, email_confirmed, google_id, favorite_genres, privacy_level as \"privacy_level: PrivacyLevel\", is_subscribed, end_subscription_date FROM users WHERE google_id = $1",
   "describe": {
     "columns": [
       {
@@ -67,8 +67,7 @@
     ],
     "parameters": {
       "Left": [
-        "Varchar",
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -84,5 +83,5 @@
       true
     ]
   },
-  "hash": "4b34df08bb8a4ffb4c72b4d0441feac25a28e720e86a7cf1f6b692ae3dec6e62"
+  "hash": "7b705f72972947fb9275998c57a03e4a91633ced5d70d3f7247f9fcbecb5383b"
 }

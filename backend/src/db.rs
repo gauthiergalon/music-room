@@ -1,22 +1,44 @@
 use std::time::Duration;
+
 use sqlx::postgres::PgPoolOptions;
 
 pub type DbPool = sqlx::PgPool;
 
-pub async fn create_pool(database_url: &str) -> DbPool {
-    let mut last_err = String::new();
-    for i in 1..=5 {
-        match PgPoolOptions::new().max_connections(5).connect(database_url).await {
-            Ok(pool) => return pool,
-            Err(e) => {
-                last_err = e.to_string();
-                tracing::warn!("PostgreSQL connection attempt {}/5 failed: {}", i, e);
-                if i < 5 {
-                    tokio::time::sleep(Duration::from_secs(2)).await;
-                }
+const CONNECT_ATTEMPTS: u32 = 5;
+const DEFAULT_MAX_CONNECTIONS: u32 = 10;
+
+/// Connects to PostgreSQL, retrying while the database container starts.
+pub async fn create_pool(database_url: &str) -> Result<DbPool, sqlx::Error> {
+    let max_connections = std::env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(DEFAULT_MAX_CONNECTIONS);
+
+    let mut attempt = 1;
+    loop {
+        match PgPoolOptions::new()
+            .max_connections(max_connections)
+            .acquire_timeout(Duration::from_secs(5))
+            .connect(database_url)
+            .await
+        {
+            Ok(pool) => return Ok(pool),
+            Err(e) if attempt < CONNECT_ATTEMPTS => {
+                tracing::warn!(
+                    "PostgreSQL connection attempt {}/{} failed: {}",
+                    attempt,
+                    CONNECT_ATTEMPTS,
+                    e
+                );
+                attempt += 1;
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
+            Err(e) => return Err(e),
         }
     }
-    tracing::error!("Failed to connect to PostgreSQL after 5 attempts: {}", last_err);
-    std::process::exit(1);
+}
+
+/// Applies the SQL files of `migrations/` that this database has not seen yet.
+pub async fn run_migrations(pool: &DbPool) -> Result<(), sqlx::migrate::MigrateError> {
+    sqlx::migrate!("./migrations").run(pool).await
 }

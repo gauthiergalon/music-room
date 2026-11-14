@@ -54,3 +54,14 @@ where
         expires_at: s.expires_at,
     }))
 }
+
+pub async fn delete_by_user_id<'c, E>(executor: E, user_id: uuid::Uuid) -> Result<(), AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!("DELETE FROM reset_tokens WHERE user_id = $1", user_id)
+        .execute(executor)
+        .await
+        .map_err(AppError::Database)?;
+    Ok(())
+}

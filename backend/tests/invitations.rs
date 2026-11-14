@@ -1,11 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum_test::TestServer;
-use backend::{routes::app_router, state::AppState};
+use common::create_app;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestAuthResponse {
@@ -26,19 +25,6 @@ struct TestInvitationResponse {
     inviter_id: String,
     invitee_id: String,
     is_pending: bool,
-}
-
-fn create_app(pool: PgPool) -> axum::Router {
-    let state = AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url: "http://localhost:8080".to_string(),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
 }
 
 fn generate_email() -> String {
@@ -110,7 +96,7 @@ async fn test_invite_flow(pool: PgPool) {
         .await;
     invite_resp.assert_status(axum::http::StatusCode::CREATED);
     let invitation: TestInvitationResponse = invite_resp.json();
-    assert_eq!(invitation.is_pending, true);
+    assert!(invitation.is_pending);
 
     // List pending invitations as friend
     let list_resp = server
@@ -277,4 +263,50 @@ async fn test_unauthorized_actions(pool: PgPool) {
         .add_header("Authorization", format!("Bearer {}", other_token))
         .await
         .assert_status(axum::http::StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn test_invite_rejects_self_and_unknown_users(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let owner = common::register(&server, "owner").await;
+    let room_id = common::create_room(&server, &owner).await;
+    let invite = |invitee: uuid::Uuid| {
+        server
+            .post(&format!("/rooms/{room_id}/invite/{invitee}"))
+            .add_header("Authorization", common::bearer(&owner.access_token))
+    };
+
+    invite(owner.id)
+        .await
+        .assert_status(axum::http::StatusCode::UNPROCESSABLE_ENTITY);
+    invite(uuid::Uuid::new_v4())
+        .await
+        .assert_status(axum::http::StatusCode::NOT_FOUND);
+}
+
+#[sqlx::test]
+async fn test_pending_invitations_carry_inviter_and_room_names(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let owner = common::register(&server, "host").await;
+    let guest = common::register(&server, "guest").await;
+    let room_id = common::create_room(&server, &owner).await;
+
+    server
+        .post(&format!("/rooms/{room_id}/invite/{}", guest.id))
+        .add_header("Authorization", common::bearer(&owner.access_token))
+        .await
+        .assert_status(axum::http::StatusCode::CREATED);
+
+    let invitations = server
+        .get("/me/invitations")
+        .add_header("Authorization", common::bearer(&guest.access_token))
+        .await
+        .json::<serde_json::Value>();
+
+    assert_eq!(invitations.as_array().unwrap().len(), 1);
+    assert_eq!(invitations[0]["inviter_username"], owner.username);
+    assert_eq!(
+        invitations[0]["room_name"],
+        format!("{}'s room", owner.username)
+    );
 }

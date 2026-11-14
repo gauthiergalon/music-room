@@ -1,41 +1,41 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
+use chrono::Utc;
 use sqlx::PgPool;
-use tokio::{sync::RwLock, time};
+use tokio::time;
 use uuid::Uuid;
 
-use crate::{dtos::ws::WsEventServer, state::ActiveRoom};
+use crate::{repositories::rooms as rooms_repo, services::rooms as room_service, state::AppState};
+
+const TOKEN_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60 * 24);
+const SUBSCRIPTION_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const ROOM_CLEANUP_INTERVAL: Duration = Duration::from_secs(60);
+
+/// A room nobody controls any more (no play, pause, seek or skip) is closed after this long.
+const ROOM_IDLE_TIMEOUT_HOURS: i64 = 2;
+/// A room whose owner is not connected is deleted once it has been untouched
+/// this long. It covers rooms that were created but never joined, and rooms
+/// left behind by a server restart whose owner never came back.
+const ROOM_ABANDONED_AFTER_MINUTES: i64 = 2;
 
 pub fn spawn_token_cleanup_task(pool: PgPool) {
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(60 * 60 * 24));
+        let mut interval = time::interval(TOKEN_CLEANUP_INTERVAL);
 
         loop {
             interval.tick().await;
 
-            let res_refresh = sqlx::query!(
-                "DELETE FROM refresh_tokens WHERE expires_at < $1",
-                chrono::Utc::now()
-            )
-            .execute(&pool)
-            .await;
-
-            if let Ok(result) = res_refresh {
-                tracing::info!(
-                    "Cleaned up {} expired refresh tokens",
-                    result.rows_affected()
-                );
-            }
-
-            let res_reset = sqlx::query!(
-                "DELETE FROM reset_tokens WHERE expires_at < $1",
-                chrono::Utc::now()
-            )
-            .execute(&pool)
-            .await;
-
-            if let Ok(result) = res_reset {
-                tracing::info!("Cleaned up {} expired reset tokens", result.rows_affected());
+            for table in ["refresh_tokens", "reset_tokens", "email_tokens"] {
+                // The table name comes from the fixed list above, never from user input.
+                let query = format!("DELETE FROM {table} WHERE expires_at < now()");
+                match sqlx::query(&query).execute(&pool).await {
+                    Ok(result) => tracing::info!(
+                        "Cleaned up {} expired rows from {}",
+                        result.rows_affected(),
+                        table
+                    ),
+                    Err(e) => tracing::error!("Failed to clean up {}: {}", table, e),
+                }
             }
         }
     });
@@ -43,7 +43,7 @@ pub fn spawn_token_cleanup_task(pool: PgPool) {
 
 pub fn spawn_subscription_cleanup_task(pool: PgPool) {
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(60 * 60));
+        let mut interval = time::interval(SUBSCRIPTION_CLEANUP_INTERVAL);
 
         loop {
             interval.tick().await;
@@ -60,84 +60,52 @@ pub fn spawn_subscription_cleanup_task(pool: PgPool) {
             .execute(&pool)
             .await;
 
-            if let Ok(result) = result {
-                tracing::info!(
+            match result {
+                Ok(result) => tracing::info!(
                     "Cleaned up {} expired subscriptions",
                     result.rows_affected()
-                );
+                ),
+                Err(e) => tracing::error!("Failed to clean up subscriptions: {}", e),
             }
         }
     });
 }
 
-pub fn spawn_room_cleanup_task(
-    pool: PgPool,
-    active_rooms: Arc<RwLock<std::collections::HashMap<Uuid, ActiveRoom>>>,
-) {
+pub fn spawn_room_cleanup_task(state: AppState) {
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(60 * 5));
+        let mut interval = time::interval(ROOM_CLEANUP_INTERVAL);
 
         loop {
             interval.tick().await;
-
-            // Inactivity timeout: 2 hours
-            let timeout_duration = chrono::Duration::hours(2);
-            let now = chrono::Utc::now();
-
-            let mut rooms_to_remove = Vec::new();
-
-            {
-                let rooms_guard = active_rooms.read().await;
-                for (id, room) in rooms_guard.iter() {
-                    // Evict if room is empty or hasn't had activity for `timeout_duration`
-                    if room.users.is_empty() || (now - room.last_activity > timeout_duration) {
-                        rooms_to_remove.push(*id);
-                    }
-                }
-            }
-
-            if !rooms_to_remove.is_empty() {
-                let mut rooms_guard = active_rooms.write().await;
-                for id in rooms_to_remove.iter() {
-                    if let Some(room) = rooms_guard.remove(id) {
-                        let _ = room.tx.send(WsEventServer::RoomClosed);
-                    }
-                }
-            }
-
-            let rooms = sqlx::query!("SELECT id, owner_id FROM rooms")
-                .fetch_all(&pool)
-                .await;
-
-            if let Ok(rooms) = rooms {
-                for room in rooms {
-                    let active = {
-                        let rooms_guard = active_rooms.read().await;
-                        rooms_guard.contains_key(&room.id)
-                    };
-
-                    if !active {
-                        tracing::info!("Cleaning up orphaned room: {}", room.id);
-                        let _ = sqlx::query!("DELETE FROM rooms WHERE id = $1", room.id)
-                            .execute(&pool)
-                            .await;
-                    }
+            for room_id in rooms_to_close(&state).await {
+                tracing::info!("Cleaning up inactive room {}", room_id);
+                if let Err(e) = room_service::close(&state, room_id).await {
+                    tracing::error!("Failed to clean up room {}: {:?}", room_id, e);
                 }
             }
         }
     });
 }
 
-pub async fn cleanup_user_rooms(pool: &PgPool, user_id: Uuid) -> Result<(), sqlx::Error> {
-    let rooms = sqlx::query!("SELECT id FROM rooms WHERE owner_id = $1", user_id)
-        .fetch_all(pool)
-        .await?;
+/// Rooms that should not exist any more. A room whose owner is connected is
+/// only ever closed for being idle.
+pub async fn rooms_to_close(state: &AppState) -> Vec<Uuid> {
+    let mut to_close = state
+        .rooms
+        .idle_rooms(chrono::Duration::hours(ROOM_IDLE_TIMEOUT_HOURS))
+        .await;
 
-    for room in rooms {
-        sqlx::query!("DELETE FROM rooms WHERE id = $1", room.id)
-            .execute(pool)
-            .await?;
+    let threshold = Utc::now() - chrono::Duration::minutes(ROOM_ABANDONED_AFTER_MINUTES);
+    match rooms_repo::find_inactive_since(&state.pool, threshold).await {
+        Ok(candidates) => {
+            for room_id in candidates {
+                if !state.rooms.owner_connected(room_id).await && !to_close.contains(&room_id) {
+                    to_close.push(room_id);
+                }
+            }
+        }
+        Err(e) => tracing::error!("Failed to list inactive rooms: {:?}", e),
     }
 
-    Ok(())
+    to_close
 }

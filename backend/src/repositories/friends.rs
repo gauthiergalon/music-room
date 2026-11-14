@@ -3,7 +3,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::{AppError, ErrorMessage},
-    models::friend::Friend,
+    models::friend::{Friend, FriendWithUser},
 };
 
 pub async fn create(
@@ -106,12 +106,17 @@ pub async fn delete(pool: &PgPool, user_id_1: Uuid, user_id_2: Uuid) -> Result<(
     Ok(())
 }
 
-pub async fn find_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<Friend>, AppError> {
+/// Friendships and pending requests of a user, with the other user's name.
+pub async fn find_by_user(pool: &PgPool, user_id: Uuid) -> Result<Vec<FriendWithUser>, AppError> {
     let friends = sqlx::query_as!(
-        Friend,
+        FriendWithUser,
         r#"
-        SELECT * FROM friends
-        WHERE (user_id_1 = $1 OR user_id_2 = $1)
+        SELECT f.user_id_1, f.user_id_2, f.sender_id, f.is_pending,
+               u.id AS "friend_id!", u.username AS "username!"
+        FROM friends f
+        JOIN users u ON u.id = CASE WHEN f.user_id_1 = $1 THEN f.user_id_2 ELSE f.user_id_1 END
+        WHERE f.user_id_1 = $1 OR f.user_id_2 = $1
+        ORDER BY u.username
         "#,
         user_id
     )

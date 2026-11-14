@@ -2,8 +2,8 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    errors::{AppError, ErrorMessage},
-    models::invitation::Invitation,
+    errors::{AppError, ErrorMessage, FOREIGN_KEY_VIOLATION, UNIQUE_VIOLATION},
+    models::invitation::{Invitation, InvitationWithDetails},
 };
 
 pub async fn exists_accepted(
@@ -46,14 +46,17 @@ pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<Invitation>, A
 pub async fn find_pending_by_user(
     pool: &PgPool,
     user_id: Uuid,
-) -> Result<Vec<Invitation>, AppError> {
+) -> Result<Vec<InvitationWithDetails>, AppError> {
     sqlx::query_as!(
-        Invitation,
+        InvitationWithDetails,
         r#"
-        SELECT id, room_id, inviter_id, invitee_id, is_pending, created_at
-        FROM invitations
-        WHERE invitee_id = $1 AND is_pending = true
-        ORDER BY created_at DESC
+        SELECT i.id, i.room_id, i.inviter_id, i.invitee_id, i.is_pending, i.created_at,
+               u.username AS "inviter_username!", r.name AS "room_name!"
+        FROM invitations i
+        JOIN users u ON u.id = i.inviter_id
+        JOIN rooms r ON r.id = i.room_id
+        WHERE i.invitee_id = $1 AND i.is_pending = true
+        ORDER BY i.created_at DESC
         "#,
         user_id
     )
@@ -82,12 +85,14 @@ pub async fn create(
     .fetch_one(pool)
     .await
     .map_err(|e| {
-        if let sqlx::Error::Database(ref db_err) = e
-            && db_err.code().as_deref() == Some("23505")
-        {
-            return AppError::Conflict(ErrorMessage::AlreadyInvited);
+        if AppError::is_db_violation(&e, UNIQUE_VIOLATION) {
+            AppError::Conflict(ErrorMessage::AlreadyInvited)
+        } else if AppError::is_db_violation(&e, FOREIGN_KEY_VIOLATION) {
+            // The invitee (or the room) was deleted in the meantime.
+            AppError::NotFound(ErrorMessage::UserNotFound)
+        } else {
+            AppError::Database(e)
         }
-        AppError::Database(e)
     })
 }
 

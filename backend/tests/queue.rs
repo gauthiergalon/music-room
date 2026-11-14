@@ -1,12 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+mod common;
 
 use axum::http::StatusCode;
 use axum_test::TestServer;
-use backend::{routes::app_router, state::AppState};
+use common::{FAILING_TRACK_ID, TestApp, UNKNOWN_TRACK_ID, create_app};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
-use tokio::sync::RwLock;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct TestAuthResponse {
@@ -28,19 +27,6 @@ struct TestQueueResponse {
     position: f64,
 }
 
-fn create_app(pool: PgPool) -> axum::Router {
-    let state = AppState {
-        pool: pool.clone(),
-        jwt_secret: "test_secret".to_string(),
-        google_client_id: "test_client_id".to_string(),
-        google_client_secret: "test_client_secret".to_string(),
-        google_auth_url: "http://localhost:8080".to_string(),
-        active_rooms: Arc::new(RwLock::new(HashMap::new())),
-        music_provider: Arc::new(backend::services::music_provider::hifi::HifiProvider::new()),
-    };
-    app_router(state.clone()).with_state(state)
-}
-
 async fn register_and_login(server: &TestServer, username: &str, email: &str) -> String {
     let res = server
         .post("/auth/register")
@@ -53,6 +39,20 @@ async fn register_and_login(server: &TestServer, username: &str, email: &str) ->
 
     let json = res.json::<TestAuthResponse>();
     json.access_token
+}
+
+/// The first track added to an idle room starts playing right away and leaves
+/// the queue, so tests about the queue itself put one track in front first.
+async fn start_playback(server: &TestServer, token: &str, room_id: &str) {
+    server
+        .post(&format!("/rooms/{}/queue", room_id))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token),
+        )
+        .json(&json!({ "track_id": 999 }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
 }
 
 #[sqlx::test]
@@ -100,6 +100,7 @@ async fn test_queue_get(pool: PgPool) {
         )
         .await;
     let room = create_res.json::<TestRoomResponse>();
+    start_playback(&server, &token, &room.id).await;
 
     // Add tracks to queue
     server
@@ -150,6 +151,7 @@ async fn test_queue_remove(pool: PgPool) {
         )
         .await;
     let room = create_res.json::<TestRoomResponse>();
+    start_playback(&server, &token, &room.id).await;
 
     // Add track to queue
     server
@@ -211,6 +213,7 @@ async fn test_queue_reorder(pool: PgPool) {
         )
         .await;
     let room = create_res.json::<TestRoomResponse>();
+    start_playback(&server, &token, &room.id).await;
 
     // Add 3 tracks to queue
     server
@@ -287,4 +290,121 @@ async fn test_queue_reorder(pool: PgPool) {
         reordered_q[1].position, 0.5,
         "Position not updated correctly"
     );
+}
+
+#[sqlx::test]
+async fn test_queue_add_caches_track_metadata_once(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let owner = common::register(&server, "cache").await;
+    let room_id = common::create_room(&server, &owner).await;
+
+    for _ in 0..3 {
+        common::add_track(&server, &owner, room_id, 77).await;
+    }
+
+    // The provider is asked once; later adds use the stored metadata.
+    assert_eq!(app.music.track_info_calls(), 1);
+}
+
+#[sqlx::test]
+async fn test_queue_add_reports_provider_errors(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let owner = common::register(&server, "errors").await;
+    let room_id = common::create_room(&server, &owner).await;
+    let add = |track_id: i64| {
+        server
+            .post(&format!("/rooms/{room_id}/queue"))
+            .add_header(
+                axum::http::header::AUTHORIZATION,
+                common::bearer(&owner.access_token),
+            )
+            .json(&json!({ "track_id": track_id }))
+    };
+
+    add(UNKNOWN_TRACK_ID)
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    add(FAILING_TRACK_ID)
+        .await
+        .assert_status(StatusCode::BAD_GATEWAY);
+
+    // Nothing was queued for the failed requests.
+    let queue = server
+        .get(&format!("/rooms/{room_id}/queue"))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&owner.access_token),
+        )
+        .await
+        .json::<Vec<TestQueueResponse>>();
+    assert!(queue.is_empty());
+}
+
+#[sqlx::test]
+async fn test_queue_add_checks_permissions_before_calling_the_provider(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let server = app.server();
+    let owner = common::register(&server, "owner").await;
+    let stranger = common::register(&server, "stranger").await;
+    let room_id = common::create_room(&server, &owner).await;
+    sqlx::query("UPDATE rooms SET is_public = false WHERE id = $1")
+        .bind(room_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    server
+        .post(&format!("/rooms/{room_id}/queue"))
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&stranger.access_token),
+        )
+        .json(&json!({ "track_id": 5 }))
+        .await
+        .assert_status(StatusCode::FORBIDDEN);
+
+    assert_eq!(app.music.track_info_calls(), 0);
+}
+
+#[sqlx::test]
+async fn test_queue_remove_and_reorder_report_missing_items_and_conflicts(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let owner = common::register(&server, "edit").await;
+    let room_id = common::create_room(&server, &owner).await;
+    let auth = common::bearer(&owner.access_token);
+    // The first track starts playing; the next two stay in the queue.
+    for track_id in [1, 2, 3] {
+        common::add_track(&server, &owner, room_id, track_id).await;
+    }
+    let queue = server
+        .get(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .json::<Vec<TestQueueResponse>>();
+    assert_eq!(queue.len(), 2);
+
+    let missing = uuid::Uuid::new_v4();
+    server
+        .delete(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "id": missing }))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    server
+        .patch(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "id": missing, "new_position": 10.0 }))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+
+    // Moving an item onto the exact position of another one is a conflict, not a crash.
+    server
+        .patch(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .json(&json!({ "id": queue[0].id, "new_position": queue[1].position }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
 }

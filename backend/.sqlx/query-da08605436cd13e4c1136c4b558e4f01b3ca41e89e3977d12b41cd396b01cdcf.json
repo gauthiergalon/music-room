@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE rooms SET is_playing = false, current_position = $1 WHERE id = $2",
+  "query": "UPDATE rooms SET played_at = now(), current_position = $1 WHERE id = $2",
   "describe": {
     "columns": [],
     "parameters": {
@@ -11,5 +11,5 @@
     },
     "nullable": []
   },
-  "hash": "d41926273cd71ae66d78ed4d13cc7604ed230c6e3f28184c37a2589e1bd4747c"
+  "hash": "da08605436cd13e4c1136c4b558e4f01b3ca41e89e3977d12b41cd396b01cdcf"
 }

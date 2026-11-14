@@ -32,8 +32,5 @@ pub struct NewUser<'a> {
     pub password_hash: Option<String>,
     pub email_confirmed: bool,
     pub google_id: Option<String>,
-    pub favorite_genres: Option<Vec<String>>,
     pub privacy_level: PrivacyLevel,
-    pub is_subscribed: bool,
-    pub end_subscription_date: Option<DateTime<Utc>>,
 }

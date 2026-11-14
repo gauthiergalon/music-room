@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE rooms SET current_track = NULL, played_at = now(), current_position = 0, is_playing = false WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d8a741f1a6ed29f6215b694e6dd0f08016dbbc744b955ab5b220d142effa6ebd"
+}

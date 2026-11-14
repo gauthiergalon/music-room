@@ -19,34 +19,50 @@ pub struct QueuedTrack {
     pub track: TrackItem,
 }
 
+/// Events sent by the device that controls playback. Positions are in
+/// milliseconds. The server stamps every event with its own clock, so clients
+/// do not send timestamps (unknown fields are ignored).
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsEventClient {
     Play {
         position: i32,
-        timestamp: DateTime<Utc>,
     },
     Pause {
         position: i32,
     },
     SeekTo {
         position: i32,
-        timestamp: DateTime<Utc>,
     },
+    /// `track_id` is the track the client believes is current (`null` if none).
+    /// The event is ignored when it does not match the room, which makes a
+    /// repeated or late `NextTrack` harmless.
     NextTrack {
-        timestamp: DateTime<Utc>,
+        #[serde(default)]
+        track_id: Option<i64>,
     },
 }
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(tag = "type", content = "payload")]
 pub enum WsEventServer {
+    /// First message on every connection.
+    Welcome {
+        connection_id: Uuid,
+        server_time: DateTime<Utc>,
+    },
     RoomState {
         current_track: Option<TrackItem>,
-        message_id: String,
+        /// Increases with every state of a room; restarts when the room is
+        /// re-activated, so clients reset it when they (re)connect.
+        version: u64,
         is_playing: bool,
+        /// Playback position in milliseconds at `timestamp`.
         current_position: i32,
+        /// Server clock instant at which `current_position` was valid.
         timestamp: DateTime<Utc>,
+        /// Server clock when this message was built, for clock-offset estimation.
+        server_time: DateTime<Utc>,
         queue: Vec<QueuedTrack>,
     },
     UserState {
