@@ -46,7 +46,6 @@ use utoipa::OpenApi;
 
         // Hifi endpoints
         crate::handlers::music::search,
-        crate::handlers::music::get_track,
         crate::handlers::music::get_stream_url,
         crate::handlers::music::stream_playlist,
         crate::handlers::music::stream_segment,
@@ -101,7 +100,6 @@ use utoipa::OpenApi;
             crate::dtos::music::TrackItem,
             crate::dtos::music::AlbumData,
             crate::dtos::music::ArtistData,
-            crate::dtos::music::TrackResponse,
             crate::dtos::music::StreamUrlResponse,
 
             // Invitation DTOs

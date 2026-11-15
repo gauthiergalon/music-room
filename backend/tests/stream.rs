@@ -259,3 +259,22 @@ async fn a_stream_the_provider_refuses_is_reported_as_unavailable(pool: PgPool) 
         "This track is not available for streaming"
     );
 }
+
+#[sqlx::test]
+async fn the_raw_provider_track_endpoint_is_not_exposed(pool: PgPool) {
+    let (app, _cdn) = app_with_cdn(pool).await;
+    let server = app.server();
+    let user = register(&server, "listener").await;
+
+    // Only the stream URL is served; the provider's manifest stays internal.
+    server
+        .get("/hifi/track/1")
+        .add_header(header::AUTHORIZATION, bearer(&user.access_token))
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
+    server
+        .get("/hifi/track/1/stream-url")
+        .add_header(header::AUTHORIZATION, bearer(&user.access_token))
+        .await
+        .assert_status(StatusCode::OK);
+}

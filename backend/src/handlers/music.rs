@@ -6,7 +6,7 @@ use axum::{
 };
 
 use crate::{
-    dtos::music::{SearchResponse, StreamUrlResponse, TrackResponse},
+    dtos::music::{SearchResponse, StreamUrlResponse},
     errors::AppError,
     middleware::auth::Claims,
     services::stream_proxy::{SignedLink, StreamProxy},
@@ -22,17 +22,6 @@ pub async fn search(
     let tracks = state.music_provider.search_tracks(&query).await?;
 
     Ok(Json(tracks))
-}
-
-#[utoipa::path(get, path = "/hifi/track/{id}", responses((status = 200, body = TrackResponse)), tag = "Hifi")]
-pub async fn get_track(
-    State(state): State<AppState>,
-    Path(track_id): Path<i64>,
-    Extension(_claims): Extension<Claims>,
-) -> Result<Json<TrackResponse>, AppError> {
-    let track = state.music_provider.get_track_details(track_id).await?;
-
-    Ok(Json(track))
 }
 
 /// Where the client can load the audio of a track.
