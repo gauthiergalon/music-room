@@ -22,9 +22,13 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      # Pinned to the version the app is developed and tested with. "Latest
+      # stable" changes without notice and each release brings new lints:
+      # raise this on purpose, together with the code changes it calls for.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.8
           cache: true
 
       - name: Create the .env
