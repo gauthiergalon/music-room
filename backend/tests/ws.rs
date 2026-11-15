@@ -84,6 +84,38 @@ async fn unknown_room_and_missing_token_are_refused(pool: PgPool) {
 }
 
 #[sqlx::test]
+async fn the_query_string_token_is_only_accepted_on_websocket_upgrades(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.ws_server();
+    let user = register(&server, "browser").await;
+    let room_id = create_room(&server, &user).await;
+
+    // A browser cannot set headers on a WebSocket: the token goes in the URL.
+    let mut socket = server
+        .get_websocket(&format!(
+            "/rooms/{room_id}/ws?token={}&device=Web",
+            user.access_token
+        ))
+        .await
+        .into_websocket()
+        .await;
+    let welcome = common::next_event(&mut socket).await;
+    assert_eq!(welcome["type"], "Welcome");
+    let users = next_of_type(&mut socket, "UserState").await;
+    assert_eq!(users["user_list"][0]["device_name"], "Web");
+
+    // Anywhere else the token must come in the Authorization header.
+    server
+        .get(&format!("/rooms?token={}", user.access_token))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+    server
+        .get(&format!("/users/me?token={}", user.access_token))
+        .await
+        .assert_status(StatusCode::UNAUTHORIZED);
+}
+
+#[sqlx::test]
 async fn room_limit_refuses_new_rooms(pool: PgPool) {
     let app = TestApp::with_config(
         pool,
