@@ -6,6 +6,8 @@ pub const USERNAME_MIN_CHARS: usize = 3;
 pub const USERNAME_MAX_CHARS: usize = 24;
 pub const PASSWORD_MIN_CHARS: usize = 8;
 pub const PASSWORD_MAX_CHARS: usize = 128;
+pub const MAX_FAVORITE_GENRES: usize = 20;
+pub const GENRE_MAX_CHARS: usize = 32;
 
 /// Trims the username and checks its length in characters (the column is `VARCHAR(24)`).
 pub fn username(raw: &str) -> Result<String, ErrorMessage> {
@@ -41,6 +43,31 @@ pub fn password(raw: &str) -> Result<(), ErrorMessage> {
     }
 
     Ok(())
+}
+
+/// Trims the genres, drops empty and repeated ones, and bounds what a user
+/// can store on their profile: free text, but not an unlimited amount of it.
+pub fn favorite_genres(raw: Vec<String>) -> Result<Vec<String>, ErrorMessage> {
+    let mut genres: Vec<String> = Vec::new();
+
+    for genre in raw {
+        let genre = genre.trim();
+        if genre.is_empty() {
+            continue;
+        }
+        if genre.chars().count() > GENRE_MAX_CHARS || genre.chars().any(char::is_control) {
+            return Err(ErrorMessage::FavoriteGenresInvalid);
+        }
+        if !genres.iter().any(|known| known.eq_ignore_ascii_case(genre)) {
+            genres.push(genre.to_string());
+        }
+    }
+
+    if genres.len() > MAX_FAVORITE_GENRES {
+        return Err(ErrorMessage::FavoriteGenresInvalid);
+    }
+
+    Ok(genres)
 }
 
 /// Wraps a single validation failure in the error type handlers return.
@@ -98,5 +125,36 @@ mod tests {
         assert!(password("1234567").is_err());
         assert!(password(&"a".repeat(128)).is_ok());
         assert!(password(&"a".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn favorite_genres_are_cleaned_up() {
+        let genres = favorite_genres(vec![
+            "  Rock ".to_string(),
+            "".to_string(),
+            "rock".to_string(),
+            "Électro".to_string(),
+        ])
+        .unwrap();
+
+        assert_eq!(genres, vec!["Rock", "Électro"]);
+    }
+
+    #[test]
+    fn favorite_genres_are_bounded() {
+        let many = |count: usize| (0..count).map(|i| format!("genre {i}")).collect::<Vec<_>>();
+
+        assert!(favorite_genres(many(MAX_FAVORITE_GENRES)).is_ok());
+        assert_eq!(
+            favorite_genres(many(MAX_FAVORITE_GENRES + 1)).unwrap_err(),
+            ErrorMessage::FavoriteGenresInvalid
+        );
+
+        assert!(favorite_genres(vec!["a".repeat(GENRE_MAX_CHARS)]).is_ok());
+        assert_eq!(
+            favorite_genres(vec!["a".repeat(GENRE_MAX_CHARS + 1)]).unwrap_err(),
+            ErrorMessage::FavoriteGenresInvalid
+        );
+        assert!(favorite_genres(vec!["ro\nck".to_string()]).is_err());
     }
 }

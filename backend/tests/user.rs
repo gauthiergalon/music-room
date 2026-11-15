@@ -616,3 +616,46 @@ async fn test_update_username_is_trimmed_and_validated(pool: PgPool) {
         .await
         .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+#[sqlx::test]
+async fn test_favorite_genres_are_cleaned_up_and_bounded(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let user = common::register(&server, "genres").await;
+    let update = |genres: serde_json::Value| {
+        server
+            .patch("/users/me/favorite-genres")
+            .add_header(
+                axum::http::header::AUTHORIZATION,
+                common::bearer(&user.access_token),
+            )
+            .json(&json!({ "favorite_genres": genres }))
+    };
+
+    // Spaces, empty entries and repetitions are removed.
+    let res = update(json!(["  Rock ", "", "rock", "Jazz"])).await;
+    res.assert_status(StatusCode::OK);
+    assert_eq!(
+        res.json::<serde_json::Value>()["favorite_genres"],
+        json!(["Rock", "Jazz"])
+    );
+
+    // Too many entries, or an entry that is too long, is refused...
+    let too_many: Vec<String> = (0..21).map(|i| format!("genre {i}")).collect();
+    update(json!(too_many))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+    update(json!(["a".repeat(33)]))
+        .await
+        .assert_status(StatusCode::UNPROCESSABLE_ENTITY);
+
+    // ...and leaves the profile as it was.
+    let me = server
+        .get("/users/me")
+        .add_header(
+            axum::http::header::AUTHORIZATION,
+            common::bearer(&user.access_token),
+        )
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(me["favorite_genres"], json!(["Rock", "Jazz"]));
+}

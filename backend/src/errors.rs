@@ -123,6 +123,7 @@ pub enum ErrorMessage {
     TrackIdInvalid,
     CannotDelegateToSelf,
     CannotInviteSelf,
+    FavoriteGenresInvalid,
 
     // Resources
     UserNotFound,
@@ -189,6 +190,9 @@ impl ErrorMessage {
             Self::TrackIdInvalid => "Track ID must be a positive integer",
             Self::CannotDelegateToSelf => "The room owner cannot delegate playback to themselves",
             Self::CannotInviteSelf => "You cannot invite yourself",
+            Self::FavoriteGenresInvalid => {
+                "Favorite genres are limited to 20 entries of at most 32 characters each"
+            }
 
             // Resources
             Self::UserNotFound => "User not found",

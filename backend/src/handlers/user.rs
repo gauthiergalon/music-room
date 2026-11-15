@@ -152,15 +152,17 @@ pub async fn send_email_confirmation_email(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(patch, path = "/users/me/favorite-genres", request_body = UpdateFavoriteGenresRequest, responses((status = 200, body = UserResponse)), tag = "Users")]
+#[utoipa::path(patch, path = "/users/me/favorite-genres", request_body = UpdateFavoriteGenresRequest, responses((status = 200, body = UserResponse), (status = 422)), tag = "Users")]
 pub async fn update_favorite_genres(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
     Json(payload): Json<UpdateFavoriteGenresRequest>,
 ) -> Result<Json<UserResponse>, AppError> {
+    let favorite_genres =
+        validation::favorite_genres(payload.favorite_genres).map_err(validation::invalid)?;
+
     let user =
-        user_service::update_favorite_genres(&state.pool, claims.user_id, payload.favorite_genres)
-            .await?;
+        user_service::update_favorite_genres(&state.pool, claims.user_id, favorite_genres).await?;
     Ok(Json(user.into()))
 }
 
