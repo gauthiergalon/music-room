@@ -95,6 +95,9 @@ class ApiHttp {
   }
 
   Future<String> _refresh(String? staleToken) async {
+    // Another instance of the app sharing the storage (a second browser tab)
+    // may already have renewed the session: look at the storage itself.
+    tokenStore.invalidate();
     final current = await tokenStore.readAccessToken();
     if (staleToken != null && current != null && current != staleToken) {
       return current;
