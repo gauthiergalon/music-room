@@ -460,9 +460,7 @@ async fn test_password_reset_flow_revokes_existing_sessions(pool: PgPool) {
         .json(&json!({ "email": user.email }))
         .await
         .assert_status(StatusCode::NO_CONTENT);
-    let reset_token = app
-        .last_email_token(&user.email)
-        .expect("a reset email was sent");
+    let reset_token = app.wait_for_email_token(&user.email).await;
 
     server
         .post("/auth/reset-password")
@@ -496,14 +494,50 @@ async fn test_forgot_password_sends_one_email_at_a_time(pool: PgPool) {
     let server = app.server();
     let user = common::register(&server, "forgot").await;
 
-    for _ in 0..2 {
+    // Two requests arriving together, as an impatient user would send them.
+    let request = || {
         server
             .post("/auth/forgot-password")
             .json(&json!({ "email": user.email }))
-            .await
-            .assert_status(StatusCode::NO_CONTENT);
-    }
+    };
+    let (first, second) = tokio::join!(request(), request());
+    first.assert_status(StatusCode::NO_CONTENT);
+    second.assert_status(StatusCode::NO_CONTENT);
 
+    app.wait_for_email_token(&user.email).await;
+    // Leave the second request the time to send an email if it was going to.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    assert_eq!(app.mailer.sent().len(), 1);
+}
+
+#[sqlx::test]
+async fn test_forgot_password_answers_before_doing_the_work(pool: PgPool) {
+    // The response must not depend on whether the account exists: not its
+    // status, and not its timing either. Sending an email takes time, so the
+    // request answers first and the email goes out afterwards.
+    let app = TestApp::new(pool);
+    let server = app.server();
+    let user = common::register(&server, "timing").await;
+    app.mailer.set_delay(std::time::Duration::from_millis(400));
+
+    server
+        .post("/auth/forgot-password")
+        .json(&json!({ "email": user.email }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+    assert!(
+        app.mailer.sent().is_empty(),
+        "the request waited for the email to be sent"
+    );
+
+    server
+        .post("/auth/forgot-password")
+        .json(&json!({ "email": "nobody@example.com" }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    // The email of the existing account still arrives; the unknown one gets nothing.
+    app.wait_for_email_token(&user.email).await;
     assert_eq!(app.mailer.sent().len(), 1);
 }
 

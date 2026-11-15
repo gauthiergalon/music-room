@@ -80,6 +80,11 @@ pub async fn refresh(
     Ok(Json(tokens.into()))
 }
 
+/// Sends a password reset link if the address belongs to an account.
+///
+/// The answer is always 204 and is sent before anything is looked up: the
+/// work happens in the background, so neither the status nor the response
+/// time tells whether an account exists for that address.
 #[utoipa::path(post, path = "/auth/forgot-password", request_body = ForgotPasswordRequest, responses((status = 204), (status = 422), (status = 429)), tag = "Auth")]
 pub async fn forgot_password(
     State(state): State<AppState>,
@@ -87,12 +92,13 @@ pub async fn forgot_password(
 ) -> Result<StatusCode, AppError> {
     let email = validation::email(&payload.email).map_err(validation::invalid)?;
 
-    // Always answer 204 so the endpoint does not reveal which emails have an
-    // account, but keep the reason in the logs.
-    if let Err(e) = auth_service::forgot_password(&state.pool, state.mailer.as_ref(), &email).await
-    {
-        tracing::info!("Password reset email not sent: {:?}", e);
-    }
+    tokio::spawn(async move {
+        if let Err(e) =
+            auth_service::forgot_password(&state.pool, state.mailer.as_ref(), &email).await
+        {
+            tracing::info!("Password reset email not sent: {:?}", e);
+        }
+    });
 
     Ok(StatusCode::NO_CONTENT)
 }

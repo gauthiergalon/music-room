@@ -196,6 +196,22 @@ impl TestApp {
             .and_then(|(_, email)| email.body.split("token=").nth(1).map(str::to_string))
             .map(|token| token.trim().to_string())
     }
+
+    /// Waits for an email to `receiver` and returns its token. Emails that
+    /// answer a public request are sent in the background, after the response.
+    pub async fn wait_for_email_token(&self, receiver: &str) -> String {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Some(token) = self.last_email_token(receiver) {
+                return token;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "no email was sent to {receiver}"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
 }
 
 /// The router alone, for tests that only speak HTTP.

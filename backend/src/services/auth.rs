@@ -182,16 +182,22 @@ pub async fn forgot_password(
         .await?
         .ok_or(AppError::NotFound(ErrorMessage::UserNotFound))?;
 
-    if reset_tokens_repo::find_valid_by_user_id(pool, user.id)
+    // One valid link per user at a time. Requests for the same account are
+    // serialised on the user row, so two of them arriving together cannot
+    // both pass the check and send two emails.
+    let token_pair = TokenPair::generate();
+    let mut tx = pool.begin().await?;
+    users_repo::lock(&mut *tx, user.id).await?;
+
+    if reset_tokens_repo::find_valid_by_user_id(&mut *tx, user.id)
         .await?
         .is_some()
     {
         return Err(AppError::TooManyRequests(ErrorMessage::TooManyEmails));
     }
 
-    let token_pair = TokenPair::generate();
     reset_tokens_repo::create(
-        pool,
+        &mut *tx,
         NewResetToken {
             token_hash: token_pair.hash,
             user_id: user.id,
@@ -199,6 +205,7 @@ pub async fn forgot_password(
         },
     )
     .await?;
+    tx.commit().await?;
 
     let email = Email::for_password_reset(&token_pair.plain);
     if let Err(e) = mailer.send(email_address, &email).await {

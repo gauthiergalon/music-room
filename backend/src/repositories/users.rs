@@ -53,6 +53,19 @@ where
     Ok(user)
 }
 
+/// Locks the user's row until the end of the transaction, to serialise
+/// operations that must not run twice at once for the same account.
+pub async fn lock<'c, E>(executor: E, user_id: Uuid) -> Result<(), AppError>
+where
+    E: Executor<'c, Database = Postgres>,
+{
+    sqlx::query!("SELECT id FROM users WHERE id = $1 FOR UPDATE", user_id)
+        .fetch_optional(executor)
+        .await
+        .map_err(AppError::Database)?;
+    Ok(())
+}
+
 pub async fn find_by_email<'c, E>(executor: E, email: &str) -> Result<Option<User>, AppError>
 where
     E: Executor<'c, Database = Postgres>,

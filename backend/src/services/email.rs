@@ -158,6 +158,7 @@ impl Mailer for SmtpMailer {
 #[derive(Default)]
 pub struct MemoryMailer {
     sent: Mutex<Vec<(String, Email)>>,
+    delay: Mutex<Duration>,
 }
 
 impl MemoryMailer {
@@ -169,11 +170,21 @@ impl MemoryMailer {
     pub fn sent(&self) -> Vec<(String, Email)> {
         self.sent.lock().expect("mailer lock poisoned").clone()
     }
+
+    /// Makes every send take this long, like a real SMTP server would.
+    pub fn set_delay(&self, delay: Duration) {
+        *self.delay.lock().expect("mailer lock poisoned") = delay;
+    }
 }
 
 #[async_trait]
 impl Mailer for MemoryMailer {
     async fn send(&self, receiver: &str, email: &Email) -> Result<(), AppError> {
+        let delay = *self.delay.lock().expect("mailer lock poisoned");
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+
         self.sent
             .lock()
             .expect("mailer lock poisoned")
