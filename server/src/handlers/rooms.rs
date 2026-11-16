@@ -153,6 +153,13 @@ pub async fn privatize(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Clients only exchange small JSON events. The WebSocket library's defaults
+/// (128 KiB read and write buffers per connection, 64 MiB messages) are made
+/// for heavy traffic: with thousands of connected users they would make
+/// memory, not CPU, the limit, and let one client send huge messages.
+const WS_BUFFER_SIZE: usize = 4 * 1024;
+const WS_MAX_MESSAGE_SIZE: usize = 64 * 1024;
+
 /// Opens the room's WebSocket. Same access rule as reading the room over HTTP.
 pub async fn ws(
     ws: WebSocketUpgrade,
@@ -188,5 +195,10 @@ pub async fn ws(
     };
     let owner_id = room.owner_id;
 
-    Ok(ws.on_upgrade(move |socket| handle_socket(socket, state, room_id, owner_id, ws_user)))
+    Ok(ws
+        .read_buffer_size(WS_BUFFER_SIZE)
+        .write_buffer_size(WS_BUFFER_SIZE)
+        .max_message_size(WS_MAX_MESSAGE_SIZE)
+        .max_frame_size(WS_MAX_MESSAGE_SIZE)
+        .on_upgrade(move |socket| handle_socket(socket, state, room_id, owner_id, ws_user)))
 }
