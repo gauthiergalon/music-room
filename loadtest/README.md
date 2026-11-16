@@ -88,7 +88,7 @@ through a relay that `run.sh` cuts at the end.
 
 Each run starts a fresh server with an empty database (separate from the
 development stack: project `music-room-loadtest`, database in memory). Stop
-it with `docker compose -f compose.yaml down`.
+it with `docker compose -f compose.yaml --profile run down`.
 
 Results, in `results/`:
 

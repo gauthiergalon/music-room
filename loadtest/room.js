@@ -53,6 +53,7 @@ async function editQueue(person, roomId) {
   const path = `/rooms/${roomId}/queue`;
   while (!testIsOver()) {
     await pause(10, 30);
+    if (testIsOver()) break; // the pause ran until the end of the test
     if (!person.state) continue; // never got into the room
 
     const queue = person.state.queue;
@@ -91,6 +92,7 @@ async function delegateControl(owner, members, roomId) {
     const until = Date.now() + (15 + Math.random() * 15) * 1000;
     while (Date.now() < until && !testIsOver()) {
       await pause(2, 4);
+      if (testIsOver()) break;
       driver.send('SeekTo', { position: clock() });
     }
   }

@@ -29,17 +29,18 @@ while sleep 5; do
     music-room-loadtest-backend-1 music-room-loadtest-postgres-1
 done > results/room-resources.txt &
 sampler=$!
+relay=
+trap 'kill $sampler $relay 2>/dev/null; dc stop -t 1 dashboard >/dev/null 2>&1' EXIT
 
 # 3. The live dashboard. k6 writes room.html as soon as the test is over:
 # that is when the relay is cut, so an open page cannot keep k6 waiting.
 # (Fallback: the planned duration of the test, plus a margin.)
 steps=$(( $(tr -cd ',' <<< "${STEPS:-500,1000,2000,4000,6000,8000}" | wc -c) + 1 ))
 deadline=$(( steps * (20 + ${HOLD:-120}) + 120 ))
-dc up -d dashboard
+dc up -d --force-recreate dashboard
 ( for _ in $(seq "$deadline"); do [ -f results/room.html ] && break; sleep 1; done
   dc stop -t 1 dashboard ) >/dev/null 2>&1 &
 relay=$!
-trap 'kill $sampler $relay 2>/dev/null; dc stop -t 1 dashboard >/dev/null 2>&1' EXIT
 echo "Live dashboard: http://localhost:5665"
 
 # 4. The test.
