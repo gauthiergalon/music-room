@@ -2,8 +2,9 @@
 # a stand-in for the music provider, and a backend capped like a low-end
 # server. Nothing here touches the development stack or its data.
 #
-# The backend and PostgreSQL share the equivalent of a 2 vCPU / 2 GB VPS:
-# 1.5 vCPU + 1.5 GB for the backend, 0.5 vCPU + 512 MB for the database.
+# The backend and PostgreSQL share the equivalent of a 2 vCPU / 2 GB VPS,
+# split evenly: 1 vCPU + 1 GB each. On a real VPS both processes would draw
+# on the same two cores; an even split is the closest fixed approximation.
 #
 # Every connection is a file descriptor. Docker's default limit (1024 per
 # process) would cap the test at about a thousand users whatever the
@@ -33,8 +34,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1"
+          memory: 1G
 
   # Answers like the HiFi API, instantly: the test measures our backend, not
   # the provider, and must not send thousands of requests to the real one.
@@ -68,8 +69,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.5"
-          memory: 1536M
+          cpus: "1"
+          memory: 1G
 
   k6:
     <<: *many-connections

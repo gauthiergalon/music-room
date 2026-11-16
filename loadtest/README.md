@@ -12,8 +12,8 @@ together the equivalent of a **low-end VPS with 2 vCPU and 2 GB of RAM**:
 
 | Component | CPU | RAM |
 |---|---|---|
-| Backend (Rust, Axum) | 1.5 vCPU | 1.5 GB |
-| PostgreSQL 18 | 0.5 vCPU | 512 MB |
+| Backend (Rust, Axum) | 1 vCPU | 1 GB |
+| PostgreSQL 18 | 1 vCPU | 1 GB |
 
 | Host (on premise) | |
 |---|---|
@@ -137,38 +137,66 @@ services used at the same time in every room.
 
 | Users | Verdict | In the room | Edit response p95 | Delegation response p95 | Update delivery p95 | Command delivery p95 | Errors |
 |---|---|---|---|---|---|---|---|
-| 500 | PASS | 100 % | 5 ms | 1 ms | 4 ms | 5 ms | 0 % |
-| 1000 | PASS | 100 % | 4 ms | 1 ms | 4 ms | 6 ms | 0 % |
 | 2000 | PASS | 100 % | 3 ms | 1 ms | 4 ms | 6 ms | 0 % |
-| 4000 | PASS | 100 % | 7 ms | 2 ms | 5 ms | 11 ms | 0 % |
-| 6000 | PASS | 100 % | 16 ms | 5 ms | 8 ms | 18 ms | 0 % |
-| 8000 | PASS | 100 % | 81 ms | 30 ms | 10 ms | 56 ms | 0 % |
+| 4000 | PASS | 100 % | 7 ms | 2 ms | 6 ms | 11 ms | 0 % |
+| 8000 | PASS | 100 % | 23 ms | 7 ms | 12 ms | 24 ms | 0 % |
+| 12000 | PASS | 100 % | 205 ms | 63 ms | 68 ms | 143 ms | 0 % |
+| 16000 | FAIL | 100 % | 8412 ms | 697 ms | 270 ms | 10880 ms | 0 % |
 
-Up to 4000 users everything stays around 10 ms. From 6000, response times
-start to rise, and at 8000 the server nears its limits: the backend uses
-1.36 GB of its 1.5 GB of memory and about half of its 1.5 vCPU, PostgreSQL
-about 43 % of its 0.5 vCPU. Every criterion is still met, far below the
-thresholds (81 ms for 500 ms allowed, 56 ms for 300 ms).
+Server resources (average over each step, 100 % = the whole vCPU):
+
+| Users | Backend CPU | Backend memory | PostgreSQL CPU |
+|---|---|---|---|
+| 8000 | 32 % | 180 MB | 43 % |
+| 12000 | 56 % | 275 MB | 76 % |
+| 16000 | 65 % | 520 MB | 81 % (peaks at 100 %) |
 
 ### Conclusion
 
-On a 2 vCPU / 2 GB server, **8000 people can use the Playlist Editor and
+On a 2 vCPU / 2 GB server, **12000 people can use the Playlist Editor and
 the Control Delegation at the same time**, every criterion met. This is
 consistent with a low-end server ("thousands of users").
 
-What gives way first, and how to push it further:
+### What limits it
 
-- **Memory**: about 150 KB per connected user, mostly the read and write
-  buffers kept for each WebSocket. Smaller buffers would raise the
-  capacity at no other cost.
-- **Database CPU**: each queue edit is followed by a full read of the queue
-  to broadcast it. More CPU for PostgreSQL, or sending only the change,
-  would push the limit.
+At 16000 users the server makes about 800 queue edits and 270 playback
+commands per second. Each edit is about ten small SQL queries (access
+check, track cache, the insert, starting playback if the room was idle,
+then reading the room state back to broadcast it): about 8000 queries per
+second for a database with one vCPU, which runs at 80-100 %. There are no
+lock waits and the connection pool is not full: the volume of queries is
+the limit. The backend itself stays at about 60 % of its vCPU.
 
-Earlier runs of each service alone (same server) gave the same picture:
-the Playlist Editor alone still passed at 10000 users, with PostgreSQL's
-CPU and the backend's memory at their limits; the Control Delegation alone
-passed at 8000 users using half a core.
+Measured from outside k6 with curl during that step, an edit takes about
+0.9 s (median) and 2.1 s (p95): the server really is saturated. The 8 s
+reported by k6 are higher because k6 itself runs out of CPU at that load:
+decoding about 20000 room updates per second takes it 8 to 12 cores of
+the host and 6 GB of memory. Testing beyond 12000 users needs k6 on
+another machine.
+
+To go further, the server would need fewer queries per action, for
+instance not trying to start playback when a track is already playing,
+or keeping the playback position in memory instead of writing it on
+every seek.
+
+### Optimisations made with the help of this test
+
+The first runs (backend 1.5 vCPU / 1.5 GB, PostgreSQL 0.5 vCPU / 512 MB)
+held 8000 users, limited by the backend's memory: 1.36 GB at 8000 users.
+Three changes followed:
+
+- **WebSocket buffers** of 4 KB instead of 128 KB for reading and for
+  writing, per connection: memory at 8000 users fell from 1.36 GB to
+  about 190 MB.
+- **One JSON serialisation per broadcast** instead of one per member of
+  the room, which saves backend CPU.
+- **At most one password hash per CPU at a time**, so a burst of logins
+  (Argon2 takes about 19 MB per hash) cannot exhaust the memory.
+
+With memory no longer the limit, PostgreSQL's 0.5 vCPU became it, so the
+two were given 1 vCPU and 1 GB each, as both processes would share the
+same cores on a real server. Edits at 8000 users went from 81 ms to
+23 ms (p95), and the capacity from 8000 to 12000 users.
 
 These figures are a little optimistic: a vCPU of the host's i7 is faster
 than a typical shared VPS vCPU, and k6 reaches the server without a real
