@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/audio_service.dart';
@@ -21,8 +20,6 @@ class ThemeController extends ChangeNotifier {
   }
 
   void _onTrackChanged() {
-    if (kIsWeb) return;
-
     final imageUrl = _audioService.currentTrack?.imageUrl;
     final normalized = imageUrl == null || imageUrl.isEmpty ? null : imageUrl;
     if (normalized == _imageUrl) return;
