@@ -1,7 +1,23 @@
-use utoipa::OpenApi;
+use utoipa::{
+    Modify, OpenApi,
+    openapi::{
+        self, ResponseBuilder,
+        security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    },
+};
 
+/// Name of the security scheme of the access token (repeated as a literal in
+/// `#[openapi(security(...))]`, which takes no constant).
+const BEARER_AUTH: &str = "bearer_auth";
+
+/// Every route requires the access token unless its annotation says
+/// `security(())`: the routes of `/auth`, which hand out the tokens, and the
+/// stream relay, whose links carry their own signature. This mirrors where
+/// `auth_middleware` is applied in the routers.
 #[derive(OpenApi)]
 #[openapi(
+    modifiers(&BearerAuth),
+    security(("bearer_auth" = [])),
     paths(
         // Auth endpoints
         crate::handlers::auth::register,
@@ -131,3 +147,94 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+/// Declares the access token as a bearer JWT (the "Authorize" button of the
+/// Swagger UI) and documents the 401 of every route that requires it.
+struct BearerAuth;
+
+impl Modify for BearerAuth {
+    fn modify(&self, openapi: &mut openapi::OpenApi) {
+        openapi
+            .components
+            .get_or_insert_with(Default::default)
+            .add_security_scheme(
+                BEARER_AUTH,
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .description(Some(
+                            "Access token returned by /auth/login, /auth/register, \
+                             /auth/google-login or /auth/refresh",
+                        ))
+                        .build(),
+                ),
+            );
+
+        let unauthorized = ResponseBuilder::new()
+            .description("Missing, invalid or expired access token")
+            .build();
+        for item in openapi.paths.paths.values_mut() {
+            let operations = [
+                &mut item.get,
+                &mut item.put,
+                &mut item.post,
+                &mut item.delete,
+                &mut item.patch,
+            ];
+            for operation in operations.into_iter().flatten() {
+                // No security of its own: the global requirement applies.
+                if operation.security.is_none() {
+                    operation
+                        .responses
+                        .responses
+                        .entry("401".to_string())
+                        .or_insert_with(|| unauthorized.clone().into());
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::{Value, json};
+
+    use super::*;
+
+    fn spec() -> Value {
+        serde_json::to_value(ApiDoc::openapi()).unwrap()
+    }
+
+    #[test]
+    fn the_access_token_is_a_bearer_jwt_required_by_default() {
+        let spec = spec();
+        assert_eq!(
+            spec["components"]["securitySchemes"][BEARER_AUTH]["scheme"],
+            "bearer"
+        );
+        assert_eq!(spec["security"], json!([{ BEARER_AUTH: [] }]));
+    }
+
+    #[test]
+    fn protected_routes_document_the_unauthorized_response() {
+        let spec = spec();
+        let me = &spec["paths"]["/users/me"]["get"];
+        assert!(me.get("security").is_none());
+        assert!(me["responses"].get("401").is_some());
+    }
+
+    #[test]
+    fn public_routes_opt_out_of_the_token() {
+        let spec = spec();
+        for (path, method) in [
+            ("/auth/register", "post"),
+            ("/auth/logout", "post"),
+            ("/hifi/stream/segment", "get"),
+        ] {
+            let operation = &spec["paths"][path][method];
+            assert_eq!(operation["security"], json!([{}]), "{path}");
+            assert!(operation["responses"].get("401").is_none(), "{path}");
+        }
+    }
+}

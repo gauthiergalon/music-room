@@ -54,7 +54,7 @@ pub async fn get_stream_url(
 }
 
 /// An HLS playlist of the provider, with its URLs rewritten to this relay.
-#[utoipa::path(get, path = "/hifi/stream/playlist.m3u8", params(("u" = String, Query), ("exp" = i64, Query), ("sig" = String, Query)), responses((status = 200, content_type = "application/vnd.apple.mpegurl"), (status = 403), (status = 502)), tag = "Hifi")]
+#[utoipa::path(get, path = "/hifi/stream/playlist.m3u8", params(("u" = String, Query), ("exp" = i64, Query), ("sig" = String, Query)), responses((status = 200, content_type = "application/vnd.apple.mpegurl"), (status = 403), (status = 502)), security(()), tag = "Hifi")]
 pub async fn stream_playlist(
     State(state): State<AppState>,
     Query(link): Query<SignedLink>,
@@ -72,7 +72,7 @@ pub async fn stream_playlist(
 }
 
 /// A media segment of the provider, fetched on behalf of the browser.
-#[utoipa::path(get, path = "/hifi/stream/segment", params(("u" = String, Query), ("exp" = i64, Query), ("sig" = String, Query)), responses((status = 200), (status = 206), (status = 403), (status = 502)), tag = "Hifi")]
+#[utoipa::path(get, path = "/hifi/stream/segment", params(("u" = String, Query), ("exp" = i64, Query), ("sig" = String, Query)), responses((status = 200), (status = 206), (status = 403), (status = 502)), security(()), tag = "Hifi")]
 pub async fn stream_segment(
     State(state): State<AppState>,
     Query(link): Query<SignedLink>,

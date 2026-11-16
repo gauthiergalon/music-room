@@ -11,7 +11,7 @@ use crate::{
     validation,
 };
 
-#[utoipa::path(post, path = "/auth/register", request_body = RegisterRequest, responses((status = 201, body = AuthResponse), (status = 409), (status = 422), (status = 429)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/register", request_body = RegisterRequest, responses((status = 201, body = AuthResponse), (status = 409), (status = 422), (status = 429)), security(()), tag = "Auth")]
 pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
@@ -44,7 +44,7 @@ pub async fn register(
     Ok((StatusCode::CREATED, Json(tokens.into())))
 }
 
-#[utoipa::path(post, path = "/auth/login", request_body = LoginRequest, responses((status = 200, body = AuthResponse), (status = 401), (status = 429)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/login", request_body = LoginRequest, responses((status = 200, body = AuthResponse), (status = 401), (status = 429)), security(()), tag = "Auth")]
 pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
@@ -59,7 +59,7 @@ pub async fn login(
 
 /// Ends the session of the given refresh token. No access token is needed:
 /// a client whose access token expired must still be able to log out.
-#[utoipa::path(post, path = "/auth/logout", request_body = LogoutRequest, responses((status = 204)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/logout", request_body = LogoutRequest, responses((status = 204)), security(()), tag = "Auth")]
 pub async fn logout(
     State(state): State<AppState>,
     Json(payload): Json<LogoutRequest>,
@@ -69,7 +69,7 @@ pub async fn logout(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/auth/refresh", request_body = RefreshRequest, responses((status = 200, body = AuthResponse), (status = 401)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/refresh", request_body = RefreshRequest, responses((status = 200, body = AuthResponse), (status = 401)), security(()), tag = "Auth")]
 pub async fn refresh(
     State(state): State<AppState>,
     Json(payload): Json<RefreshRequest>,
@@ -85,7 +85,7 @@ pub async fn refresh(
 /// The answer is always 204 and is sent before anything is looked up: the
 /// work happens in the background, so neither the status nor the response
 /// time tells whether an account exists for that address.
-#[utoipa::path(post, path = "/auth/forgot-password", request_body = ForgotPasswordRequest, responses((status = 204), (status = 422), (status = 429)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/forgot-password", request_body = ForgotPasswordRequest, responses((status = 204), (status = 422), (status = 429)), security(()), tag = "Auth")]
 pub async fn forgot_password(
     State(state): State<AppState>,
     Json(payload): Json<ForgotPasswordRequest>,
@@ -103,7 +103,7 @@ pub async fn forgot_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/auth/reset-password", request_body = ResetPasswordRequest, responses((status = 204), (status = 401), (status = 422)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/reset-password", request_body = ResetPasswordRequest, responses((status = 204), (status = 401), (status = 422)), security(()), tag = "Auth")]
 pub async fn reset_password(
     State(state): State<AppState>,
     Json(payload): Json<ResetPasswordRequest>,
@@ -115,7 +115,7 @@ pub async fn reset_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[utoipa::path(post, path = "/auth/google-login", request_body = GoogleLoginRequest, responses((status = 200, body = AuthResponse), (status = 401), (status = 409), (status = 502)), tag = "Auth")]
+#[utoipa::path(post, path = "/auth/google-login", request_body = GoogleLoginRequest, responses((status = 200, body = AuthResponse), (status = 401), (status = 409), (status = 502)), security(()), tag = "Auth")]
 pub async fn google_login(
     State(state): State<AppState>,
     Json(payload): Json<GoogleLoginRequest>,
