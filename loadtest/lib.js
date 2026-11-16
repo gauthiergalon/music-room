@@ -19,7 +19,7 @@ const JWT_SECRET = __ENV.JWT_SECRET || 'loadtest-secret';
 // ------------------------------------------------------------ load profile
 
 // Number of simultaneous users of each step, e.g. STEPS=500,1000,2000.
-const STEPS = (__ENV.STEPS || '500,1000,2000,3000,5000').split(',').map(Number);
+const STEPS = (__ENV.STEPS || '500,1000,2000,4000,6000,8000').split(',').map(Number);
 const RAMP_SECONDS = 20; // time for a step's new users to join
 const HOLD_SECONDS = Number(__ENV.HOLD || 120); // time the step is measured
 const STEP_SECONDS = RAMP_SECONDS + HOLD_SECONDS;
@@ -32,6 +32,7 @@ const CRITERIA = {
   state_delivery_ms: ['p(95)<300'], // room update reaching every member
 };
 
+// `extraCriteria` may target one kind of request: 'http_req_duration{op:edit}'.
 export function loadProfile(roomSize, extraCriteria = {}) {
   const stages = [];
   const thresholds = {};
@@ -39,8 +40,8 @@ export function loadProfile(roomSize, extraCriteria = {}) {
     const rooms = Math.ceil(users / roomSize);
     stages.push({ duration: `${RAMP_SECONDS}s`, target: rooms });
     stages.push({ duration: `${HOLD_SECONDS}s`, target: rooms });
-    for (const [metric, rules] of Object.entries({ ...CRITERIA, ...extraCriteria })) {
-      thresholds[`${metric}{step:${users}}`] = rules;
+    for (const [key, rules] of Object.entries({ ...CRITERIA, ...extraCriteria })) {
+      thresholds[withStep(key, users)] = rules;
     }
   }
   return {
@@ -48,6 +49,12 @@ export function loadProfile(roomSize, extraCriteria = {}) {
     thresholds,
     summaryTrendStats: ['avg', 'med', 'p(95)', 'p(99)', 'max'],
   };
+}
+
+// 'http_req_duration{op:edit}' -> 'http_req_duration{step:2000,op:edit}'
+export function withStep(key, users) {
+  const [metric, tags] = key.split('{');
+  return tags ? `${metric}{step:${users},${tags}` : `${metric}{step:${users}}`;
 }
 
 function elapsedSeconds() {
@@ -106,13 +113,14 @@ export function roomMembers(roomSize) {
 // ------------------------------------------------------------ actions
 
 // Calls the API as `user`. Asynchronous, so the other members of the room
-// keep receiving their messages meanwhile.
-export async function api(user, method, path, body) {
+// keep receiving their messages meanwhile. `op` names the kind of request
+// in the results (edit, delegate...).
+export async function api(user, method, path, body, op = 'other') {
   const step = currentStep();
   const res = await http.asyncRequest(method, `${BASE_URL}${path}`,
     body === undefined ? null : JSON.stringify(body), {
       headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' },
-      tags: { step },
+      tags: { step, op },
       // 404/409/422: another user changed the same thing first. Expected
       // with concurrent users, and not a failure of the server.
       responseCallback: http.expectedStatuses({ min: 200, max: 299 }, 404, 409, 422),
@@ -178,11 +186,11 @@ export function stepReport(scenario, data, columns) {
   const header = ['Users', 'Verdict', ...columns.map((c) => c.title)];
   const rows = STEPS.map((users) => {
     const failed = Object.entries(data.metrics)
-      .filter(([name]) => name.endsWith(`{step:${users}}`))
+      .filter(([name]) => name.includes(`{step:${users},`) || name.includes(`{step:${users}}`))
       .flatMap(([name, metric]) => Object.entries(metric.thresholds || {})
         .filter(([, result]) => !result.ok)
         .map(([rule]) => `${name.split('{')[0]} ${rule}`));
-    const cells = columns.map((c) => c.format(value(`${c.metric}{step:${users}}`, c.stat)));
+    const cells = columns.map((c) => c.format(value(withStep(c.metric, users), c.stat)));
     return [String(users), failed.length ? `FAIL: ${failed.join(', ')}` : 'PASS', ...cells];
   });
 

@@ -44,6 +44,11 @@ services:
     command: ["python", "-u", "/app/server.py"]
     volumes:
       - ./mock-provider:/app:ro,Z
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/info/?id=1')"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
   backend:
     <<: *many-connections
@@ -59,7 +64,7 @@ services:
       postgres:
         condition: service_healthy
       mock-provider:
-        condition: service_started
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -76,8 +81,21 @@ services:
     environment:
       BASE_URL: http://backend:3000
       JWT_SECRET: loadtest-secret
-      # Saves k6's dashboard as an HTML report at the end (no live server).
+      # k6's live dashboard (reached through "dashboard" below); run.sh also
+      # saves it as an HTML report at the end.
       K6_WEB_DASHBOARD: "true"
-      K6_WEB_DASHBOARD_PORT: "-1"
+      K6_WEB_DASHBOARD_HOST: 0.0.0.0
+      K6_WEB_DASHBOARD_PORT: "5665"
     volumes:
       - ./:/loadtest:Z
+
+  # Live dashboard on http://localhost:5665 while the test runs.
+  # k6 only exits once every open dashboard page has disconnected, so the
+  # page reaches k6 through this relay, which run.sh stops at the end of the
+  # test: the page disconnects and k6 can write its results.
+  dashboard:
+    image: alpine/socat:1.8.1.3
+    profiles: ["run"]
+    command: ["TCP-LISTEN:5665,fork,reuseaddr", "TCP:loadtest-k6:5665"]
+    ports:
+      - "127.0.0.1:5665:5665"

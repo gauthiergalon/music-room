@@ -156,8 +156,7 @@ success criteria and results: [loadtest/README.md](loadtest/README.md).
 
 ```bash
 cd loadtest
-./run.sh playlist
-./run.sh delegation
+./run.sh        # live charts on http://localhost:5665
 ```
 
 ## Backend Structure
