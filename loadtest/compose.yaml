@@ -1,0 +1,83 @@
+# Isolated stack for the load tests: its own throwaway database (in memory),
+# a stand-in for the music provider, and a backend capped like a low-end
+# server. Nothing here touches the development stack or its data.
+#
+# The backend and PostgreSQL share the equivalent of a 2 vCPU / 2 GB VPS:
+# 1.5 vCPU + 1.5 GB for the backend, 0.5 vCPU + 512 MB for the database.
+#
+# Every connection is a file descriptor. Docker's default limit (1024 per
+# process) would cap the test at about a thousand users whatever the
+# hardware, so it is raised like on any server meant to hold many sockets.
+name: music-room-loadtest
+
+x-many-connections: &many-connections
+  ulimits:
+    nofile:
+      soft: 65536
+      hard: 65536
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: loadtest
+      POSTGRES_PASSWORD: loadtest
+      POSTGRES_DB: musicroom
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loadtest -d musicroom"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # Answers like the HiFi API, instantly: the test measures our backend, not
+  # the provider, and must not send thousands of requests to the real one.
+  mock-provider:
+    <<: *many-connections
+    image: python:3.13-alpine
+    command: ["python", "-u", "/app/server.py"]
+    volumes:
+      - ./mock-provider:/app:ro,Z
+
+  backend:
+    <<: *many-connections
+    build: ../backend
+    environment:
+      DATABASE_URL: postgres://loadtest:loadtest@postgres:5432/musicroom
+      JWT_SECRET: loadtest-secret
+      GOOGLE_CLIENT_ID: loadtest
+      HIFI_API_HOST: mock-provider:8000
+    ports:
+      - "127.0.0.1:3100:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mock-provider:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1536M
+
+  k6:
+    <<: *many-connections
+    image: grafana/k6:2.2.0
+    profiles: ["run"]
+    # Writes the results as the user running run.sh.
+    user: "${LOADTEST_UID:-1000}:${LOADTEST_GID:-1000}"
+    working_dir: /loadtest
+    environment:
+      BASE_URL: http://backend:3000
+      JWT_SECRET: loadtest-secret
+      # Saves k6's dashboard as an HTML report at the end (no live server).
+      K6_WEB_DASHBOARD: "true"
+      K6_WEB_DASHBOARD_PORT: "-1"
+    volumes:
+      - ./:/loadtest:Z

@@ -150,12 +150,15 @@ flutter test
 
 ### Load test
 
-```bash
-docker compose -f docker-compose.yaml -f docker-compose.loadtest.yml --profile testing up
-```
+How many people can use the Playlist Editor and the Control Delegation at
+the same time, on a backend capped like a 2 vCPU / 2 GB server. Method,
+success criteria and results: [loadtest/README.md](loadtest/README.md).
 
-The scenario registers many users from one address: set
-`AUTH_RATE_LIMIT_PER_MINUTE=0` in `.env` for the run.
+```bash
+cd loadtest
+./run.sh playlist
+./run.sh delegation
+```
 
 ## Backend Structure
 
