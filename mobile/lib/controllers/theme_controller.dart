@@ -21,15 +21,11 @@ class ThemeController extends ChangeNotifier {
 
   void _onTrackChanged() {
     final imageUrl = _audioService.currentTrack?.imageUrl;
-    final normalized = imageUrl == null || imageUrl.isEmpty ? null : imageUrl;
-    if (normalized == _imageUrl) return;
-    _imageUrl = normalized;
-
-    if (normalized == null) {
-      _updateSeedColor(_defaultSeedColor);
-    } else {
-      _extractColorFromImage(normalized);
-    }
+    // Nothing playing any more (room left, queue finished): keep the colour
+    // of the last track, including one still being computed.
+    if (imageUrl == null || imageUrl.isEmpty || imageUrl == _imageUrl) return;
+    _imageUrl = imageUrl;
+    _extractColorFromImage(imageUrl);
   }
 
   Future<void> _extractColorFromImage(String imageUrl) async {
