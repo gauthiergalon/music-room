@@ -172,15 +172,10 @@ class AuthController extends ChangeNotifier {
     return value == null || value.isEmpty ? null : value;
   }
 
-  /// Runs the Google sign-in flow and returns the Google ID token.
-  Future<String> _googleIdToken() async {
-    if (kIsWeb) {
-      throw ApiException(
-        'Google sign-in is not available in the browser. '
-        'Use your email and password.',
-      );
-    }
-
+  /// Initializes Google sign-in, once. On the web the client ID is the app's
+  /// own; elsewhere it is passed as the server's. Either way the ID tokens
+  /// are issued for that client, the audience the backend expects.
+  Future<void> ensureGoogleInitialized() async {
     final clientId = _googleClientId;
     if (clientId == null) {
       throw ApiException('Google sign-in is not configured.');
@@ -188,13 +183,38 @@ class AuthController extends ChangeNotifier {
 
     try {
       await (_googleInit ??= GoogleSignIn.instance.initialize(
-        serverClientId: clientId,
+        clientId: kIsWeb ? clientId : null,
+        serverClientId: kIsWeb ? null : clientId,
       ));
     } catch (e) {
       _googleInit = null;
       rethrow;
     }
+  }
 
+  /// ID tokens of the sign-ins made with Google's own button, the only way
+  /// to sign in with Google on the web. Failures arrive as stream errors.
+  Stream<String> get googleButtonIdTokens => GoogleSignIn
+      .instance
+      .authenticationEvents
+      .map(
+        (event) => switch (event) {
+          GoogleSignInAuthenticationEventSignIn(:final user) =>
+            user.authentication.idToken,
+          GoogleSignInAuthenticationEventSignOut() => null,
+        },
+      )
+      .where((idToken) => idToken != null)
+      .cast<String>();
+
+  /// Runs the Google sign-in flow and returns the Google ID token. Not
+  /// available on the web, where the token comes from Google's button.
+  Future<String> _googleIdToken() async {
+    if (kIsWeb) {
+      throw ApiException('Use the Google button to sign in with Google.');
+    }
+
+    await ensureGoogleInitialized();
     final account = await GoogleSignIn.instance.authenticate(
       scopeHint: ['email', 'profile'],
     );
@@ -205,12 +225,14 @@ class AuthController extends ChangeNotifier {
     return idToken;
   }
 
-  Future<void> loginWithGoogle() async {
+  /// Logs in with Google. [idToken] is given when Google's button already
+  /// produced it (web); otherwise the sign-in flow runs first.
+  Future<void> loginWithGoogle({String? idToken}) async {
     try {
-      final idToken = await _googleIdToken();
+      final token = idToken ?? await _googleIdToken();
       final data = await ApiClient.post(
         '/auth/google-login',
-        body: {'id_token': idToken},
+        body: {'id_token': token},
       );
       await _storeAuthenticatedSession(Map<String, dynamic>.from(data as Map));
     } on ApiException {
@@ -222,12 +244,13 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Links a Google account to the account that is currently logged in.
-  Future<void> linkGoogleAccount() async {
+  /// [idToken] as for [loginWithGoogle].
+  Future<void> linkGoogleAccount({String? idToken}) async {
     try {
-      final idToken = await _googleIdToken();
+      final token = idToken ?? await _googleIdToken();
       final data = await ApiClient.post(
         '/users/me/google',
-        body: {'id_token': idToken},
+        body: {'id_token': token},
       );
       _setUserFrom(data);
     } on ApiException {

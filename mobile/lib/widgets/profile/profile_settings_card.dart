@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import '../../core/exceptions/api_exception.dart';
 import '../../core/utils/ui_utils.dart';
 import '../../models/user.dart';
 import '../../screens/friends_page.dart';
+import '../google/google_web_sign_in.dart';
 import 'profile_action.dart';
 
 /// Friends, email verification, Google link and subscription.
@@ -75,15 +77,35 @@ class ProfileSettingsCard extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.account_circle_outlined),
             title: const Text('Google Account'),
-            subtitle: Text(
-              user.googleLinked
-                  ? 'Linked to Google'
-                  : 'Tap to link your Google account',
-            ),
+            subtitle: user.googleLinked
+                ? const Text('Linked to Google')
+                : kIsWeb
+                // On the web, Google only signs in through its own button.
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Link it to sign in with Google'),
+                      const SizedBox(height: 10),
+                      GoogleWebSignIn(
+                        alignment: AlignmentDirectional.centerStart,
+                        compact: true,
+                        onIdToken: (idToken) => context
+                            .read<AuthController>()
+                            .linkGoogleAccount(idToken: idToken),
+                        successMessage: 'Google account linked successfully!',
+                        fallbackError:
+                            'An unexpected error occurred while linking Google.',
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  )
+                : const Text('Tap to link your Google account'),
             trailing: user.googleLinked
-                ? const Icon(Icons.check_circle)
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : kIsWeb
+                ? null
                 : const Icon(Icons.link),
-            onTap: user.googleLinked
+            onTap: user.googleLinked || kIsWeb
                 ? null
                 : () => runProfileAction(
                     context,

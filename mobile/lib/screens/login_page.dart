@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../controllers/auth_controller.dart';
 import '../core/exceptions/api_exception.dart';
 import '../core/utils/ui_utils.dart';
+import '../widgets/google/google_web_sign_in.dart';
 import 'package:mobile/core/theme.dart';
 
 class LoginPage extends StatefulWidget {
@@ -232,10 +233,11 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 24),
                 if (kIsWeb)
-                  const Text(
-                    'Google Sign-In requires the mobile app',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey),
+                  GoogleWebSignIn(
+                    onIdToken: (idToken) => context
+                        .read<AuthController>()
+                        .loginWithGoogle(idToken: idToken),
+                    fallbackError: 'Google sign-in failed.',
                   )
                 else
                   SizedBox(
