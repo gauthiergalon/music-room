@@ -1,11 +1,11 @@
-name: Backend
+name: Server
 
 on:
   push:
     branches: [main, dev]
-    paths: ["backend/**", ".github/workflows/backend.yaml"]
+    paths: ["server/**", ".github/workflows/server.yaml"]
   pull_request:
-    paths: ["backend/**", ".github/workflows/backend.yaml"]
+    paths: ["server/**", ".github/workflows/server.yaml"]
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
+        working-directory: server
 
     services:
       postgres:
@@ -44,7 +44,7 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: backend
+          workspaces: server
 
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings

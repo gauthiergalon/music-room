@@ -13,7 +13,7 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build: ./server
     ports:
       - "3000:3000"
     env_file: .env

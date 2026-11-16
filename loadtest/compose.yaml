@@ -47,7 +47,7 @@ services:
 
   backend:
     <<: *many-connections
-    build: ../backend
+    build: ../server
     environment:
       DATABASE_URL: postgres://loadtest:loadtest@postgres:5432/musicroom
       JWT_SECRET: loadtest-secret

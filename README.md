@@ -6,8 +6,8 @@ Real-time collaborative music room application.
 
 ```
 music-room/
-├── backend/          # REST API + WebSocket (Rust + Axum)
-├── mobile/           # Flutter Application (iOS, Android, Web)
+├── server/           # REST API + WebSocket (Rust + Axum)
+├── client/           # Flutter app (Android, iOS, web, Linux, Windows)
 └── docker-compose.yaml
 ```
 
@@ -98,21 +98,21 @@ Available services:
 - **Mailhog** (email testing): http://localhost:8025
 - **HiFi API**: localhost:8000
 
-The backend applies the SQL migrations in `backend/migrations/` when it starts,
+The backend applies the SQL migrations in `server/migrations/` when it starts,
 on a fresh database as well as on an existing one. To change the schema, add a
 new numbered file; never edit a migration that has already been applied.
 
 ### Local Backend
 
 ```bash
-cd backend
+cd server
 cargo run
 ```
 
 ### Mobile
 
 ```bash
-cd mobile
+cd client
 cp .env.example .env   # backend URL and Google client ID
 flutter pub get
 flutter run
@@ -128,7 +128,7 @@ exists (see the comment in `mobile/android/app/build.gradle.kts`).
 The tests need a PostgreSQL server; each test creates its own database on it.
 
 ```bash
-cd backend
+cd server
 DATABASE_URL=postgres://user:password@localhost:5432/postgres cargo test
 ```
 
@@ -143,7 +143,7 @@ cargo sqlx prepare -- --all-targets
 ### Mobile
 
 ```bash
-cd mobile
+cd client
 flutter analyze
 flutter test
 ```
@@ -163,7 +163,7 @@ cd loadtest
 ## Backend Structure
 
 ```
-backend/src/
+server/src/
 ├── handlers/     # HTTP/WebSocket handlers
 ├── models/       # Data models
 ├── repositories/ # Data access

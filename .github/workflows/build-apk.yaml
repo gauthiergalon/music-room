@@ -3,9 +3,9 @@ name: Build APK
 on:
   push:
     branches: [main, dev]
-    paths: ["mobile/**", ".github/workflows/build-apk.yaml"]
+    paths: ["client/**", ".github/workflows/build-apk.yaml"]
   pull_request:
-    paths: ["mobile/**", ".github/workflows/build-apk.yaml"]
+    paths: ["client/**", ".github/workflows/build-apk.yaml"]
   workflow_dispatch:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mobile
+        working-directory: client
     steps:
       - uses: actions/checkout@v4
 
@@ -46,5 +46,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          path: client/build/app/outputs/flutter-apk/app-release.apk
           retention-days: 14
