@@ -3,6 +3,10 @@ import '../models/track.dart';
 /// Playback state of a room as last announced by the server.
 class RoomPlaybackState {
   final Track? track;
+
+  /// Queue entry [track] was played from: identifies this playback even when
+  /// the same track is queued several times. Sent back with NextTrack.
+  final String? itemId;
   final bool isPlaying;
 
   /// Position of the track, in milliseconds, at [timestamp].
@@ -13,6 +17,7 @@ class RoomPlaybackState {
 
   const RoomPlaybackState({
     required this.track,
+    this.itemId,
     required this.isPlaying,
     required this.positionMs,
     required this.timestamp,
@@ -25,6 +30,7 @@ class RoomPlaybackState {
   }) {
     return RoomPlaybackState(
       track: track,
+      itemId: itemId,
       isPlaying: isPlaying ?? this.isPlaying,
       positionMs: positionMs ?? this.positionMs,
       timestamp: timestamp ?? this.timestamp,

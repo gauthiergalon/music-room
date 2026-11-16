@@ -77,7 +77,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   int? _loadedTrackId;
   int? _loadingTrackId;
 
-  /// Identifies the playback (track + start instant) NextTrack was last
+  /// Identifies the playback (queue entry + start instant) NextTrack was last
   /// requested for, so it is requested once.
   String? _nextTrackRequestedFor;
 
@@ -328,6 +328,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
     _target = RoomPlaybackState(
       track: track,
+      itemId: track == null ? null : payload['current_item_id']?.toString(),
       isPlaying: isPlaying,
       positionMs: (payload['current_position'] as num?)?.toInt() ?? 0,
       timestamp: _parseTime(payload['timestamp']) ?? _clock.now(receivedAt),
@@ -507,13 +508,17 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   /// device that controls the room.
   void _requestNextTrackOnce() {
     final trackId = _loadedTrackId;
-    if (trackId == null || !canControl) return;
+    final target = _target;
+    if (trackId == null || target == null || !canControl) return;
+    // The room already moved to another track: the server would ignore it.
+    if (target.track?.id != trackId) return;
 
-    final key = '$trackId@${_target?.timestamp.toIso8601String()}';
+    final itemId = target.itemId;
+    final key = '$itemId@${target.timestamp.toIso8601String()}';
     if (_nextTrackRequestedFor == key) return;
     _nextTrackRequestedFor = key;
 
-    _ws.send(_eventNextTrack, {'track_id': trackId});
+    _ws.send(_eventNextTrack, {'item_id': itemId});
   }
 
   /// Position to report with a play/pause command.
@@ -577,7 +582,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void skipNext() {
     if (!canControl) return;
-    _ws.send(_eventNextTrack, {'track_id': currentTrack?.id});
+    _ws.send(_eventNextTrack, {'item_id': _target?.itemId});
   }
 
   void skipPrev() => seekTo(Duration.zero);

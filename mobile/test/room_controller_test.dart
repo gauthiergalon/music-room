@@ -189,6 +189,7 @@ void main() {
 
   Map<String, dynamic> roomState({
     int? trackId = 1,
+    String? itemId,
     bool isPlaying = true,
     int positionMs = 0,
     DateTime? timestamp,
@@ -196,6 +197,7 @@ void main() {
     int? withVersion,
   }) => {
     'current_track': trackId == null ? null : _trackJson(trackId),
+    'current_item_id': trackId == null ? null : (itemId ?? 'item-$trackId'),
     'version': withVersion ?? ++version,
     'is_playing': isPlaying,
     'current_position': positionMs,
@@ -387,7 +389,25 @@ void main() {
       engine.finishTrack();
 
       expect(socket.sentOf('NextTrack'), [
-        {'track_id': 1},
+        {'item_id': 'item-1'},
+      ]);
+    });
+
+    test('a track queued twice in a row is skipped once per entry', () async {
+      await join();
+      socket.emit('RoomState', roomState(trackId: 1, itemId: 'first'));
+      await settle();
+
+      engine.finishTrack();
+      // Both entries play the same track: only the identifier tells them apart.
+      now = t0.add(const Duration(minutes: 3));
+      socket.emit('RoomState', roomState(trackId: 1, itemId: 'second'));
+      await settle();
+      engine.finishTrack();
+
+      expect(socket.sentOf('NextTrack'), [
+        {'item_id': 'first'},
+        {'item_id': 'second'},
       ]);
     });
 
@@ -429,7 +449,7 @@ void main() {
         socket.emit('RoomState', roomState(trackId: 1, timestamp: t0));
 
         expect(socket.sentOf('NextTrack'), [
-          {'track_id': 1},
+          {'item_id': 'item-1'},
         ]);
       },
     );
@@ -553,7 +573,7 @@ void main() {
 
       expect(socket.sent, [
         {
-          'NextTrack': {'track_id': 1},
+          'NextTrack': {'item_id': 'item-1'},
         },
       ]);
     });
@@ -674,7 +694,7 @@ void main() {
       controller.skipNext();
 
       expect(socket.sentOf('NextTrack'), [
-        {'track_id': 1},
+        {'item_id': 'item-1'},
       ]);
     });
   });
