@@ -50,6 +50,9 @@ dependencies:
   google_sign_in_android: ^7.2.15
   shared_preferences_android: ^2.4.27
   flutter_dotenv: ^6.0.1
+  just_audio_media_kit: ^2.1.0
+  media_kit_libs_linux: ^1.2.1
+  media_kit_libs_windows_audio: ^1.0.9
 
 dev_dependencies:
   flutter_test:

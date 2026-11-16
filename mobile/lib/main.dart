@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +25,11 @@ import 'screens/reset_password_page.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+bool get _isDesktop =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.linux ||
+        defaultTargetPlatform == TargetPlatform.windows);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -32,11 +39,22 @@ Future<void> main() async {
 
   await ApiClient.init();
 
-  await JustAudioBackground.init(
-    androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
-    androidNotificationChannelName: 'Music Room Playback',
-    androidNotificationOngoing: true,
-  );
+  if (_isDesktop) {
+    // just_audio has no Linux/Windows implementation of its own: playback
+    // goes through libmpv. There are no background controls on desktop.
+    try {
+      JustAudioMediaKit.ensureInitialized();
+    } catch (e) {
+      // libmpv is not installed: the app still works, without playback.
+      logger.error('Audio playback unavailable: libmpv not found', error: e);
+    }
+  } else {
+    await JustAudioBackground.init(
+      androidNotificationChannelId: 'com.music_room.bg_audio.channel.audio',
+      androidNotificationChannelName: 'Music Room Playback',
+      androidNotificationOngoing: true,
+    );
+  }
 
   logger.info('App started');
 
