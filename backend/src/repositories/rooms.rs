@@ -175,18 +175,19 @@ pub async fn update_playback_seek(
 /// pauses when the queue is empty. Runs in one transaction with the room row
 /// locked, so two concurrent calls cannot skip two tracks.
 ///
-/// `expected_current` is the track the caller believes is current (`None` =
-/// nothing playing). Returns `false` and changes nothing when the room has
-/// moved on, which makes a duplicated or late request a no-op.
+/// `expected_item` is the queue entry the caller believes is playing (`None` =
+/// nothing playing). Entries are unique even when a track is queued several
+/// times. Returns `false` and changes nothing when the room has moved on,
+/// which makes a duplicated or late request a no-op.
 pub async fn advance_track(
     pool: &PgPool,
     room_id: Uuid,
-    expected_current: Option<i64>,
+    expected_item: Option<Uuid>,
 ) -> Result<bool, AppError> {
     let mut tx = pool.begin().await?;
 
-    let Some(current_track) = sqlx::query_scalar!(
-        "SELECT current_track FROM rooms WHERE id = $1 FOR UPDATE",
+    let Some(current_item) = sqlx::query_scalar!(
+        "SELECT current_item FROM rooms WHERE id = $1 FOR UPDATE",
         room_id
     )
     .fetch_optional(&mut *tx)
@@ -195,26 +196,27 @@ pub async fn advance_track(
         return Ok(false);
     };
 
-    if current_track != expected_current {
+    if current_item != expected_item {
         return Ok(false);
     }
 
-    let next_track = sqlx::query_scalar!(
+    let next = sqlx::query!(
         r#"
         DELETE FROM queue
         WHERE id = (SELECT id FROM queue WHERE room_id = $1 ORDER BY position ASC LIMIT 1)
-        RETURNING track_id
+        RETURNING id, track_id
         "#,
         room_id
     )
     .fetch_optional(&mut *tx)
     .await?;
 
-    match next_track {
-        Some(track_id) => {
+    match next {
+        Some(next) => {
             sqlx::query!(
-                "UPDATE rooms SET current_track = $1, played_at = now(), current_position = 0, is_playing = true WHERE id = $2",
-                track_id,
+                "UPDATE rooms SET current_track = $1, current_item = $2, played_at = now(), current_position = 0, is_playing = true WHERE id = $3",
+                next.track_id,
+                next.id,
                 room_id
             )
             .execute(&mut *tx)
@@ -222,7 +224,7 @@ pub async fn advance_track(
         }
         None => {
             sqlx::query!(
-                "UPDATE rooms SET current_track = NULL, played_at = now(), current_position = 0, is_playing = false WHERE id = $1",
+                "UPDATE rooms SET current_track = NULL, current_item = NULL, played_at = now(), current_position = 0, is_playing = false WHERE id = $1",
                 room_id
             )
             .execute(&mut *tx)
@@ -236,6 +238,7 @@ pub async fn advance_track(
 
 pub struct RoomPlaybackState {
     pub current_track: Option<i64>,
+    pub current_item: Option<Uuid>,
     pub is_playing: bool,
     pub current_position: i32,
     pub played_at: Option<DateTime<Utc>>,
@@ -254,7 +257,7 @@ pub async fn get_room_playback_state(
     let state = sqlx::query_as!(
         RoomPlaybackState,
         r#"
-        SELECT r.current_track, r.is_playing, r.current_position, r.played_at,
+        SELECT r.current_track, r.current_item, r.is_playing, r.current_position, r.played_at,
                t.title AS "title?", t.artist AS "artist?", t.album AS "album?",
                t.cover AS "cover?", t.duration AS "duration?"
         FROM rooms r

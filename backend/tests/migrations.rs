@@ -26,10 +26,12 @@ async fn migrations_upgrade_a_legacy_database_and_keep_its_data(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::query("INSERT INTO rooms (owner_id, name) SELECT id, 'legacy room' FROM users")
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query(
+        "INSERT INTO rooms (owner_id, name, current_track) SELECT id, 'legacy room', 7 FROM users",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     assert!(!column_exists(&pool, "rooms", "last_active_at").await);
 
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
@@ -40,6 +42,13 @@ async fn migrations_upgrade_a_legacy_database_and_keep_its_data(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(rooms, 1);
+    // The track that was playing gets a playback identifier.
+    let has_item: bool =
+        sqlx::query_scalar("SELECT current_item IS NOT NULL FROM rooms WHERE name = 'legacy room'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(has_item);
 
     // Starting the server a second time is a no-op.
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();

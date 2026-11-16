@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT current_track FROM rooms WHERE id = $1 FOR UPDATE",
+  "query": "SELECT current_item FROM rooms WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "current_track",
-        "type_info": "Int8"
+        "name": "current_item",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -18,5 +18,5 @@
       true
     ]
   },
-  "hash": "62c3b921ec0defbc7e9891b6ec32fe120a2b916b7ea3630b673c2fddc1063f47"
+  "hash": "0a3e031213aff04df487497767f46155ccfd50c6989817b0ada4e23e90c6e85b"
 }

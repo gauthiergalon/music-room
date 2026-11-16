@@ -243,8 +243,8 @@ async fn handle_client_event(state: &AppState, room_id: Uuid, event: WsEventClie
         WsEventClient::SeekTo { position } => {
             rooms_repo::update_playback_seek(pool, room_id, position.max(0)).await
         }
-        WsEventClient::NextTrack { track_id } => {
-            match rooms_repo::advance_track(pool, room_id, track_id).await {
+        WsEventClient::NextTrack { item_id } => {
+            match rooms_repo::advance_track(pool, room_id, item_id).await {
                 // A stale or duplicated request: nothing changed, nothing to announce.
                 Ok(false) => return,
                 other => other.map(|_| ()),

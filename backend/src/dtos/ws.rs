@@ -34,12 +34,13 @@ pub enum WsEventClient {
     SeekTo {
         position: i32,
     },
-    /// `track_id` is the track the client believes is current (`null` if none).
-    /// The event is ignored when it does not match the room, which makes a
-    /// repeated or late `NextTrack` harmless.
+    /// `item_id` is the queue entry the client believes is playing
+    /// (`current_item_id` of the room state, `null` if none). The event is
+    /// ignored when it does not match the room, which makes a repeated or late
+    /// `NextTrack` harmless, even when the same track is queued twice in a row.
     NextTrack {
         #[serde(default)]
-        track_id: Option<i64>,
+        item_id: Option<Uuid>,
     },
 }
 
@@ -53,6 +54,9 @@ pub enum WsEventServer {
     },
     RoomState {
         current_track: Option<TrackItem>,
+        /// Identifies this playback of `current_track`: the queue entry it
+        /// came from. To send back with `NextTrack`.
+        current_item_id: Option<Uuid>,
         /// Increases with every state of a room; restarts when the room is
         /// re-activated, so clients reset it when they (re)connect.
         version: u64,

@@ -34,6 +34,10 @@ fn track_id(room_state: &Value) -> Option<i64> {
     room_state["current_track"]["id"].as_i64()
 }
 
+fn item_id(room_state: &Value) -> Value {
+    room_state["current_item_id"].clone()
+}
+
 fn queue_ids(room_state: &Value) -> Vec<i64> {
     room_state["queue"]
         .as_array()
@@ -390,13 +394,13 @@ async fn next_track_is_idempotent(pool: PgPool) {
     // Two devices of the owner both notice that track 31 ended.
     let (mut phone, _) = connect(&server, &owner, room_id).await;
     let (mut laptop, _) = connect(&server, &owner, room_id).await;
-    assert_eq!(
-        track_id(&next_of_type(&mut phone, "RoomState").await),
-        Some(31)
-    );
+    let state = next_of_type(&mut phone, "RoomState").await;
+    assert_eq!(track_id(&state), Some(31));
+    let playing = item_id(&state);
+    assert!(playing.is_string());
 
-    send_event(&mut phone, "NextTrack", json!({ "track_id": 31 })).await;
-    send_event(&mut laptop, "NextTrack", json!({ "track_id": 31 })).await;
+    send_event(&mut phone, "NextTrack", json!({ "item_id": playing })).await;
+    send_event(&mut laptop, "NextTrack", json!({ "item_id": playing })).await;
 
     let state = next_of_type(&mut phone, "RoomState").await;
     assert_eq!(track_id(&state), Some(32));
@@ -404,6 +408,44 @@ async fn next_track_is_idempotent(pool: PgPool) {
 
     // The duplicate changed nothing: no second state follows.
     expect_no_event_of_type(&mut phone, "RoomState", Duration::from_millis(300)).await;
+}
+
+#[sqlx::test]
+async fn next_track_skips_one_entry_of_a_track_queued_twice_in_a_row(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.ws_server();
+    let owner = register(&server, "owner").await;
+    let room_id = create_room(&server, &owner).await;
+    for id in [35, 35, 36] {
+        add_track(&server, &owner, room_id, id).await;
+    }
+
+    let (mut phone, _) = connect(&server, &owner, room_id).await;
+    let (mut laptop, _) = connect(&server, &owner, room_id).await;
+    let state = next_of_type(&mut phone, "RoomState").await;
+    assert_eq!(track_id(&state), Some(35));
+    assert_eq!(queue_ids(&state), vec![35, 36]);
+    let first = item_id(&state);
+
+    send_event(&mut phone, "NextTrack", json!({ "item_id": first })).await;
+    send_event(&mut laptop, "NextTrack", json!({ "item_id": first })).await;
+
+    // The second entry of the same track plays: one skip only.
+    let state = next_of_type(&mut phone, "RoomState").await;
+    assert_eq!(track_id(&state), Some(35));
+    assert_eq!(queue_ids(&state), vec![36]);
+    assert_ne!(item_id(&state), first);
+    expect_no_event_of_type(&mut phone, "RoomState", Duration::from_millis(300)).await;
+
+    // Skipping that second entry by its own identifier works.
+    send_event(
+        &mut phone,
+        "NextTrack",
+        json!({ "item_id": item_id(&state) }),
+    )
+    .await;
+    let state = next_of_type(&mut phone, "RoomState").await;
+    assert_eq!(track_id(&state), Some(36));
 }
 
 #[sqlx::test]
@@ -415,15 +457,19 @@ async fn next_track_on_an_empty_queue_clears_the_current_track(pool: PgPool) {
     add_track(&server, &owner, room_id, 41).await;
 
     let (mut socket, _) = connect(&server, &owner, room_id).await;
-    assert_eq!(
-        track_id(&next_of_type(&mut socket, "RoomState").await),
-        Some(41)
-    );
+    let state = next_of_type(&mut socket, "RoomState").await;
+    assert_eq!(track_id(&state), Some(41));
 
-    send_event(&mut socket, "NextTrack", json!({ "track_id": 41 })).await;
+    send_event(
+        &mut socket,
+        "NextTrack",
+        json!({ "item_id": item_id(&state) }),
+    )
+    .await;
 
     let state = next_of_type(&mut socket, "RoomState").await;
     assert_eq!(state["current_track"], Value::Null);
+    assert_eq!(state["current_item_id"], Value::Null);
     assert_eq!(state["is_playing"], false);
 
     // A later track starts on its own again.
@@ -483,10 +529,15 @@ async fn listeners_cannot_control_playback(pool: PgPool) {
 
     let (mut owner_socket, _) = connect(&server, &owner, room_id).await;
     let (mut listener_socket, _) = connect(&server, &listener, room_id).await;
-    next_of_type(&mut owner_socket, "RoomState").await;
+    let state = next_of_type(&mut owner_socket, "RoomState").await;
 
     send_event(&mut listener_socket, "Pause", json!({ "position": 5_000 })).await;
-    send_event(&mut listener_socket, "NextTrack", json!({ "track_id": 61 })).await;
+    send_event(
+        &mut listener_socket,
+        "NextTrack",
+        json!({ "item_id": item_id(&state) }),
+    )
+    .await;
     // Garbage is ignored too, and does not drop the connection.
     listener_socket.send_text("not json").await;
 
