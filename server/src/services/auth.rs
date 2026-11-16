@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
@@ -5,6 +7,7 @@ use argon2::{
 use chrono::{TimeDelta, Utc};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use sqlx::PgPool;
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::{
@@ -30,11 +33,26 @@ use crate::{
 /// Access and refresh token of a session.
 pub type Tokens = (String, String);
 
-/// Argon2 is deliberately slow; run it off the async workers so one login
-/// cannot stall every other request.
+/// Argon2 is deliberately slow and takes about 19 MB of memory per hash.
+/// Hashes run off the async workers, so one login cannot stall every other
+/// request, and at most one per CPU at a time: a burst of logins queues up
+/// instead of running hundreds of hashes at once and exhausting the memory.
+static HASHING: LazyLock<Semaphore> = LazyLock::new(|| {
+    Semaphore::new(std::thread::available_parallelism().map_or(2, |cpus| cpus.get()))
+});
+
+async fn run_argon2<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, AppError> + Send + 'static,
+) -> Result<T, AppError> {
+    let _permit = HASHING.acquire().await.map_err(|_| AppError::Internal)?;
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|_| AppError::Internal)?
+}
+
 pub async fn hash_password(password: &str) -> Result<String, AppError> {
     let password = password.to_owned();
-    tokio::task::spawn_blocking(move || {
+    run_argon2(move || {
         let salt = SaltString::generate(&mut OsRng);
         Argon2::default()
             .hash_password(password.as_bytes(), &salt)
@@ -42,19 +60,17 @@ pub async fn hash_password(password: &str) -> Result<String, AppError> {
             .map_err(|_| AppError::Internal)
     })
     .await
-    .map_err(|_| AppError::Internal)?
 }
 
 pub async fn verify_password(password: &str, hash: &str) -> Result<(), AppError> {
     let (password, hash) = (password.to_owned(), hash.to_owned());
-    tokio::task::spawn_blocking(move || {
+    run_argon2(move || {
         let parsed = PasswordHash::new(&hash).map_err(|_| AppError::Internal)?;
         Argon2::default()
             .verify_password(password.as_bytes(), &parsed)
             .map_err(|_| AppError::Unauthorized(ErrorMessage::InvalidCredentials))
     })
     .await
-    .map_err(|_| AppError::Internal)?
 }
 
 fn generate_access_token(
@@ -319,6 +335,35 @@ pub async fn google_login(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn password_hashes_never_run_more_than_one_per_cpu() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let running = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+        let tasks: Vec<_> = (0..50)
+            .map(|_| {
+                let (running, peak) = (running.clone(), peak.clone());
+                tokio::spawn(run_argon2(move || {
+                    let now = running.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(now, Ordering::SeqCst);
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                    running.fetch_sub(1, Ordering::SeqCst);
+                    Ok(())
+                }))
+            })
+            .collect();
+        for task in tasks {
+            task.await.unwrap().unwrap();
+        }
+
+        let cpus = std::thread::available_parallelism().map_or(2, |cpus| cpus.get());
+        assert!(peak.load(Ordering::SeqCst) <= cpus);
+    }
 
     #[test]
     fn google_usernames_always_fit_the_column() {
