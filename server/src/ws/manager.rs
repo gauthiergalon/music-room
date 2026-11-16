@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::{
     dtos::ws::{UserInfo, WsEventServer},
     errors::{AppError, ErrorMessage},
+    ws::{RoomMessage, encode},
 };
 
 const BROADCAST_CAPACITY: usize = 100;
@@ -39,7 +40,7 @@ struct Delegate {
 }
 
 struct ActiveRoom {
-    tx: broadcast::Sender<WsEventServer>,
+    tx: broadcast::Sender<RoomMessage>,
     users: HashMap<MemberKey, Member>,
     owner_id: Uuid,
     delegate: Option<Delegate>,
@@ -94,7 +95,9 @@ impl ActiveRoom {
     }
 
     fn broadcast_user_state(&self) {
-        let _ = self.tx.send(self.user_state());
+        if let Some(message) = encode(&self.user_state()) {
+            let _ = self.tx.send(message);
+        }
     }
 }
 
@@ -118,7 +121,7 @@ pub struct LeaveOutcome {
 /// Handle used to publish the playback state of a room in a consistent order.
 pub struct StateHandle {
     pub version: Arc<Mutex<u64>>,
-    pub tx: broadcast::Sender<WsEventServer>,
+    pub tx: broadcast::Sender<RoomMessage>,
 }
 
 pub struct RoomManager {
@@ -157,7 +160,7 @@ impl RoomManager {
     pub async fn join(
         &self,
         request: JoinRequest,
-    ) -> Result<broadcast::Receiver<WsEventServer>, AppError> {
+    ) -> Result<broadcast::Receiver<RoomMessage>, AppError> {
         let mut rooms = self.rooms.write().await;
 
         if !rooms.contains_key(&request.room_id) && rooms.len() >= self.max_rooms {
@@ -250,7 +253,9 @@ impl RoomManager {
         let room = self.rooms.write().await.remove(&room_id);
         match room {
             Some(room) => {
-                let _ = room.tx.send(WsEventServer::RoomClosed);
+                if let Some(message) = encode(&WsEventServer::RoomClosed) {
+                    let _ = room.tx.send(message);
+                }
                 tracing::debug!("[WS SEND] Room: {}, Type: RoomClosed", room_id);
                 true
             }
@@ -508,7 +513,9 @@ mod tests {
         let _ = rx.recv().await;
 
         assert!(manager.close(room_id).await);
-        assert!(matches!(rx.recv().await, Ok(WsEventServer::RoomClosed)));
+        let closed: serde_json::Value =
+            serde_json::from_str(rx.recv().await.unwrap().as_str()).unwrap();
+        assert_eq!(closed["type"], "RoomClosed");
         assert!(!manager.close(room_id).await);
     }
 }

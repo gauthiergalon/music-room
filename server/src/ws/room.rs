@@ -10,6 +10,7 @@ use crate::{
     errors::AppError,
     repositories::{queue as queue_repo, rooms as rooms_repo},
     state::AppState,
+    ws::{RoomMessage, encode},
 };
 
 /// Reads the playback state and the queue of a room. Two queries, whatever the
@@ -94,14 +95,16 @@ async fn next_room_state(state: &AppState, room_id: Uuid) -> Option<(WsEventServ
 
 /// Keeps the state lock until the event has been handed to its recipients.
 struct StateSender {
-    tx: tokio::sync::broadcast::Sender<WsEventServer>,
+    tx: tokio::sync::broadcast::Sender<RoomMessage>,
     _guard: tokio::sync::OwnedMutexGuard<u64>,
 }
 
 /// Broadcasts the current state of the room to every connected client.
 pub async fn send_room_state(state: &AppState, room_id: Uuid) {
-    if let Some((event, sender)) = next_room_state(state, room_id).await {
-        let _ = sender.tx.send(event);
+    if let Some((event, sender)) = next_room_state(state, room_id).await
+        && let Some(message) = encode(&event)
+    {
+        let _ = sender.tx.send(message);
     }
 }
 

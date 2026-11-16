@@ -14,7 +14,7 @@ use crate::{
     repositories::rooms as rooms_repo,
     services::rooms as room_service,
     state::AppState,
-    ws::{manager::JoinRequest, room},
+    ws::{RoomMessage, encode, manager::JoinRequest, room},
 };
 
 /// The server pings every connection so dead peers are noticed even when they
@@ -95,20 +95,18 @@ pub async fn handle_socket(
     handle_disconnect(&state, room_id, owner_id, user_id, connection_id).await;
 }
 
-/// Serialises and sends one event. Returns `false` when the socket is gone.
+/// Serialises and sends an event meant for this connection only. Returns
+/// `false` when the socket is gone.
 async fn send_event(sender: &mut SplitSink<WebSocket, Message>, event: &WsEventServer) -> bool {
-    match serde_json::to_string(event) {
-        Ok(text) => sender.send(Message::Text(text.into())).await.is_ok(),
-        Err(e) => {
-            tracing::error!("Failed to serialise a WS event: {}", e);
-            true
-        }
+    match encode(event) {
+        Some(text) => sender.send(Message::Text(text)).await.is_ok(),
+        None => true,
     }
 }
 
 fn spawn_sender_task(
     mut sender: SplitSink<WebSocket, Message>,
-    mut rx: Receiver<WsEventServer>,
+    mut rx: Receiver<RoomMessage>,
     state: AppState,
     room_id: Uuid,
     user_id: Uuid,
@@ -120,9 +118,10 @@ fn spawn_sender_task(
         loop {
             tokio::select! {
                 received = rx.recv() => match received {
-                    Ok(event) => {
-                        tracing::debug!("[WS SEND] User: {}, {:?}", user_id, event);
-                        if !send_event(&mut sender, &event).await {
+                    // Serialised once for the whole room.
+                    Ok(message) => {
+                        tracing::debug!("[WS SEND] User: {}, {}", user_id, message.as_str());
+                        if sender.send(Message::Text(message)).await.is_err() {
                             break;
                         }
                     }
