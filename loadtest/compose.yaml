@@ -86,6 +86,7 @@ services:
       K6_WEB_DASHBOARD: "true"
       K6_WEB_DASHBOARD_HOST: 0.0.0.0
       K6_WEB_DASHBOARD_PORT: "5665"
+      K6_WEB_DASHBOARD_PERIOD: 1s # refresh of the charts (k6's default: 10s)
     volumes:
       - ./:/loadtest:Z
 
