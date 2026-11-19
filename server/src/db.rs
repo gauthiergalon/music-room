@@ -4,18 +4,24 @@ use sqlx::postgres::PgPoolOptions;
 
 pub type DbPool = sqlx::PgPool;
 
-const CONNECT_ATTEMPTS: u32 = 5;
+/// The backend and PostgreSQL may start at the same time: keep trying for
+/// this long, often enough to connect as soon as the database is up. A new
+/// database takes the longest (its first initialisation).
+const CONNECT_DEADLINE: Duration = Duration::from_secs(30);
+const CONNECT_RETRY_DELAY: Duration = Duration::from_millis(500);
 const DEFAULT_MAX_CONNECTIONS: u32 = 10;
 
-/// Connects to PostgreSQL, retrying while the database container starts.
+/// Connects to PostgreSQL, retrying while the database starts.
 pub async fn create_pool(database_url: &str) -> Result<DbPool, sqlx::Error> {
     let max_connections = std::env::var("DB_MAX_CONNECTIONS")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(DEFAULT_MAX_CONNECTIONS);
 
-    let mut attempt = 1;
+    let deadline = tokio::time::Instant::now() + CONNECT_DEADLINE;
+    let mut attempts = 0;
     loop {
+        attempts += 1;
         match PgPoolOptions::new()
             .max_connections(max_connections)
             .acquire_timeout(Duration::from_secs(5))
@@ -23,17 +29,17 @@ pub async fn create_pool(database_url: &str) -> Result<DbPool, sqlx::Error> {
             .await
         {
             Ok(pool) => return Ok(pool),
-            Err(e) if attempt < CONNECT_ATTEMPTS => {
-                tracing::warn!(
-                    "PostgreSQL connection attempt {}/{} failed: {}",
-                    attempt,
-                    CONNECT_ATTEMPTS,
-                    e
-                );
-                attempt += 1;
-                tokio::time::sleep(Duration::from_secs(2)).await;
+            Err(e) if tokio::time::Instant::now() + CONNECT_RETRY_DELAY < deadline => {
+                // One line, not one per attempt: a slow start is expected.
+                if attempts == 1 {
+                    tracing::info!("Waiting for PostgreSQL ({e})");
+                }
+                tokio::time::sleep(CONNECT_RETRY_DELAY).await;
             }
-            Err(e) => return Err(e),
+            Err(e) => {
+                tracing::warn!("PostgreSQL still unreachable after {attempts} attempts");
+                return Err(e);
+            }
         }
     }
 }

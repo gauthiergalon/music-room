@@ -8,9 +8,11 @@ services:
       - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
-      interval: 5s
+      # Status shown by `compose ps` only: the backend does not wait for it.
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 3
+      start_period: 30s
 
   backend:
     build: ./server
@@ -28,10 +30,11 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-    # The backend applies the SQL migrations itself when it starts.
+    # Started together with PostgreSQL: the backend retries the connection
+    # for 30 s (server/src/db.rs), then applies the SQL migrations itself.
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
