@@ -31,10 +31,14 @@ class Room {
        listeners = listeners ?? const [];
 
   factory Room.fromJson(Map<String, dynamic> json) {
+    final nowPlaying = json['now_playing'];
     return Room(
       id: json['id'].toString(),
       owner: json['owner_id'].toString(),
       name: json['name']?.toString() ?? 'Unnamed Room',
+      currentTrack: nowPlaying is Map
+          ? Track.fromJson(Map<String, dynamic>.from(nowPlaying))
+          : null,
       isPublic: json['is_public'] != false,
       isLicensed: json['is_licensed'] == true,
       isPlaying: json['is_playing'] == true,

@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/models/friend.dart';
 import 'package:mobile/models/queue_item.dart';
+import 'package:mobile/models/room.dart';
 import 'package:mobile/models/room_invitation.dart';
 import 'package:mobile/models/track.dart';
 import 'package:mobile/models/user.dart';
@@ -42,6 +43,43 @@ void main() {
     expect(item.position, 3.0);
     expect(item.track.title, 'Queued');
     expect(item.trackId, 5);
+  });
+
+  test('Room.fromJson reads the track playing in the room', () {
+    final room = Room.fromJson({
+      'id': 'r1',
+      'owner_id': 'u1',
+      'name': 'Room',
+      'is_playing': true,
+      'current_track': 7,
+      'now_playing': {
+        'id': 7,
+        'title': 'Playing',
+        'duration': 180,
+        'artists': [
+          {'name': 'Someone'},
+        ],
+        'album': {'cover': 'ab-cd'},
+      },
+    });
+    expect(room.isPlaying, isTrue);
+    expect(room.currentTrack?.title, 'Playing');
+    expect(room.currentTrack?.artist, 'Someone');
+    expect(
+      room.currentTrack?.imageUrl,
+      'https://resources.tidal.com/images/ab/cd/320x320.jpg',
+    );
+  });
+
+  test('Room.fromJson has no track when nothing is playing', () {
+    final room = Room.fromJson({
+      'id': 'r1',
+      'owner_id': 'u1',
+      'name': 'Room',
+      'current_track': null,
+      'now_playing': null,
+    });
+    expect(room.currentTrack, isNull);
   });
 
   test('Friend.fromJson tells who sent the request', () {
