@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:18
-    env_file: { path: .env, required: false } # checked below, with a clear message
+    env_file: [{ path: .env, required: false }] # checked below, with a clear message
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -22,7 +22,7 @@ services:
       # Stops `compose up` with this message when .env is missing (or has
       # no JWT_SECRET), instead of a stack trace.
       JWT_SECRET: "${JWT_SECRET:?is missing: create .env with cp .env.example .env, then fill it in}"
-    env_file: { path: .env, required: false }
+    env_file: [{ path: .env, required: false }]
     # Every WebSocket, request and database connection is a file descriptor.
     # Docker's default of 1024 per process would cap the server at about a
     # thousand simultaneous users, whatever the machine.
@@ -44,7 +44,7 @@ services:
 
   hifi-api:
     build: https://github.com/binimum/hifi-api.git#main
-    env_file: { path: .env, required: false }
+    env_file: [{ path: .env, required: false }]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]
       interval: 10s
