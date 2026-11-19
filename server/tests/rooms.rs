@@ -299,3 +299,45 @@ async fn test_room_name_uses_the_current_username(pool: PgPool) {
         .json::<serde_json::Value>();
     assert_eq!(room["name"], "fresh_name's room");
 }
+
+#[sqlx::test]
+async fn test_list_shows_the_track_playing_in_each_room(pool: PgPool) {
+    let server = TestServer::new(create_app(pool));
+    let owner = common::register(&server, "dj").await;
+    let auth = common::bearer(&owner.access_token);
+    let room_id = common::create_room(&server, &owner).await;
+
+    let rooms = server
+        .get("/rooms")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .json::<serde_json::Value>();
+    assert!(rooms[0]["now_playing"].is_null());
+
+    // The first track added to an idle room starts playing by itself.
+    server
+        .post(&format!("/rooms/{room_id}/queue"))
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .json(&json!({ "track_id": 42 }))
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
+
+    let rooms = server
+        .get("/rooms")
+        .add_header(axum::http::header::AUTHORIZATION, auth.clone())
+        .await
+        .json::<serde_json::Value>();
+    let track = &rooms[0]["now_playing"];
+    assert_eq!(rooms[0]["current_track"], 42);
+    assert_eq!(track["id"], 42);
+    assert_eq!(track["title"], "Title 42");
+    assert_eq!(track["album"]["cover"], "cover-id");
+    assert!(track["artists"][0]["name"].is_string());
+
+    let room = server
+        .get(&format!("/rooms/{room_id}"))
+        .add_header(axum::http::header::AUTHORIZATION, auth)
+        .await
+        .json::<serde_json::Value>();
+    assert_eq!(room["now_playing"]["title"], "Title 42");
+}

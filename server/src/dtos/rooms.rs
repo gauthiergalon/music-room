@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::models::room::Room;
+use crate::{dtos::music::TrackItem, models::room::Room};
 
 /// Pagination of the room list.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
@@ -25,6 +25,16 @@ impl From<Room> for RoomResponse {
             name: room.name,
             is_public: room.is_public,
             is_licensed: room.is_licensed,
+            now_playing: room.current_track.map(|id| {
+                TrackItem::from_cache(
+                    id,
+                    room.track_title,
+                    room.track_artist,
+                    room.track_album,
+                    room.track_cover,
+                    room.track_duration,
+                )
+            }),
             current_track: room.current_track,
             current_position: room.current_position,
             is_playing: room.is_playing,
@@ -40,6 +50,8 @@ pub struct RoomResponse {
     pub is_public: bool,
     pub is_licensed: bool,
     pub current_track: Option<i64>,
+    /// The current track with its metadata, for the room list.
+    pub now_playing: Option<TrackItem>,
     pub current_position: i32,
     pub is_playing: bool,
 }

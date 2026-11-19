@@ -15,8 +15,11 @@ pub async fn find_visible(
     let rooms = sqlx::query_as!(
         Room,
         r#"
-        SELECT r.id, r.owner_id, r.name, r.is_public, r.is_licensed, r.current_track, r.current_position, r.is_playing
+        SELECT r.id, r.owner_id, r.name, r.is_public, r.is_licensed, r.current_track, r.current_position, r.is_playing,
+               t.title AS "track_title?", t.artist AS "track_artist?", t.album AS "track_album?",
+               t.cover AS "track_cover?", t.duration AS "track_duration?"
         FROM rooms r
+        LEFT JOIN tracks t ON t.id = r.current_track
         WHERE r.is_public
            OR r.owner_id = $1
            OR EXISTS (
@@ -38,7 +41,12 @@ pub async fn find_visible(
 pub async fn create(pool: &PgPool, owner_id: Uuid, name: &str) -> Result<Room, AppError> {
     let room = sqlx::query_as!(
         Room,
-        "INSERT INTO rooms (owner_id, name) VALUES ($1, $2) RETURNING id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing",
+        r#"
+        INSERT INTO rooms (owner_id, name) VALUES ($1, $2)
+        RETURNING id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing,
+                  NULL::varchar AS "track_title?", NULL::varchar AS "track_artist?", NULL::varchar AS "track_album?",
+                  NULL::varchar AS "track_cover?", NULL::int AS "track_duration?"
+        "#,
         owner_id,
         name
     )
@@ -50,7 +58,14 @@ pub async fn create(pool: &PgPool, owner_id: Uuid, name: &str) -> Result<Room, A
 pub async fn find_by_id(pool: &PgPool, room_id: Uuid) -> Result<Option<Room>, AppError> {
     let room = sqlx::query_as!(
         Room,
-        "SELECT id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing FROM rooms WHERE id = $1",
+        r#"
+        SELECT r.id, r.owner_id, r.name, r.is_public, r.is_licensed, r.current_track, r.current_position, r.is_playing,
+               t.title AS "track_title?", t.artist AS "track_artist?", t.album AS "track_album?",
+               t.cover AS "track_cover?", t.duration AS "track_duration?"
+        FROM rooms r
+        LEFT JOIN tracks t ON t.id = r.current_track
+        WHERE r.id = $1
+        "#,
         room_id
     )
     .fetch_optional(pool)
