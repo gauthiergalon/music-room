@@ -19,9 +19,9 @@ const JWT_SECRET = __ENV.JWT_SECRET || 'loadtest-secret';
 // ------------------------------------------------------------ load profile
 
 // Number of simultaneous users of each step, e.g. STEPS=500,1000,2000.
-const STEPS = (__ENV.STEPS || '500,1000,2000,4000,6000,8000').split(',').map(Number);
+const STEPS = (__ENV.STEPS || '2000,4000,8000,12000,16000').split(',').map(Number);
 const RAMP_SECONDS = 20; // time for a step's new users to join
-const HOLD_SECONDS = Number(__ENV.HOLD || 120); // time the step is measured
+const HOLD_SECONDS = Number(__ENV.HOLD || 60); // time the step is measured
 const STEP_SECONDS = RAMP_SECONDS + HOLD_SECONDS;
 
 // What every user must experience for a step to pass.
@@ -181,24 +181,72 @@ export function pick(items) {
 // ------------------------------------------------------------ summary
 
 // One line per step: did it pass, and the key figures behind the verdict.
+// Written to results/<scenario>.md and printed (in colour) at the end.
 export function stepReport(scenario, data, columns) {
   const value = (metric, stat) => data.metrics[metric] && data.metrics[metric].values[stat];
-  const header = ['Users', 'Verdict', ...columns.map((c) => c.title)];
-  const rows = STEPS.map((users) => {
-    const failed = Object.entries(data.metrics)
-      .filter(([name]) => name.includes(`{step:${users},`) || name.includes(`{step:${users}}`))
-      .flatMap(([name, metric]) => Object.entries(metric.thresholds || {})
-        .filter(([, result]) => !result.ok)
-        .map(([rule]) => `${name.split('{')[0]} ${rule}`));
-    const cells = columns.map((c) => c.format(value(withStep(c.metric, users), c.stat)));
-    return [String(users), failed.length ? `FAIL: ${failed.join(', ')}` : 'PASS', ...cells];
-  });
+  const failures = (users) => Object.entries(data.metrics)
+    .filter(([name]) => name.includes(`{step:${users},`) || name.includes(`{step:${users}}`))
+    .flatMap(([name, metric]) => Object.entries(metric.thresholds || {})
+      .filter(([, result]) => !result.ok)
+      .map(([rule]) => {
+        // 'http_req_duration{step:8000,op:edit}' -> 'http_req_duration{op:edit}',
+        // then the column's title when there is one: 'Edit response p95 (p(95)<500)'
+        const metric = name.replace(/step:\d+,?/, '').replace(',}', '}').replace('{}', '');
+        const column = columns.find((c) => c.metric === metric);
+        return column ? `${column.title} (${rule})` : `${metric} ${rule}`;
+      }));
 
-  const table = [header, header.map(() => '---'), ...rows]
-    .map((row) => `| ${row.join(' | ')} |`).join('\n');
-  const text = `# ${scenario}\n\n${table}\n`;
-  return { [`results/${scenario}.md`]: text, stdout: `\n${text}` };
+  const steps = STEPS.map((users) => ({ users, failed: failures(users) }));
+  const header = ['Users', 'Verdict', ...columns.map((c) => c.title)];
+  const rows = steps.map(({ users, failed }) => [
+    String(users), failed.length ? 'FAIL' : 'PASS',
+    ...columns.map((c) => c.format(value(withStep(c.metric, users), c.stat))),
+  ]);
+
+  // The highest step such that it and every step below it passed.
+  const firstFail = steps.findIndex((s) => s.failed.length);
+  const held = firstFail === -1 ? steps.length : firstFail;
+  const verdict = held === 0
+    ? `**Not even ${steps[0].users} users**: the first step fails.`
+    : held === steps.length
+      ? `**${steps[held - 1].users} users supported**: every step passes.`
+      : `**${steps[held - 1].users} users supported**: ${steps[held].users} fails.`;
+  const notes = steps.filter((s) => s.failed.length)
+    .map((s) => `- ${s.users} users fail on: ${s.failed.join(', ')}`);
+
+  const render = (paint) => [
+    `# ${scenario}`, '',
+    paint(verdict, held === steps.length ? GREEN : RED), '',
+    `Each step: ${RAMP_SECONDS} s for the new users to join, then ${HOLD_SECONDS} s measured.`, '',
+    markdownTable(header, rows, (padded, cell) => (cell === 'PASS' ? paint(padded, GREEN)
+      : cell === 'FAIL' ? paint(padded, RED) : padded)),
+    ...(notes.length ? ['', ...notes] : []), '',
+  ].join('\n');
+
+  return {
+    [`results/${scenario}.md`]: render((text) => text),
+    stdout: `\n${render((text, colour) => `${colour}${text.replace(/\*\*/g, '')}${RESET}`)}`,
+  };
+}
+
+const GREEN = '\x1b[32m';
+const RED = '\x1b[31m';
+const RESET = '\x1b[0m';
+
+// Columns padded to the same width (still a valid Markdown table), figures
+// aligned right. `paint(padded, cell)` may colour a cell once it is padded.
+export function markdownTable(header, rows, paint = (cell) => cell) {
+  const widths = header.map((title, i) => Math.max(title.length, ...rows.map((r) => r[i].length)));
+  const numeric = header.map((_, i) => rows.every((r) => /^[\d.<>-]/.test(r[i])));
+  const pad = (cell, i) => (numeric[i] ? cell.padStart(widths[i]) : cell.padEnd(widths[i]));
+  const line = (cells) => `| ${cells.join(' | ')} |`;
+  return [
+    line(header.map(pad)),
+    line(widths.map((w, i) => (numeric[i] ? `${'-'.repeat(w - 1)}:` : '-'.repeat(w)))),
+    ...rows.map((row) => line(row.map((cell, i) => paint(pad(cell, i), cell)))),
+  ].join('\n');
 }
 
 export const ms = (v) => (v === undefined ? '-' : `${Math.round(v)} ms`);
-export const percent = (v) => (v === undefined ? '-' : `${(v * 100).toFixed(2)} %`);
+// 1 -> '100 %', 0.99953 -> '99.95 %', 0 -> '0 %'
+export const percent = (v) => (v === undefined ? '-' : `${+(v * 100).toFixed(2)} %`);

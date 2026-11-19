@@ -46,14 +46,14 @@ Both services are used **at the same time, in every room**
   in control moves the playback every 2 to 4 seconds, and every member must
   receive it.
 
-The load grows in steps: 500, 1000, 2000, 4000, 6000 then 8000
-simultaneous users. At each step the new users join during 20 seconds,
-then the step is measured for 2 minutes. Users of the previous steps stay
-connected and active.
+The load grows in steps: 2000, 4000, 8000, 12000 then 16000
+simultaneous users, up to the edge of saturation. At each step the new
+users join during 20 seconds, then the step is measured for 1 minute.
+Users of the previous steps stay connected and active.
 
 ## Success criteria
 
-A step is **supported** when, during its 2 minutes:
+A step is **supported** when, during its minute:
 
 | Criterion | Threshold |
 |---|---|
@@ -73,12 +73,13 @@ The maximum number of simultaneous users is the **last step that passes**.
 
 ## Running it
 
-Requirements: Docker or Podman with Compose, curl.
+Requirements: Docker or Podman with Compose, curl, and about 6 GB of free
+memory: k6 itself takes about 5.5 GB and 5 cores at 16000 users.
 
 ```bash
 cd loadtest
-./run.sh                                  # about 15 minutes
-STEPS=500,1000,2000 HOLD=60 ./run.sh      # other steps, shorter
+./run.sh                                  # about 8 minutes
+STEPS=500,1000,2000 HOLD=30 ./run.sh      # other steps, shorter
 ```
 
 While it runs, **http://localhost:5665** shows k6's charts live (users,
@@ -92,7 +93,9 @@ it with `docker compose -f compose.yaml --profile run down` (or `podman compose`
 
 Results, in `results/`:
 
-- `room.md`: the verdict and key figures of each step;
+- `room.md`: how many users the server supports, the verdict and key figures
+  of each step, then the server's CPU and memory during each step (also
+  printed at the end of the run);
 - `room.html`: the same charts as the live page, to open in a browser;
 - `room-resources.txt`: CPU and memory of the backend and of PostgreSQL
   every 5 seconds (seconds since the start of the run).

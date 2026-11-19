@@ -2,7 +2,7 @@
 # Runs the load test on a fresh server.
 #
 #   ./run.sh
-#   STEPS=500,1000,2000 HOLD=60 ./run.sh      # other steps, shorter
+#   STEPS=500,1000,2000 HOLD=30 ./run.sh      # other steps, shorter
 #
 # Live charts on http://localhost:5665 while it runs. Results in results/:
 # room.md (verdict per step), room.html (the charts) and room-resources.txt
@@ -62,8 +62,8 @@ trap 'kill $sampler $relay 2>/dev/null; dcr stop -t 1 dashboard >/dev/null 2>&1'
 # 3. The live dashboard. k6 writes room.html as soon as the test is over:
 # that is when the relay is cut, so an open page cannot keep k6 waiting.
 # (Fallback: the planned duration of the test, plus a margin.)
-steps=$(( $(tr -cd ',' <<< "${STEPS:-500,1000,2000,4000,6000,8000}" | wc -c) + 1 ))
-deadline=$(( steps * (20 + ${HOLD:-120}) + 120 ))
+steps=$(( $(tr -cd ',' <<< "${STEPS:-2000,4000,8000,12000,16000}" | wc -c) + 1 ))
+deadline=$(( steps * (20 + ${HOLD:-60}) + 120 ))
 dcr up -d --force-recreate dashboard
 ( for _ in $(seq "$deadline"); do [ -f results/room.html ] && break; sleep 1; done
   dcr stop -t 1 dashboard ) >/dev/null 2>&1 &
@@ -74,5 +74,36 @@ echo "Live dashboard: http://localhost:5665"
 # (-e NAME=value: Podman's compose does not accept a bare -e NAME.)
 env=()
 for var in STEPS HOLD; do [ -n "${!var:-}" ] && env+=(-e "$var=${!var}"); done
+k6_start=$(( $(date +%s) - start ))
+# k6 exits with 99 when a step fails: report the resources anyway, then
+# exit with k6's status.
+status=0
 dcr run --rm --name loadtest-k6 "${env[@]}" -e K6_WEB_DASHBOARD_EXPORT=results/room.html \
-  k6 run --quiet room.js
+  k6 run --quiet room.js || status=$?
+
+# 5. The server's resources during each step (the ramp left out), added to
+# room.md: average CPU (100 % = its whole vCPU) and peak memory.
+kill "$sampler" 2>/dev/null || true
+awk -v steps="${STEPS:-2000,4000,8000,12000,16000}" -v hold="${HOLD:-60}" -v ramp=20 -v t0="$k6_start" '
+  function mb(s,  v, u) {
+    v = s + 0; u = s; sub(/^[0-9.]+/, "", u)
+    return u ~ /^G/ ? v * 1000 : u ~ /^M/ ? v : u ~ /^[kK]/ ? v / 1000 : v / 1e6
+  }
+  {
+    n = split(steps, users, ","); t = ($1 + 0) - t0; i = int(t / (ramp + hold))
+    if (t < 0 || i >= n || t - i * (ramp + hold) < ramp) next
+    k = i SUBSEP $2; cpu[k] += $3 + 0; samples[k]++
+    if (mb($4) > mem[k]) mem[k] = mb($4)
+  }
+  END {
+    print "\nServer resources (average CPU over each step, 100 % = its whole vCPU; peak memory):\n"
+    print "|  Users | Backend CPU | Backend memory | PostgreSQL CPU | PostgreSQL memory |"
+    print "| -----: | ----------: | -------------: | -------------: | ----------------: |"
+    for (i = 0; i < n; i++) {
+      b = i SUBSEP "loadtest-backend"; p = i SUBSEP "loadtest-postgres"
+      if (!samples[b]) continue
+      printf "| %6s | %9.1f %% | %11.0f MB | %12.1f %% | %14.0f MB |\n", users[i + 1],
+        cpu[b] / samples[b], mem[b], samples[p] ? cpu[p] / samples[p] : 0, mem[p]
+    }
+  }' results/room-resources.txt | tee -a results/room.md
+exit "$status"
