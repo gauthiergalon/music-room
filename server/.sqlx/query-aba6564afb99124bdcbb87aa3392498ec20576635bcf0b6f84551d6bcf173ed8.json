@@ -1,0 +1,95 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO rooms (owner_id, name) VALUES ($1, $2)\n        RETURNING id, owner_id, name, is_public, is_licensed, current_track, current_position, is_playing,\n                  NULL::varchar AS \"track_title?\", NULL::varchar AS \"track_artist?\", NULL::varchar AS \"track_album?\",\n                  NULL::varchar AS \"track_cover?\", NULL::int AS \"track_duration?\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_licensed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_playing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "track_title?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "track_artist?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "track_album?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "track_cover?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "track_duration?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "aba6564afb99124bdcbb87aa3392498ec20576635bcf0b6f84551d6bcf173ed8"
+}

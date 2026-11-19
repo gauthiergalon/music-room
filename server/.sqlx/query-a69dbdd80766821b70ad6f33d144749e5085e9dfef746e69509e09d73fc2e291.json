@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE users\n                SET is_subscribed = FALSE\n                WHERE is_subscribed = TRUE\n                  AND end_subscription_date IS NOT NULL\n                  AND end_subscription_date <= NOW()\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "a69dbdd80766821b70ad6f33d144749e5085e9dfef746e69509e09d73fc2e291"
+}

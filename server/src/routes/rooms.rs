@@ -1,0 +1,36 @@
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
+
+use crate::{
+    handlers::{queue, rooms},
+    middleware::auth::auth_middleware,
+    state::AppState,
+};
+
+pub fn router(state: AppState) -> Router<AppState> {
+    Router::new()
+        .route("/", get(rooms::list).post(rooms::create))
+        .route("/{id}", get(rooms::get).delete(rooms::delete))
+        .route("/{id}/ws", get(rooms::ws))
+        .route(
+            "/{id}/delegate",
+            post(rooms::delegate_room).delete(rooms::revoke_delegate),
+        )
+        .route("/{id}/publish", post(rooms::publish))
+        .route("/{id}/privatize", post(rooms::privatize))
+        .route("/{id}/enable-license", post(rooms::enable_license))
+        .route("/{id}/disable-license", post(rooms::disable_license))
+        .route(
+            "/{id}/queue",
+            get(queue::list)
+                .post(queue::add)
+                .delete(queue::delete)
+                .patch(queue::reorder),
+        )
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            auth_middleware,
+        ))
+}

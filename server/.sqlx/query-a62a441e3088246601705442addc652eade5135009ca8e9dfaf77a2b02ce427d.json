@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.id, r.owner_id, r.name, r.is_public, r.is_licensed, r.current_track, r.current_position, r.is_playing,\n               t.title AS \"track_title?\", t.artist AS \"track_artist?\", t.album AS \"track_album?\",\n               t.cover AS \"track_cover?\", t.duration AS \"track_duration?\"\n        FROM rooms r\n        LEFT JOIN tracks t ON t.id = r.current_track\n        WHERE r.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_public",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_licensed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "is_playing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "track_title?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "track_artist?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "track_album?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "track_cover?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "track_duration?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "a62a441e3088246601705442addc652eade5135009ca8e9dfaf77a2b02ce427d"
+}

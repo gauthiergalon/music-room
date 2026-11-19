@@ -1,40 +1,55 @@
 services:
   postgres:
     image: postgres:18
-    env_file: .env
+    env_file: [{ path: .env, required: false }] # checked below, with a clear message
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./backend/migrations:/docker-entrypoint-initdb.d:Z
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U musicroom"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      # Status shown by `compose ps` only: the backend does not wait for it.
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 30s
 
   backend:
-    image: rust:latest
-    working_dir: /app
-    volumes:
-      - ./backend:/app:Z
-    command: cargo run
+    build: ./server
     ports:
       - "3000:3000"
-    env_file: .env
+    environment:
+      # Stops `compose up` with this message when .env is missing (or has
+      # no JWT_SECRET), instead of a stack trace.
+      JWT_SECRET: "${JWT_SECRET:?is missing: create .env with cp .env.example .env, then fill it in}"
+    env_file: [{ path: .env, required: false }]
+    # Every WebSocket, request and database connection is a file descriptor.
+    # Docker's default of 1024 per process would cap the server at about a
+    # thousand simultaneous users, whatever the machine.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # Started together with PostgreSQL: the backend retries the connection
+    # for 30 s (server/src/db.rs), then applies the SQL migrations itself.
     depends_on:
       postgres:
-        condition: service_healthy
+        condition: service_started
 
   mailhog:
-    image: mailhog/mailhog:latest
+    image: mailhog/mailhog:v1.0.1
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   hifi-api:
     build: https://github.com/binimum/hifi-api.git#main
-    env_file: .env
+    env_file: [{ path: .env, required: false }]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     environment:
       - CLIENT_ID=${HIFI_API_CLIENT_ID}
       - CLIENT_SECRET=${HIFI_API_CLIENT_SECRET}
@@ -42,7 +57,7 @@ services:
       - USER_ID=${HIFI_API_USER_ID}
       - ACCESS_TOKEN=${HIFI_API_ACCESS_TOKEN}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
 volumes:
   postgres_data:

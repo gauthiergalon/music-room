@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM queue\n        WHERE id = (SELECT id FROM queue WHERE room_id = $1 ORDER BY position ASC LIMIT 1)\n        RETURNING id, track_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "track_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1f0ff9478a6df3fe9934f0891877013c84ea24166070322530855037d42b3af2"
+}

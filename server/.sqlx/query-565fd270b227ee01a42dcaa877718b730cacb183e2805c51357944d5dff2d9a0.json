@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT r.current_track, r.current_item, r.is_playing, r.current_position, r.played_at,\n               t.title AS \"title?\", t.artist AS \"artist?\", t.album AS \"album?\",\n               t.cover AS \"cover?\", t.duration AS \"duration?\"\n        FROM rooms r\n        LEFT JOIN tracks t ON t.id = r.current_track\n        WHERE r.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current_track",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "current_item",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_playing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "current_position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "played_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "title?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "artist?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "album?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "cover?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "duration?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "565fd270b227ee01a42dcaa877718b730cacb183e2805c51357944d5dff2d9a0"
+}
