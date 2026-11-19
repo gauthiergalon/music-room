@@ -20,6 +20,7 @@ x-many-connections: &many-connections
 services:
   postgres:
     image: postgres:18
+    container_name: loadtest-postgres # fixed names: run.sh samples their CPU
     environment:
       POSTGRES_USER: loadtest
       POSTGRES_PASSWORD: loadtest
@@ -54,6 +55,7 @@ services:
   backend:
     <<: *many-connections
     build: ../server
+    container_name: loadtest-backend
     environment:
       DATABASE_URL: postgres://loadtest:loadtest@postgres:5432/musicroom
       JWT_SECRET: loadtest-secret

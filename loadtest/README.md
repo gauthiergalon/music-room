@@ -73,7 +73,7 @@ The maximum number of simultaneous users is the **last step that passes**.
 
 ## Running it
 
-Requirements: Docker with Compose, curl.
+Requirements: Docker or Podman with Compose, curl.
 
 ```bash
 cd loadtest
@@ -88,7 +88,7 @@ through a relay that `run.sh` cuts at the end.
 
 Each run starts a fresh server with an empty database (separate from the
 development stack: project `music-room-loadtest`, database in memory). Stop
-it with `docker compose -f compose.yaml --profile run down`.
+it with `docker compose -f compose.yaml --profile run down` (or `podman compose`).
 
 Results, in `results/`:
 
