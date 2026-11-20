@@ -126,6 +126,15 @@ class _FakeSocket extends WebSocketService {
 }
 
 class _FakeRepository extends RoomRepository {
+  /// Runs during `toggleLicense`, before it returns (a broadcast that
+  /// arrives before the HTTP answer).
+  void Function()? onToggleLicense;
+
+  @override
+  Future<void> toggleLicense(String roomId, bool isLicensed) async {
+    onToggleLicense?.call();
+  }
+
   /// Stream URL requests wait for the gate of their track, if any.
   final Map<int, Completer<void>> urlGates = {};
   Object? removeError;
@@ -744,6 +753,65 @@ void main() {
 
       expect(controller.currentRoom, isNull);
       expect(controller.availableRooms, isEmpty);
+    });
+  });
+
+  group('license', () {
+    Future<void> joinAsListener({required bool hasLicense}) async {
+      await controller.openRoom(
+        Room(id: 'room-1', owner: 'someone-else', name: 'Room'),
+      );
+      socket.emit('Welcome', {
+        'connection_id': myConnection,
+        'server_time': now.toIso8601String(),
+        'has_license': hasLicense,
+      });
+    }
+
+    test('anyone may edit the queue while the license mode is off', () async {
+      await joinAsListener(hasLicense: false);
+      socket.emit('RoomState', {...roomState(), 'is_licensed': false});
+      expect(controller.canEditQueue, isTrue);
+    });
+
+    test(
+      'the license mode locks the queue for users without a license',
+      () async {
+        await joinAsListener(hasLicense: false);
+        socket.emit('RoomState', {...roomState(), 'is_licensed': true});
+        expect(controller.canEditQueue, isFalse);
+        expect(controller.currentRoom!.isLicensed, isTrue);
+
+        // The owner turns it off: the next state unlocks the queue.
+        socket.emit('RoomState', {...roomState(), 'is_licensed': false});
+        expect(controller.canEditQueue, isTrue);
+      },
+    );
+
+    test('invited users keep editing in license mode', () async {
+      await joinAsListener(hasLicense: true);
+      socket.emit('RoomState', {...roomState(), 'is_licensed': true});
+      expect(controller.canEditQueue, isTrue);
+    });
+
+    test('toggling the license is not undone by the broadcast state', () async {
+      await join();
+      socket.emit('RoomState', {...roomState(), 'is_licensed': false});
+
+      // The server broadcasts the new state before it answers the request.
+      repository.onToggleLicense = () =>
+          socket.emit('RoomState', {...roomState(), 'is_licensed': true});
+      await controller.toggleLicense();
+      expect(controller.currentRoom!.isLicensed, isTrue);
+
+      repository.onToggleLicense = () =>
+          socket.emit('RoomState', {...roomState(), 'is_licensed': false});
+      await controller.toggleLicense();
+      expect(controller.currentRoom!.isLicensed, isFalse);
+    });
+
+    test('no room, no queue to edit', () {
+      expect(controller.canEditQueue, isFalse);
     });
   });
 }

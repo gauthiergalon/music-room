@@ -14,6 +14,10 @@ import '../services/queue_order.dart';
 import '../services/room_repository.dart';
 import '../services/websocket_service.dart';
 
+/// Shown where queue controls are locked (license mode, no invitation).
+const lockedQueueMessage =
+    'Only invited users can edit the queue of this room.';
+
 class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   static const String _eventWelcome = 'Welcome';
   static const String _eventRoomState = 'RoomState';
@@ -87,6 +91,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<void>? _completedSubscription;
   bool _disposed = false;
 
+  /// Sent by the server on every connection (`has_license` of Welcome).
+  bool _hasLicense = false;
+
   Room? get currentRoom => _currentRoom;
   List<Room> get availableRooms => _availableRooms;
   Track? get currentTrack => _currentRoom?.currentTrack;
@@ -103,6 +110,15 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get hasRoomClosedMessage => _roomClosedMessage != null;
   bool get hasPlayerErrorMessage => _playerErrorMessage != null;
+
+  /// Whether this user may add, remove and reorder tracks: anyone while the
+  /// room's license mode is off, otherwise its owner and invited users. The
+  /// server enforces it; this only keeps the controls in line with it.
+  bool get canEditQueue {
+    final room = _currentRoom;
+    if (room == null) return false;
+    return !room.isLicensed || _hasLicense;
+  }
 
   /// Whether this device may control the playback of the current room: the
   /// delegated device if there is one, otherwise any device of the owner.
@@ -238,6 +254,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
     _target = null;
     _lastVersion = null;
     _connectionId = null;
+    _hasLicense = false;
     _clock.reset();
 
     if (_currentRoom != null) {
@@ -291,6 +308,7 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
 
   void _handleWelcome(Map<String, dynamic> payload) {
     _connectionId = payload['connection_id']?.toString();
+    _hasLicense = payload['has_license'] == true;
     _lastVersion = null;
     _observeServerTime(payload['server_time'], _now());
   }
@@ -316,6 +334,9 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
           ),
       ];
     }
+
+    final isLicensed = payload['is_licensed'];
+    if (isLicensed is bool) room.isLicensed = isLicensed;
 
     final rawTrack = payload['current_track'];
     final track = rawTrack is Map
@@ -689,9 +710,13 @@ class RoomController extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> toggleLicense() async {
     final room = _currentRoom;
     if (room == null) return;
+    // Set the requested value, not a flip of the current one: the server
+    // broadcasts the new room state before it answers, so `isLicensed` may
+    // already be up to date when the request returns.
+    final isLicensed = !room.isLicensed;
     try {
       await _roomRepository.toggleLicense(room.id, room.isLicensed);
-      room.isLicensed = !room.isLicensed;
+      room.isLicensed = isLicensed;
       _notify();
     } catch (e) {
       logger.error('Failed to toggle license', error: e);

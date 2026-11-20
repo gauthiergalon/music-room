@@ -147,6 +147,12 @@ class _SearchPageState extends State<SearchPage> {
       );
     }
 
+    // Outside a room there is no queue to add to: no button at all. In a
+    // licensed room, users without a license see a lock instead.
+    final (inRoom, locked) = context.select<RoomController, (bool, bool)>(
+      (c) => (c.currentRoom != null, c.currentRoom != null && !c.canEditQueue),
+    );
+
     return ListView.builder(
       itemCount: _results.length,
       itemBuilder: (context, index) {
@@ -154,36 +160,40 @@ class _SearchPageState extends State<SearchPage> {
 
         return TrackListTile(
           track: track,
-          trailingIcon: Icons.add_circle_outline,
-          onTapTrailing: () async {
-            final controller = context.read<RoomController>();
+          trailingIcon: locked ? Icons.lock_outline : Icons.add_circle_outline,
+          onTapTrailing: !inRoom
+              ? null
+              : () async {
+                  final controller = context.read<RoomController>();
 
-            if (controller.currentRoom != null) {
-              try {
-                await controller.addTrack(track);
-                if (context.mounted) {
-                  UiUtils.showSuccess(
-                    context,
-                    '${track.title} added to the queue',
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  // A 4xx answer explains itself ("This track is not
-                  // available for streaming", missing permission...).
-                  final status = e is ApiException ? e.statusCode ?? 0 : 0;
-                  UiUtils.showError(
-                    context,
-                    e is ApiException && status >= 400 && status < 500
-                        ? e.message
-                        : 'Failed to add the song to the queue.',
-                  );
-                }
-              }
-            } else {
-              UiUtils.showError(context, 'Join a room to add a song.');
-            }
-          },
+                  if (locked) {
+                    UiUtils.showError(context, lockedQueueMessage);
+                  } else {
+                    try {
+                      await controller.addTrack(track);
+                      if (context.mounted) {
+                        UiUtils.showSuccess(
+                          context,
+                          '${track.title} added to the queue',
+                        );
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        // A 4xx answer explains itself ("This track is not
+                        // available for streaming", missing permission...).
+                        final status = e is ApiException
+                            ? e.statusCode ?? 0
+                            : 0;
+                        UiUtils.showError(
+                          context,
+                          e is ApiException && status >= 400 && status < 500
+                              ? e.message
+                              : 'Failed to add the song to the queue.',
+                        );
+                      }
+                    }
+                  }
+                },
         );
       },
     );
