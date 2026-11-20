@@ -313,9 +313,10 @@ class AuthController extends ChangeNotifier {
   }
 
   /// Confirms an email address (current or new) with the token of the link.
+  /// Works without a session; a logged-in user's profile is refreshed after.
   Future<void> confirmEmail(String token) async {
-    await ApiClient.patch('/users/me/confirm-email', body: {'token': token});
-    await fetchUserInfo();
+    await ApiClient.patch('/auth/confirm-email', body: {'token': token});
+    if (_isAuthenticated) await fetchUserInfo();
   }
 
   Future<void> enableSubscription() async {

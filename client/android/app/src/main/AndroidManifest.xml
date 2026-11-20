@@ -32,7 +32,8 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Custom URI Scheme deep link: musicroom:// -->
+            <!-- musicroom:// links, opened from the backend's email pages on Android
+                 ("Open in the Music Room app") and from older emails. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
