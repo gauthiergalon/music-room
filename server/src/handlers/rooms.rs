@@ -12,7 +12,7 @@ use crate::{
     middleware::auth::Claims,
     services::{rooms as room_service, user as user_service},
     state::AppState,
-    ws::{WsUser, handle_socket},
+    ws::{WsUser, handle_socket, send_room_state},
 };
 
 const DEFAULT_PAGE_SIZE: i64 = 50;
@@ -79,6 +79,8 @@ pub async fn enable_license(
     Extension(claims): Extension<Claims>,
 ) -> Result<StatusCode, AppError> {
     room_service::enable_license(&state.pool, room_id, claims.user_id).await?;
+    // Listeners hide or show their queue controls right away.
+    send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -89,6 +91,7 @@ pub async fn disable_license(
     Extension(claims): Extension<Claims>,
 ) -> Result<StatusCode, AppError> {
     room_service::disable_license(&state.pool, room_id, claims.user_id).await?;
+    send_room_state(&state, room_id).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -192,6 +195,7 @@ pub async fn ws(
         id: user.id,
         username: user.username,
         device_name,
+        has_license: room_service::has_license(&state.pool, &room, claims.user_id).await?,
     };
     let owner_id = room.owner_id;
 

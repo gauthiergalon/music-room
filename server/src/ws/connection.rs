@@ -27,6 +27,8 @@ pub struct WsUser {
     pub id: Uuid,
     pub username: String,
     pub device_name: String,
+    /// See `WsEventServer::Welcome::has_license`.
+    pub has_license: bool,
 }
 
 pub async fn handle_socket(
@@ -38,6 +40,7 @@ pub async fn handle_socket(
 ) {
     let connection_id = Uuid::new_v4();
     let user_id = user.id;
+    let has_license = user.has_license;
     let (mut sender, receiver) = socket.split();
 
     let rx = match state
@@ -75,6 +78,7 @@ pub async fn handle_socket(
     let welcome = WsEventServer::Welcome {
         connection_id,
         server_time: Utc::now(),
+        has_license,
     };
     let mut connected = send_event(&mut sender, &welcome).await;
     if connected && let Some(room_state) = room::get_room_state_event(&state, room_id).await {

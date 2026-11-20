@@ -51,8 +51,14 @@ pub enum WsEventServer {
     Welcome {
         connection_id: Uuid,
         server_time: DateTime<Utc>,
+        /// Whether this user may edit the queue while the license mode is on
+        /// (owner, or accepted invitation). With `is_licensed` of the room
+        /// state: the queue is editable when `!is_licensed || has_license`.
+        has_license: bool,
     },
     RoomState {
+        /// License mode: only users with a license may edit the queue.
+        is_licensed: bool,
         current_track: Option<TrackItem>,
         /// Identifies this playback of `current_track`: the queue entry it
         /// came from. To send back with `NextTrack`.

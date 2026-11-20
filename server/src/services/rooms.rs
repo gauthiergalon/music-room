@@ -29,16 +29,20 @@ pub async fn check_edit_queue_access(
 ) -> Result<(), AppError> {
     check_read_access(pool, room, user_id).await?;
 
-    if !room.is_licensed || room.owner_id == user_id {
+    if !room.is_licensed || has_license(pool, room, user_id).await? {
         return Ok(());
     }
+    Err(AppError::Forbidden(ErrorMessage::MissingLicense))
+}
 
-    let is_invited = invitation_service::check_accepted_invitation(pool, room.id, user_id).await?;
-    if !is_invited {
-        return Err(AppError::Forbidden(ErrorMessage::MissingLicense));
+/// Whether the user may edit the queue while the room's license mode is on:
+/// its owner, or someone who accepted an invitation to it. Whether the mode is
+/// on (`is_licensed`) is a separate, room-wide setting.
+pub async fn has_license(pool: &PgPool, room: &Room, user_id: Uuid) -> Result<bool, AppError> {
+    if room.owner_id == user_id {
+        return Ok(true);
     }
-
-    Ok(())
+    invitation_service::check_accepted_invitation(pool, room.id, user_id).await
 }
 
 pub fn check_is_owner(room: &Room, user_id: Uuid) -> Result<(), AppError> {

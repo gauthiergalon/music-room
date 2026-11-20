@@ -252,6 +252,7 @@ pub async fn advance_track(
 }
 
 pub struct RoomPlaybackState {
+    pub is_licensed: bool,
     pub current_track: Option<i64>,
     pub current_item: Option<Uuid>,
     pub is_playing: bool,
@@ -272,7 +273,7 @@ pub async fn get_room_playback_state(
     let state = sqlx::query_as!(
         RoomPlaybackState,
         r#"
-        SELECT r.current_track, r.current_item, r.is_playing, r.current_position, r.played_at,
+        SELECT r.is_licensed, r.current_track, r.current_item, r.is_playing, r.current_position, r.played_at,
                t.title AS "title?", t.artist AS "artist?", t.album AS "album?",
                t.cover AS "cover?", t.duration AS "duration?"
         FROM rooms r
