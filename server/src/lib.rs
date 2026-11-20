@@ -64,7 +64,9 @@ pub async fn run() {
     };
 
     let jwt_secret = required_env("JWT_SECRET");
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     let state = AppState {
+        public_url: public_url_from_env(&port),
         pool: pool.clone(),
         stream_proxy: Arc::new(StreamProxy::from_env(&jwt_secret)),
         jwt_secret,
@@ -82,7 +84,6 @@ pub async fn run() {
     services::cleanup::spawn_subscription_cleanup_task(pool);
     services::cleanup::spawn_room_cleanup_task(state.clone());
 
-    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     start_server(build_router(state), &format!("0.0.0.0:{port}")).await;
 }
 
@@ -104,6 +105,20 @@ fn auth_rate_limiter_from_env() -> Option<Arc<RateLimiter>> {
         .unwrap_or(DEFAULT_AUTH_RATE_LIMIT_PER_MINUTE);
 
     (per_minute > 0).then(|| Arc::new(RateLimiter::new(per_minute, Duration::from_secs(60))))
+}
+
+/// `PUBLIC_URL`: the address users reach this server at, used in the links of
+/// the emails. Defaults to `http://localhost:<PORT>`, which only works when the
+/// email is opened on the machine running the server.
+fn public_url_from_env(port: &str) -> String {
+    let url = env::var("PUBLIC_URL")
+        .ok()
+        .filter(|url| !url.trim().is_empty())
+        .unwrap_or_else(|| {
+            tracing::warn!("PUBLIC_URL is not set: email links will point to localhost");
+            format!("http://localhost:{port}")
+        });
+    url.trim().trim_end_matches('/').to_string()
 }
 
 fn setup_tracing() {

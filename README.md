@@ -72,6 +72,16 @@ cp .env.example .env
 | `SMTP_SECURITY` | `none` (default, for Mailhog), `starttls` or `tls` |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | Credentials, if the server needs them |
 | `SMTP_FROM` | Sender address |
+| `PUBLIC_URL` | Address users reach the backend at (default `http://localhost:3000`). The email links (confirm the email, reset the password) open pages the backend serves, so it must be reachable from the device the email is read on: the public address in production, the machine's LAN address to test from a phone |
+
+#### Email links
+The emails link to pages the backend serves (`<PUBLIC_URL>/confirm-email`,
+`/reset-password`), which work in any browser. On Android they also offer
+"Open in the Music Room app", a `musicroom://` link Chrome hands to the app.
+- Emails read on the machine running the backend (Mailhog at
+  http://localhost:8025): the default `PUBLIC_URL` works.
+- Emails opened on a phone: set `PUBLIC_URL` to the machine's LAN address,
+  the same as `BACKEND_URL` in `client/.env`.
 
 #### Other
 | Variable | Description |

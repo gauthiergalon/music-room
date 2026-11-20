@@ -5,8 +5,9 @@ use crate::{
         AuthResponse, ForgotPasswordRequest, GoogleLoginRequest, LoginRequest, LogoutRequest,
         RefreshRequest, RegisterRequest, ResetPasswordRequest,
     },
+    dtos::user::ConfirmEmailRequest,
     errors::AppError,
-    services::auth as auth_service,
+    services::{auth as auth_service, user as user_service},
     state::AppState,
     validation,
 };
@@ -93,8 +94,13 @@ pub async fn forgot_password(
     let email = validation::email(&payload.email).map_err(validation::invalid)?;
 
     tokio::spawn(async move {
-        if let Err(e) =
-            auth_service::forgot_password(&state.pool, state.mailer.as_ref(), &email).await
+        if let Err(e) = auth_service::forgot_password(
+            &state.pool,
+            state.mailer.as_ref(),
+            &state.public_url,
+            &email,
+        )
+        .await
         {
             tracing::info!("Password reset email not sent: {:?}", e);
         }
@@ -111,6 +117,19 @@ pub async fn reset_password(
     validation::password(&payload.new_password).map_err(validation::invalid)?;
 
     auth_service::reset_password(&state.pool, &payload.token, &payload.new_password).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Confirms an email address (current or new) with the token of the link.
+/// The token alone proves the address belongs to the user, so no session is
+/// needed: the link can be opened on any device.
+#[utoipa::path(patch, path = "/auth/confirm-email", request_body = ConfirmEmailRequest, responses((status = 204), (status = 401), (status = 429)), security(()), tag = "Auth")]
+pub async fn confirm_email(
+    State(state): State<AppState>,
+    Json(payload): Json<ConfirmEmailRequest>,
+) -> Result<StatusCode, AppError> {
+    user_service::confirm_email(&state.pool, &payload.token).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

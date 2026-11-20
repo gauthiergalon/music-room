@@ -31,6 +31,7 @@ use uuid::Uuid;
 pub const JWT_SECRET: &str = "test_secret";
 pub const GOOGLE_CLIENT_ID: &str = "test_client_id";
 pub const PASSWORD: &str = "password123";
+pub const PUBLIC_URL: &str = "https://music-room.test";
 
 /// Tracks the provider does not know.
 pub const UNKNOWN_TRACK_ID: i64 = 404_404;
@@ -161,6 +162,7 @@ impl TestApp {
             music_provider: music.clone(),
             stream_proxy: Arc::new(StreamProxy::new(JWT_SECRET, config.stream_hosts)),
             mailer: mailer.clone(),
+            public_url: PUBLIC_URL.to_string(),
             auth_rate_limiter: config
                 .auth_rate_limit
                 .map(|max| Arc::new(RateLimiter::new(max, Duration::from_secs(60)))),
@@ -193,8 +195,10 @@ impl TestApp {
             .into_iter()
             .rev()
             .find(|(to, _)| to == receiver)
-            .and_then(|(_, email)| email.body.split("token=").nth(1).map(str::to_string))
-            .map(|token| token.trim().to_string())
+            .and_then(|(_, email)| {
+                let link = email.body.split("token=").nth(1)?;
+                link.split_whitespace().next().map(str::to_string)
+            })
     }
 
     /// Waits for an email to `receiver` and returns its token. Emails that

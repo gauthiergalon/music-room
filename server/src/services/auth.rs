@@ -192,6 +192,7 @@ pub async fn refresh(pool: &PgPool, jwt_secret: &str, token: &str) -> Result<Tok
 pub async fn forgot_password(
     pool: &PgPool,
     mailer: &dyn Mailer,
+    public_url: &str,
     email_address: &str,
 ) -> Result<(), AppError> {
     let user = users_repo::find_by_email(pool, email_address)
@@ -223,7 +224,7 @@ pub async fn forgot_password(
     .await?;
     tx.commit().await?;
 
-    let email = Email::for_password_reset(&token_pair.plain);
+    let email = Email::for_password_reset(public_url, &token_pair.plain);
     if let Err(e) = mailer.send(email_address, &email).await {
         // Without the email the token is useless and would block a retry for 15 minutes.
         let _ = reset_tokens_repo::delete_by_user_id(pool, user.id).await;
