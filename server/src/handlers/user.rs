@@ -9,9 +9,8 @@ use crate::{
     dtos::{
         auth::AuthResponse,
         user::{
-            ConfirmEmailRequest, LinkGoogleRequest, PublicUserResponse, UpdateEmailRequest,
-            UpdateFavoriteGenresRequest, UpdatePasswordRequest, UpdatePrivacyLevelRequest,
-            UpdateUsernameRequest, UserResponse,
+            LinkGoogleRequest, PublicUserResponse, UpdateEmailRequest, UpdateFavoriteGenresRequest,
+            UpdatePasswordRequest, UpdatePrivacyLevelRequest, UpdateUsernameRequest, UserResponse,
         },
     },
     errors::AppError,
@@ -85,6 +84,7 @@ pub async fn update_email(
     let user = user_service::request_email_change(
         &state.pool,
         state.mailer.as_ref(),
+        &state.public_url,
         claims.user_id,
         &new_email,
     )
@@ -131,23 +131,18 @@ pub async fn link_google(
     Ok(Json(user.into()))
 }
 
-#[utoipa::path(patch, path = "/users/me/confirm-email", request_body = ConfirmEmailRequest, responses((status = 204)), tag = "Users")]
-pub async fn confirm_email(
-    State(state): State<AppState>,
-    Json(payload): Json<ConfirmEmailRequest>,
-) -> Result<StatusCode, AppError> {
-    user_service::confirm_email(&state.pool, &payload.token).await?;
-
-    Ok(StatusCode::NO_CONTENT)
-}
-
 #[utoipa::path(post, path = "/users/me/send-confirmation-email", responses((status = 204)), tag = "Users")]
 pub async fn send_email_confirmation_email(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<StatusCode, AppError> {
-    user_service::send_email_confirmation_email(&state.pool, state.mailer.as_ref(), claims.user_id)
-        .await?;
+    user_service::send_email_confirmation_email(
+        &state.pool,
+        state.mailer.as_ref(),
+        &state.public_url,
+        claims.user_id,
+    )
+    .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

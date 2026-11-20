@@ -45,6 +45,7 @@ pub async fn update_username(
 async fn send_confirmation_link(
     pool: &PgPool,
     mailer: &dyn Mailer,
+    public_url: &str,
     user_id: Uuid,
     address: &str,
 ) -> Result<(), AppError> {
@@ -67,7 +68,7 @@ async fn send_confirmation_link(
     )
     .await?;
 
-    let email = Email::for_email_confirmation(&token_pair.plain);
+    let email = Email::for_email_confirmation(public_url, &token_pair.plain);
     if let Err(e) = mailer.send(address, &email).await {
         // Without the email the token is useless and would block a retry for 15 minutes.
         let _ = email_tokens_repo::delete_by_user_id(pool, user_id).await;
@@ -85,6 +86,7 @@ async fn send_confirmation_link(
 pub async fn request_email_change(
     pool: &PgPool,
     mailer: &dyn Mailer,
+    public_url: &str,
     user_id: Uuid,
     new_email: &str,
 ) -> Result<User, AppError> {
@@ -97,7 +99,7 @@ pub async fn request_email_change(
         return Err(AppError::Conflict(ErrorMessage::EmailTaken));
     }
 
-    send_confirmation_link(pool, mailer, user_id, new_email).await?;
+    send_confirmation_link(pool, mailer, public_url, user_id, new_email).await?;
     Ok(user)
 }
 
@@ -165,6 +167,7 @@ pub async fn confirm_email(pool: &PgPool, token: &str) -> Result<(), AppError> {
 pub async fn send_email_confirmation_email(
     pool: &PgPool,
     mailer: &dyn Mailer,
+    public_url: &str,
     user_id: Uuid,
 ) -> Result<(), AppError> {
     let user = get_user(pool, user_id).await?;
@@ -173,7 +176,7 @@ pub async fn send_email_confirmation_email(
         return Err(AppError::Conflict(ErrorMessage::EmailAlreadyVerified));
     }
 
-    send_confirmation_link(pool, mailer, user_id, &user.email).await
+    send_confirmation_link(pool, mailer, public_url, user_id, &user.email).await
 }
 
 /// Links a Google account to the logged-in user.

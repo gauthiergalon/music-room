@@ -21,6 +21,9 @@ pub struct AppState {
     /// Relays HLS streams to browsers, which the audio CDN refuses to serve.
     pub stream_proxy: Arc<StreamProxy>,
     pub mailer: Arc<dyn Mailer>,
+    /// Address of this server as seen by users, without a trailing slash. The
+    /// links of the emails point to pages served under it.
+    pub public_url: String,
     /// `None` disables rate limiting on the public auth routes.
     pub auth_rate_limiter: Option<Arc<RateLimiter>>,
 }

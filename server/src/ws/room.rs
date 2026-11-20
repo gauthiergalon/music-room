@@ -54,6 +54,7 @@ async fn load_room_state(
 
     let now = Utc::now();
     Ok(Some(WsEventServer::RoomState {
+        is_licensed: room.is_licensed,
         current_track,
         current_item_id: room.current_item,
         version,

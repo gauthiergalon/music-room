@@ -233,6 +233,7 @@ class _AuthInterceptor extends Interceptor {
     '/auth/google-login',
     '/auth/forgot-password',
     '/auth/reset-password',
+    '/auth/confirm-email',
   ];
 
   @override

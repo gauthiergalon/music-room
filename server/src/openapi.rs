@@ -26,6 +26,7 @@ const BEARER_AUTH: &str = "bearer_auth";
         crate::handlers::auth::refresh,
         crate::handlers::auth::forgot_password,
         crate::handlers::auth::reset_password,
+        crate::handlers::auth::confirm_email,
         crate::handlers::auth::google_login,
 
         // Rooms endpoints
@@ -47,7 +48,6 @@ const BEARER_AUTH: &str = "bearer_auth";
         crate::handlers::user::update_email,
         crate::handlers::user::update_password,
         crate::handlers::user::link_google,
-        crate::handlers::user::confirm_email,
         crate::handlers::user::send_email_confirmation_email,
         crate::handlers::user::update_favorite_genres,
         crate::handlers::user::update_privacy_level,

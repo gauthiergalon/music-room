@@ -8,6 +8,7 @@ mod auth;
 mod friends;
 mod invitations;
 mod music;
+mod pages;
 mod rooms;
 mod user;
 
@@ -23,4 +24,5 @@ pub fn app_router(state: AppState) -> Router<AppState> {
         .nest("/friends", friends::router(state.clone()))
         .nest("/hifi", music::router(state.clone()))
         .merge(invitations::router(state.clone()))
+        .merge(pages::router(state.clone()))
 }

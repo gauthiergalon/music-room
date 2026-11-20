@@ -204,7 +204,7 @@ async fn test_confirm_email_invalid_token(pool: PgPool) {
     let token = register_and_login(&server, "test_conf_invalid", "conf_invalid@example.com").await;
 
     let res = server
-        .patch("/users/me/confirm-email")
+        .patch("/auth/confirm-email")
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),
@@ -247,7 +247,7 @@ async fn test_confirm_email_success(pool: PgPool) {
         .unwrap();
 
     let res = server
-        .patch("/users/me/confirm-email")
+        .patch("/auth/confirm-email")
         .add_header(
             axum::http::header::AUTHORIZATION,
             format!("Bearer {}", token),
@@ -459,7 +459,7 @@ async fn test_email_change_only_applies_after_confirmation(pool: PgPool) {
     assert!(app.last_email_token(&user.email).is_none());
 
     server
-        .patch("/users/me/confirm-email")
+        .patch("/auth/confirm-email")
         .add_header(axum::http::header::AUTHORIZATION, auth.clone())
         .json(&json!({ "token": token }))
         .await
@@ -522,7 +522,7 @@ async fn test_send_confirmation_email_then_confirm(pool: PgPool) {
 
     let token = app.last_email_token(&user.email).unwrap();
     server
-        .patch("/users/me/confirm-email")
+        .patch("/auth/confirm-email")
         .add_header(axum::http::header::AUTHORIZATION, auth.clone())
         .json(&json!({ "token": token }))
         .await

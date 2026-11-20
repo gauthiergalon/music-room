@@ -632,3 +632,70 @@ async fn queue_changes_are_broadcast_with_increasing_versions(pool: PgPool) {
         last_version = version;
     }
 }
+
+// ----------------------------------------------------------------- license
+
+/// Connects and returns the payload of the Welcome event.
+async fn welcome(server: &axum_test::TestServer, user: &common::TestUser, room_id: Uuid) -> Value {
+    let mut socket = server
+        .get_websocket(&format!("/rooms/{room_id}/ws"))
+        .add_header(AUTHORIZATION, bearer(&user.access_token))
+        .await
+        .into_websocket()
+        .await;
+    let welcome = common::next_event(&mut socket).await;
+    assert_eq!(welcome["type"], "Welcome");
+    welcome["payload"].clone()
+}
+
+#[sqlx::test]
+async fn welcome_tells_whether_the_user_has_a_license(pool: PgPool) {
+    let app = TestApp::new(pool.clone());
+    let server = app.ws_server();
+    let owner = register(&server, "owner").await;
+    let invited = register(&server, "invited").await;
+    let listener = register(&server, "listener").await;
+    let room_id = create_room(&server, &owner).await;
+    sqlx::query(
+        "INSERT INTO invitations (room_id, inviter_id, invitee_id, is_pending) VALUES ($1, $2, $3, false)",
+    )
+    .bind(room_id)
+    .bind(owner.id)
+    .bind(invited.id)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(welcome(&server, &owner, room_id).await["has_license"], true);
+    assert_eq!(
+        welcome(&server, &invited, room_id).await["has_license"],
+        true
+    );
+    assert_eq!(
+        welcome(&server, &listener, room_id).await["has_license"],
+        false
+    );
+}
+
+#[sqlx::test]
+async fn a_license_change_reaches_connected_listeners(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let server = app.ws_server();
+    let owner = register(&server, "owner").await;
+    let listener = register(&server, "listener").await;
+    let room_id = create_room(&server, &owner).await;
+
+    let (mut socket, _) = connect(&server, &listener, room_id).await;
+    let state = next_of_type(&mut socket, "RoomState").await;
+    assert_eq!(state["is_licensed"], false);
+
+    for (route, licensed) in [("enable-license", true), ("disable-license", false)] {
+        server
+            .post(&format!("/rooms/{room_id}/{route}"))
+            .add_header(AUTHORIZATION, bearer(&owner.access_token))
+            .await
+            .assert_status(StatusCode::NO_CONTENT);
+        let state = next_of_type(&mut socket, "RoomState").await;
+        assert_eq!(state["is_licensed"], licensed, "after {route}");
+    }
+}

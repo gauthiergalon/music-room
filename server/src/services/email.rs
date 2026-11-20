@@ -26,22 +26,25 @@ impl Email {
         }
     }
 
-    pub fn for_password_reset(token: &str) -> Self {
+    /// `public_url` is the address of this server as seen from the device the
+    /// email is read on: the link opens a page it serves (see `handlers::pages`).
+    pub fn for_password_reset(public_url: &str, token: &str) -> Self {
         Self::new(
             "Reset your password",
             format!(
-                "Click on this link to reset your password...\n\nmusicroom://reset-password?token={}",
-                token
+                "Someone asked to reset the password of your Music Room account. \
+                 If it was you, open this link within 15 minutes to choose a new one. \
+                 Otherwise, ignore this email.\n\n{public_url}/reset-password?token={token}"
             ),
         )
     }
 
-    pub fn for_email_confirmation(token: &str) -> Self {
+    pub fn for_email_confirmation(public_url: &str, token: &str) -> Self {
         Self::new(
             "Confirm your email address",
             format!(
-                "Please confirm your email address by clicking on this link...\n\nmusicroom://confirm-email?token={}",
-                token
+                "Open this link within 15 minutes to confirm your email address \
+                 for Music Room.\n\n{public_url}/confirm-email?token={token}"
             ),
         )
     }

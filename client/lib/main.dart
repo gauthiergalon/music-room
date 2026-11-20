@@ -8,6 +8,7 @@ import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 
+import 'core/email_link.dart';
 import 'core/logger/logger.dart';
 import 'core/theme.dart';
 import 'core/utils/ui_utils.dart';
@@ -142,18 +143,27 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _handleIncomingUri(Uri uri) {
-    logger.debug('Received Deep Link: $uri');
+    // The query carries a single-use token: keep it out of the logs.
+    logger.debug('Received Deep Link: ${uri.replace(query: '')}');
 
-    final token = uri.queryParameters['token'];
-    if (token == null) return;
+    final link = parseEmailLink(uri);
+    if (link == null) return;
 
-    switch (uri.host) {
-      case 'confirm-email':
-        _handleConfirmEmail(token);
-        break;
-      case 'reset-password':
-        _handleResetPassword(token);
-        break;
+    // A link that launched the app arrives before the first frame, when there
+    // is no navigator yet to show anything with.
+    if (navigatorKey.currentContext == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openEmailLink(link));
+    } else {
+      _openEmailLink(link);
+    }
+  }
+
+  void _openEmailLink(EmailLink link) {
+    switch (link.action) {
+      case EmailLinkAction.confirmEmail:
+        _handleConfirmEmail(link.token);
+      case EmailLinkAction.resetPassword:
+        _handleResetPassword(link.token);
     }
   }
 
@@ -161,12 +171,8 @@ class _MyAppState extends State<MyApp> {
     final currentContext = navigatorKey.currentContext;
     if (currentContext == null) return;
 
+    // The token alone proves the address: no session is needed.
     final auth = currentContext.read<AuthController>();
-    if (!auth.isAuthenticated) {
-      UiUtils.showError(currentContext, 'Log in to confirm your email');
-      return;
-    }
-
     try {
       await auth.confirmEmail(token);
       if (currentContext.mounted) {

@@ -1,8 +1,12 @@
-use axum::{Router, middleware, routing::post};
+use axum::{
+    Router, middleware,
+    routing::{patch, post},
+};
 
 use crate::{
     handlers::auth::{
-        forgot_password, google_login, login, logout, refresh, register, reset_password,
+        confirm_email, forgot_password, google_login, login, logout, refresh, register,
+        reset_password,
     },
     middleware::rate_limit::auth_rate_limit,
     state::AppState,
@@ -17,6 +21,7 @@ pub fn router(state: AppState) -> Router<AppState> {
         .route("/google-login", post(google_login))
         .route("/forgot-password", post(forgot_password))
         .route("/reset-password", post(reset_password))
+        .route("/confirm-email", patch(confirm_email))
         .route_layer(middleware::from_fn_with_state(state, auth_rate_limit));
 
     let session = Router::new()
